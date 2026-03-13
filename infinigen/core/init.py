@@ -321,6 +321,7 @@ def require_blender_addon(addon: str, fail: str = "fatal", allow_online=False):
         and (not allow_online)
     ):
         report_fail(f"{addon=} not found and online install is disabled")
+        return False
 
     try:
         if long in builtin_local_addons:
