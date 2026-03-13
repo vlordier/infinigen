@@ -11,6 +11,7 @@ build/
 
 .coverage
 coverage.xml
+.venv/
 
 */rclone.zip
 */miniconda.sh

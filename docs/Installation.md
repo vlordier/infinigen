@@ -34,9 +34,7 @@ Once you have chosen your configuration, proceed to the relevant section below f
 
 ### Dependencies
 
-Please install anaconda or miniconda. Platform-specific instructions can be found [here](https://docs.conda.io/projects/miniconda/en/latest/miniconda-install.html)
-
-Then, install the following dependencies using the method of your choice. Examples are shown for Ubuntu, Mac ARM and Mac x86.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and the following system dependencies using the method of your choice. Examples are shown for Ubuntu, Mac ARM and Mac x86.
 ```bash
 # on Ubuntu / Debian / WSL / etc
 sudo apt-get install wget cmake g++ libgles2-mesa-dev libglew-dev libglfw3-dev libglm-dev zlib1g-dev
@@ -47,39 +45,39 @@ arch -arm64 brew install wget cmake llvm open-mpi libomp glm glew zlib
 # on  Mac x86_64 (Intel)
 brew install wget cmake llvm open-mpi libomp glm glew zlib
 
-# on Conda. Useful when you don't have sudo permissions
-conda install conda-forge::gxx=11.4.0 mesalib glew glm menpo::glfw3
-export C_INCLUDE_PATH=$CONDA_PREFIX/include:$C_INCLUDE_PATH
-export CPLUS_INCLUDE_PATH=$CONDA_PREFIX/include:$CPLUS_INCLUDE_PATH
-export LIBRARY_PATH=$CONDA_PREFIX/lib:$LIBRARY_PATH
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+# optional when you do not have sudo permissions: point the active uv environment at custom headers/libs
+export C_INCLUDE_PATH=$VIRTUAL_ENV/include:$C_INCLUDE_PATH
+export CPLUS_INCLUDE_PATH=$VIRTUAL_ENV/include:$CPLUS_INCLUDE_PATH
+export LIBRARY_PATH=$VIRTUAL_ENV/lib:$LIBRARY_PATH
+export LD_LIBRARY_PATH=$VIRTUAL_ENV/lib:$LD_LIBRARY_PATH
 ```
 
 ### Installation
 
-First, download the repo and set up a conda environment (you may need to [install conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html))
+First, download the repo and create a uv-managed Python 3.11 environment.
 ```bash
 git clone https://github.com/princeton-vl/infinigen.git
 cd infinigen
-conda create --name infinigen python=3.11
-conda activate infinigen
+uv python install 3.11
+uv venv --python 3.11
+source .venv/bin/activate
 ```
 
 Then, install the infinigen package using one of the options below:
 
 ```bash
 # Minimal install (No terrain or opengl GT, ok for Infinigen-Indoors or single-object generation) 
-INFINIGEN_MINIMAL_INSTALL=True pip install -e .
+INFINIGEN_MINIMAL_INSTALL=True uv sync
 
 # Full install (Terrain & OpenGL-GT enabled, needed for Infinigen-Nature HelloWorld)
-pip install -e ".[terrain,vis]"
+uv sync --extra terrain --extra vis
 
 # Installation for simulation assets
-pip install -e ".[sim]"
+uv sync --extra sim
 
 # Developer install (includes pytest, ruff, other recommended dev tools)
-pip install -e ".[dev,terrain,vis]"
-pre-commit install
+uv sync --extra dev --extra terrain --extra vis
+uv run pre-commit install
 ```
 
 :exclamation: If you encounter any issues with the above, please add `-vv > logs.txt 2>&1` to the end of your command and run again, then provide the resulting logs.txt file as an attachment when making a Github Issue.
@@ -90,8 +88,9 @@ On Linux / Mac / WSL:
 ```bash
 git clone https://github.com/princeton-vl/infinigen.git
 cd infinigen
-conda create --name infinigen python=3.11
-conda activate infinigen 
+uv python install 3.11
+uv venv --python 3.11
+source .venv/bin/activate
 ```
 
 Then, install using one of the options below:
@@ -132,7 +131,9 @@ To run without either, use `docker-run-no-gpu-opengl`
 
 Note: `make docker-setup` can be skipped if not using OpenGL.
 
-Use `exit` to exit the container and `docker exec -it infinigen bash` to re-enter the container as needed. Remember to `conda activate infinigen` before running scenes.
+Use `exit` to exit the container and `docker exec -it infinigen bash` to re-enter the container as needed. The Docker image keeps the project in `/opt/infinigen/.venv`, so you can run commands directly with `uv run ...` (or `. /opt/infinigen/.venv/bin/activate` if you prefer shell activation).
+
+On Apple Silicon, Docker will usually build the native `linux/arm64` image automatically. If you need to force that explicitly, use `DOCKER_PLATFORM=linux/arm64 make docker-build` (and pass the same variable to the corresponding `make docker-run...` command).
 
 **Docker on Windows**
 

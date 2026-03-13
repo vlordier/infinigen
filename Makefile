@@ -18,6 +18,8 @@ flip_fluids:
 
 DOCKER_BUILD_PROGRESS ?= auto
 DOCKER_TAG ?= infinigen_docker_img
+DOCKER_PLATFORM ?=
+DOCKER_PLATFORM_ARG = $(if $(DOCKER_PLATFORM),--platform $(DOCKER_PLATFORM),)
 
 PWD = $(shell pwd)
 
@@ -28,11 +30,13 @@ default:
 
 docker-build:
 	docker build \
+		$(DOCKER_PLATFORM_ARG) \
 		--tag $(DOCKER_TAG) \
 		--progress $(DOCKER_BUILD_PROGRESS) .
 
 docker-build-cuda:
 	docker build \
+		$(DOCKER_PLATFORM_ARG) \
 		--tag $(DOCKER_TAG) \
 		--progress $(DOCKER_BUILD_PROGRESS) \
 		--build-arg APP_IMAGE=nvidia/cuda:12.0.0-devel-ubuntu22.04 .
@@ -51,6 +55,7 @@ docker-setup:
 
 docker-run:
 	docker run -td --privileged --net=host --ipc=host \
+		$(DOCKER_PLATFORM_ARG) \
 		--name="infinigen" \
 		--gpus=all \
 		--env NVIDIA_DISABLE_REQUIRE=1 \
@@ -64,6 +69,7 @@ docker-run:
 		-v /etc/group:/etc/group:ro \
 		"$(DOCKER_TAG)" /bin/bash \
 	|| docker run -td --privileged --net=host --ipc=host \
+		$(DOCKER_PLATFORM_ARG) \
 		--name="infinigen" \
 		--device /dev/dri \
 		-e "DISPLAY=$(DISPLAY)" \
@@ -80,6 +86,7 @@ docker-run:
 docker-run-no-opengl:
 	echo "Launching Docker image without OpenGL ground truth"
 	docker run -td --rm --privileged --net=host --ipc=host \
+		$(DOCKER_PLATFORM_ARG) \
 		--name="infinigen" \
 		--gpus=all \
 		--env NVIDIA_DISABLE_REQUIRE=1 \
@@ -89,6 +96,7 @@ docker-run-no-opengl:
 docker-run-no-gpu:
 	echo "Launching Docker image without GPU passthrough"
 	docker run -td --privileged --net=host --ipc=host \
+		$(DOCKER_PLATFORM_ARG) \
 		--name="infinigen" \
 		-e "DISPLAY=$(DISPLAY)" \
 		-e "QT_X11_NO_MITSHM=1" \
@@ -99,11 +107,11 @@ docker-run-no-gpu:
 		--cap-add=SYS_PTRACE \
 		-v /etc/group:/etc/group:ro \
 		"$(DOCKER_TAG)" /bin/bash \
-]
 
 docker-run-no-gpu-opengl:
 	echo "Launching Docker image without GPU passthrough or OpenGL"
 	docker run -td --rm --privileged --net=host --ipc=host \
+		$(DOCKER_PLATFORM_ARG) \
 		--name="infinigen" \
 		-e "BLENDER=/opt/infinigen/blender/blender" \
 		-v $(PWD)/outputs:/opt/infinigen/outputs \

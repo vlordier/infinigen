@@ -66,4 +66,10 @@ fi
 # Install Blender dependencies
 "${BLENDER_PYTHON}" -m ensurepip
 
-CFLAGS="-I/usr/include/python3.11 -I$CONDA_PREFIX/include/python3.11 $CFLAGS" ${BLENDER_PYTHON} -m pip install -e .
+HOST_PYTHON_INCLUDE=$(python -c 'import sysconfig; print(sysconfig.get_paths().get("include", ""))' 2>/dev/null || true)
+EXTRA_CFLAGS="-I/usr/include/python3.11"
+if [ -n "${HOST_PYTHON_INCLUDE}" ]; then
+    EXTRA_CFLAGS="${EXTRA_CFLAGS} -I${HOST_PYTHON_INCLUDE}"
+fi
+
+CFLAGS="${EXTRA_CFLAGS} ${CFLAGS}" ${BLENDER_PYTHON} -m pip install -e .
