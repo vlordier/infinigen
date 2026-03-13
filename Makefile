@@ -107,7 +107,6 @@ docker-run-no-gpu:
 		--cap-add=SYS_PTRACE \
 		-v /etc/group:/etc/group:ro \
 		"$(DOCKER_TAG)" /bin/bash \
-
 docker-run-no-gpu-opengl:
 	echo "Launching Docker image without GPU passthrough or OpenGL"
 	docker run -td --rm --privileged --net=host --ipc=host \
