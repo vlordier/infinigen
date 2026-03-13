@@ -67,7 +67,7 @@ docker-run:
 		-e ROS_IP=127.0.0.1 \
 		--cap-add=SYS_PTRACE \
 		-v /etc/group:/etc/group:ro \
-		"$(DOCKER_TAG)" /bin/bash \
+		"$(DOCKER_TAG)" /bin/bash
 	|| docker run -td --privileged --net=host --ipc=host \
 		$(DOCKER_PLATFORM_ARG) \
 		--name="infinigen" \
@@ -106,7 +106,7 @@ docker-run-no-gpu:
 		-e ROS_IP=127.0.0.1 \
 		--cap-add=SYS_PTRACE \
 		-v /etc/group:/etc/group:ro \
-		"$(DOCKER_TAG)" /bin/bash \
+		"$(DOCKER_TAG)" /bin/bash
 docker-run-no-gpu-opengl:
 	echo "Launching Docker image without GPU passthrough or OpenGL"
 	docker run -td --rm --privileged --net=host --ipc=host \

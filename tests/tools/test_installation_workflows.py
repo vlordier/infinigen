@@ -18,7 +18,8 @@ def test_installation_guide_uses_uv_for_infinigen_setup():
 def test_dockerfile_uses_uv_managed_python_environment():
     dockerfile = (REPO_ROOT / "Dockerfile").read_text()
 
-    assert "ghcr.io/astral-sh/uv:0.8.22" in dockerfile
+    assert "ARG UV_IMAGE=ghcr.io/astral-sh/uv:" in dockerfile
+    assert "FROM ${UV_IMAGE} AS uv" in dockerfile
     assert "python:3.11-bookworm" in dockerfile
     assert "uv sync --frozen --extra dev --python 3.11" in dockerfile
     assert "conda create --name infinigen" not in dockerfile
