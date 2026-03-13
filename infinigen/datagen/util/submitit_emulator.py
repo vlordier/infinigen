@@ -20,6 +20,7 @@ from pathlib import Path
 from shutil import which
 
 import gin
+import infinigen
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ def job_wrapper(
             shell=False,
             check=False,  # dont throw CalledProcessError
             env=env,
+            cwd=infinigen.repo_root(),
         )
 
 
