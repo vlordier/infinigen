@@ -134,8 +134,13 @@ gx2 -o lib/cpu/sdf_from_mesh/sdf_from_mesh.so lib/cpu/sdf_from_mesh/sdf_from_mes
 echo "compiled lib/cpu/sdf_from_mesh/sdf_from_mesh.so"
 
 if [ "${OS}" = "Darwin" ]; then
-    alias gx1="CPATH=/opt/homebrew/include:\${CPATH} ${compiler} -O3 -mcpu=native -ffast-math -c -fpic -std=c++17"
-    alias gx2="CPATH=/opt/homebrew/include:\${CPATH} ${compiler} -O3 -mcpu=native -ffast-math -shared -std=c++17"
+    if [ "${ARCH}" = "arm64" ]; then
+        alias gx1="CPATH=/opt/homebrew/include:\${CPATH} ${compiler} -O3 -mcpu=native -ffast-math -c -fpic -std=c++17"
+        alias gx2="CPATH=/opt/homebrew/include:\${CPATH} ${compiler} -O3 -mcpu=native -ffast-math -shared -std=c++17"
+    else
+        alias gx1="CPATH=/opt/homebrew/include:\${CPATH} ${compiler} -O3 -c -fpic -std=c++17"
+        alias gx2="CPATH=/opt/homebrew/include:\${CPATH} ${compiler} -O3 -shared -std=c++17"
+    fi
 fi
 mkdir -p lib/cpu/soil_machine
 gx1 -I../datagen/customgt/dependencies/glm -o lib/cpu/soil_machine/SoilMachine.o source/cpu/soil_machine/SoilMachine.cpp
