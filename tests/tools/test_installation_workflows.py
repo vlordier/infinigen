@@ -37,3 +37,13 @@ def test_ci_workflow_installs_and_runs_with_uv():
     assert "python -m pip install uv" in workflow
     assert "uv sync --frozen --extra dev" in workflow
     assert "uv run pytest tests -k 'not skip_for_ci'" in workflow
+
+
+def test_pre_commit_config_includes_pyupgrade_hook():
+    pre_commit = (REPO_ROOT / ".pre-commit-config.yaml").read_text()
+    pyproject = (REPO_ROOT / "pyproject.toml").read_text()
+
+    assert 'id: pyupgrade' in pre_commit
+    assert 'env INFINIGEN_MINIMAL_INSTALL=True uv run pyupgrade --py311-plus' in pre_commit
+    assert 'env INFINIGEN_MINIMAL_INSTALL=True uv run ruff check --fix' in pre_commit
+    assert '"pyupgrade"' in pyproject
