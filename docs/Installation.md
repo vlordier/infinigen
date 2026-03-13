@@ -149,12 +149,12 @@ make docker-build-arm64
 make docker-build DOCKER_PLATFORM=linux/arm64
 ```
 
-Then run the container without GPU passthrough (NVIDIA GPUs are not available on ARM64):
+Then run the container without GPU passthrough or OpenGL (neither is available on ARM64):
 ```bash
 make docker-run-no-gpu-opengl
 ```
 
-Note: CUDA is not supported on ARM64. Use `make docker-build` (not `docker-build-cuda`) for ARM64 builds.
+Note: CUDA and OpenGL ground truth are not supported on ARM64. Use `make docker-build` (not `docker-build-cuda`) for ARM64 builds.
 
 **Docker on Windows**
 

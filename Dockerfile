@@ -2,6 +2,8 @@ ARG APP_IMAGE=condaforge/miniforge3
 FROM ${APP_IMAGE}
 ARG APP_IMAGE
 ARG TARGETARCH
+# /root/miniforge3/bin is used only when miniforge is manually installed in the CUDA path;
+# the condaforge/miniforge3 base image already includes /opt/conda/bin in PATH.
 ENV PATH="/root/miniforge3/bin:${PATH}"
 RUN if [ "$APP_IMAGE" = "nvidia/cuda:12.0.0-devel-ubuntu22.04" ]; then \
     echo "Using CUDA image" && \
