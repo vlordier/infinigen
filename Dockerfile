@@ -5,14 +5,17 @@ ARG TARGETARCH
 # /root/miniforge3/bin is used only when miniforge is manually installed in the CUDA path;
 # the condaforge/miniforge3 base image already includes /opt/conda/bin in PATH.
 ENV PATH="/root/miniforge3/bin:${PATH}"
+ENV MINIFORGE_VERSION=26.1.0-0
 RUN if [ "$APP_IMAGE" = "nvidia/cuda:12.0.0-devel-ubuntu22.04" ]; then \
     echo "Using CUDA image" && \
     apt-get update && \
     apt-get install -y unzip sudo git g++ libglm-dev libglew-dev libglfw3-dev libgles2-mesa-dev zlib1g-dev wget cmake vim libxi6 libgconf-2-4 && \
-    if [ "${TARGETARCH}" = "arm64" ]; then \
-        CONDA_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-aarch64.sh"; \
+    ARCH="${TARGETARCH}"; \
+    if [ -z "${ARCH}" ]; then ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"; fi && \
+    if [ "${ARCH}" = "arm64" ] || [ "${ARCH}" = "aarch64" ]; then \
+        CONDA_URL="https://github.com/conda-forge/miniforge/releases/download/${MINIFORGE_VERSION}/Miniforge3-${MINIFORGE_VERSION}-Linux-aarch64.sh"; \
     else \
-        CONDA_URL="https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"; \
+        CONDA_URL="https://github.com/conda-forge/miniforge/releases/download/${MINIFORGE_VERSION}/Miniforge3-${MINIFORGE_VERSION}-Linux-x86_64.sh"; \
     fi && \
     wget "${CONDA_URL}" -O /tmp/miniforge.sh && \
     mkdir -p /root/.conda && \
