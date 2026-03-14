@@ -218,7 +218,7 @@ def configure_render_cycles(
 ):
     bpy.context.scene.render.engine = "CYCLES"
 
-    # For now, denoiser is always turned on, but the  _used_
+    # For now, denoiser is always turned on but can be configured via gin
     bpy.context.scene.cycles.use_denoising = denoise
     if denoise:
         try:
