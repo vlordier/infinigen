@@ -249,3 +249,6 @@ v1.18.0
 
 v1.19.0
 - Add new articulated object generators and sim features for Infinigen-Articulated
+
+v1.20.0
+- Update to Blender == 4.5.0 (LTS)
