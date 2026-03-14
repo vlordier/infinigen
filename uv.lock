@@ -65,42 +65,20 @@ wheels = [
 
 [[package]]
 name = "bpy"
-version = "4.2.0"
+version = "4.5.7"
 source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "platform_machine == 'arm64' and sys_platform == 'darwin'",
-]
 dependencies = [
-    { name = "cython", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "numpy", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "requests", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "zstandard", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "cython" },
+    { name = "numpy" },
+    { name = "requests" },
+    { name = "zstandard" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/5a/d085d433ad26687d7ba5be235c57679780a3b41316cd7ece1ee65694ebad/bpy-4.2.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e6e8857c9f483d42f5388642601080ad3e7488970cbc9e59efeedf4a8c26c90b", size = 207901162, upload-time = "2024-07-25T09:03:05.781Z" },
-]
-
-[[package]]
-name = "bpy"
-version = "4.5.0"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "platform_machine != 'arm64' and sys_platform == 'darwin'",
-    "platform_machine == 'aarch64' and sys_platform == 'linux'",
-    "platform_machine != 'aarch64' and sys_platform == 'linux'",
-    "sys_platform != 'darwin' and sys_platform != 'linux'",
-]
-dependencies = [
-    { name = "cython", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
-    { name = "numpy", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
-    { name = "requests", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
-    { name = "zstandard", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/05/7e/d54b46e9d70898a717bfd817d797a2130f18a3717643110f1730f8337531/bpy-4.5.0-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:94321c8ede518910412f8bb8f147edf96991cd160f7d28060d9a6e53ef26913f", size = 235113657, upload-time = "2025-07-21T07:37:47.495Z" },
-    { url = "https://files.pythonhosted.org/packages/74/59/28304b38bc038844baa167d358221dd477daff53eaf57dac3dd773d149af/bpy-4.5.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:666c9355869eb7025a3f771339f7871f55430ce89491a505d48dc96477430a8c", size = 372989706, upload-time = "2025-07-21T07:38:37.004Z" },
-    { url = "https://files.pythonhosted.org/packages/13/fa/6eec79be7b24b642736536e4a7433682d06ab7caaa5897638619290b131a/bpy-4.5.0-cp311-cp311-win_amd64.whl", hash = "sha256:073ae3d6ab6ad7464b2240ef9e371666c8ffd7cb3e9c09e281c08eaa09b674a5", size = 326550429, upload-time = "2025-07-21T07:38:11.35Z" },
-    { url = "https://files.pythonhosted.org/packages/1d/10/d9359c86793042c0a72e1084ba19ddf9b6af06e6d2c0015e5a766ac6a835/bpy-4.5.0-cp311-cp311-win_arm64.whl", hash = "sha256:1372583229104d7edc5e2ca27e506b1ad6c4c27996ae077348935a55cfcb5260", size = 194057457, upload-time = "2025-07-21T07:37:32.216Z" },
+    { url = "https://files.pythonhosted.org/packages/68/76/20258dddd4d23d4cc799929db6b47563fb8a80950ec2bc65484f77a89926/bpy-4.5.7-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:53e6d4f780af844faa817f91a10b2ec8ca78baf3d5a581681eb7041971c4743a", size = 220064241, upload-time = "2026-02-17T13:38:47.231Z" },
+    { url = "https://files.pythonhosted.org/packages/b9/51/0032efafb9f768fc850077c7db731c4ae188c4fa368870edf3c1463be5bf/bpy-4.5.7-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:e2ae8cec86af8107edefc11826e8444cac42b21638dbc4b1eec53306f9a7d188", size = 235149148, upload-time = "2026-02-17T13:30:10.29Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/d5/fc02acf1f717c4e679115743e7f9383b9158442e5d2b4fc8525ecbe410a7/bpy-4.5.7-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:b3c7bbe2c2a2b46ddf27b5844f0f0abe9c87bd0f1d67db46bc14e57710ebcf64", size = 373032968, upload-time = "2026-02-17T13:38:06.646Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/44/dc3d1cb12f8aade0b4edbb25ea967fdd610ba087672dc0ac96ca7995f766/bpy-4.5.7-cp311-cp311-win_amd64.whl", hash = "sha256:a42b62f687461037546ff674b8405fd82b14e92781afcc37e52ff42467d9e69a", size = 326575443, upload-time = "2026-02-17T13:28:39.998Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/da/3cb7c5b9fba2d539779c5c6e9a984bb019169947cb5840ecb6fb2588c9dc/bpy-4.5.7-cp311-cp311-win_arm64.whl", hash = "sha256:98e321138879c315e99a64594908cec6738c11b2178ba44d74591b133fdd01e2", size = 194087423, upload-time = "2026-02-17T13:38:29.158Z" },
 ]
 
 [[package]]
@@ -516,8 +494,7 @@ wheels = [
 name = "infinigen"
 source = { editable = "." }
 dependencies = [
-    { name = "bpy", version = "4.2.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "bpy", version = "4.5.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "bpy" },
     { name = "geomdl" },
     { name = "gin-config" },
     { name = "imageio" },
@@ -574,8 +551,7 @@ wandb = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bpy", marker = "platform_machine != 'arm64' or sys_platform != 'darwin'", specifier = "==4.5.0" },
-    { name = "bpy", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = "==4.2.0" },
+    { name = "bpy", specifier = "==4.5.7" },
     { name = "coacd", marker = "extra == 'sim'" },
     { name = "einops", marker = "extra == 'vis'" },
     { name = "flow-vis", marker = "extra == 'vis'" },
