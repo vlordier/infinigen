@@ -5,7 +5,7 @@
 
 """
 Compare benchmark results from PR branch vs upstream and produce a Markdown
-report with detailed ASCII horizontal bar charts.
+report with detailed ASCII horizontal bar charts and an overall speedup.
 
 Usage:
     python tests/compare_benchmarks.py \\
@@ -29,17 +29,45 @@ from pathlib import Path
 
 PAIRS = [
     ("unique_rows (optimised)", "np.unique axis=0 baseline", "unique_rows (void-view)"),
-    ("meshgrid vectorised 256x256", "meshgrid loop 256x256", "meshgrid vectorised"),
+    (
+        "heightmap grid vectorised 256",
+        "heightmap grid loop 256",
+        "heightmap grid (vectorised)",
+    ),
+    (
+        "mesh cat prealloc 50×2k",
+        "mesh cat naive vstack 50×2k",
+        "mesh cat (pre-alloc)",
+    ),
     (
         "tree vertices lazy concat",
         "tree vertices eager append",
         "tree vertices (lazy)",
     ),
-    ("projection precomputed", "projection separate steps", "projection (combined K)"),
     (
-        "distance_transform_edt 64x64",
-        "grid_distance loop 64x64",
-        "distance_transform (EDT)",
+        "projection precomputed 10cam",
+        "projection separate 10cam",
+        "projection (combined K)",
+    ),
+    (
+        "distance_transform_edt 128",
+        "grid_distance loop 128 (extrapolated)",
+        "distance transform (EDT)",
+    ),
+    (
+        "boundary vectorised 256",
+        "boundary loop 256",
+        "boundary detection",
+    ),
+    (
+        "normals vectorised 256",
+        "normals loop 256",
+        "surface normals",
+    ),
+    (
+        "pipeline optimised",
+        "pipeline baseline",
+        "⭐ full pipeline (composite)",
     ),
 ]
 
@@ -78,15 +106,23 @@ def _bar_log(value: float, max_value: float, width: int = BAR_WIDTH) -> str:
 
 
 def _speedup_emoji(speedup: float) -> str:
-    if speedup >= 5:
+    if speedup >= 10:
         return "🚀"
-    if speedup >= 2:
+    if speedup >= 3:
         return "⚡"
-    if speedup >= 1.2:
+    if speedup >= 1.5:
         return "✅"
     if speedup >= 0.8:
         return "➖"
     return "⚠️"
+
+
+def _geometric_mean(values):
+    """Compute the geometric mean of a list of positive floats."""
+    if not values:
+        return float("nan")
+    log_sum = sum(math.log(v) for v in values if v > 0)
+    return math.exp(log_sum / len(values))
 
 
 def build_report(pr: dict, upstream: dict) -> str:
@@ -105,9 +141,9 @@ def build_report(pr: dict, upstream: dict) -> str:
     lines.append("")
     lines.append("```")
     lines.append(
-        f"{'Benchmark':<30s} {'Speedup':>8s}  {'Bar (vs baseline)':40s}  {'PR (ms)':>10s}  {'Base (ms)':>10s}"
+        f"{'Benchmark':<32s} {'Speedup':>8s}  {'Bar':40s}  {'PR (ms)':>10s}  {'Base (ms)':>10s}"
     )
-    lines.append("─" * 105)
+    lines.append("─" * 110)
 
     # Pre-compute all speedups so bars use a consistent max across rows
     speedups = []
@@ -131,60 +167,66 @@ def build_report(pr: dict, upstream: dict) -> str:
     bar_max = max(speedups + [10]) if speedups else 10
     min_sp = min((s for s in speedups if s > 0), default=1)
     # Use log scale when the range spans more than 2 orders of magnitude
-    use_log_s1 = bar_max / max(min_sp, 1e-9) > 100
+    use_log = bar_max / max(min_sp, 1e-9) > 100
 
     for pair_idx, entry in enumerate(pair_data):
         if entry is None:
             label = PAIRS[pair_idx][2]
-            lines.append(f"{label:<30s} {'N/A':>8s}  {'(benchmark skipped)':40s}")
+            lines.append(f"{label:<32s} {'N/A':>8s}  {'(benchmark skipped)':40s}")
             continue
         label, speedup, pr_opt, pr_base = entry
-        if use_log_s1:
+        if use_log:
             bar = _bar_log(speedup, bar_max, width=BAR_WIDTH)
         else:
             bar = _bar(speedup, bar_max, width=BAR_WIDTH)
         emoji = _speedup_emoji(speedup)
         lines.append(
-            f"{label:<30s} {speedup:>7.1f}×  {bar:40s}  {pr_opt*1000:>9.2f}  {pr_base*1000:>9.2f}  {emoji}"
+            f"{label:<32s} {speedup:>7.1f}×  {bar:40s}  {pr_opt*1000:>9.2f}  {pr_base*1000:>9.2f}  {emoji}"
         )
 
     lines.append("```")
     lines.append("")
 
-    # Re-render with consistent max for better visual comparison
+    # ── Overall speedup ──────────────────────────────────────────────────
+    if speedups:
+        geo_mean = _geometric_mean(speedups)
+        lines.append(
+            f"**Overall geometric-mean speedup: {geo_mean:.1f}×** "
+            f"(across {len(speedups)} paired benchmarks)"
+        )
+        lines.append("")
+
+    # ── Detailed chart ───────────────────────────────────────────────────
     if speedups:
         max_sp = max(speedups)
-        min_sp = min((s for s in speedups if s > 0), default=1)
-        # Use log scale when the range spans more than 2 orders of magnitude
-        use_log = max_sp / max(min_sp, 1e-9) > 100
-        scale_label = "log₁₀ scale" if use_log else "linear"
-        lines_chart = []
-        lines_chart.append("### Detailed Speedup Chart")
-        lines_chart.append("")
-        lines_chart.append("```")
-        lines_chart.append(
-            f"{'Benchmark':<30s}  |  Speedup bar (max = {max_sp:.0f}×, {scale_label})"
+        min_sp_chart = min((s for s in speedups if s > 0), default=1)
+        use_log_chart = max_sp / max(min_sp_chart, 1e-9) > 100
+        scale_label = "log₁₀ scale" if use_log_chart else "linear"
+        lines.append("### Detailed Speedup Chart")
+        lines.append("")
+        lines.append("```")
+        lines.append(
+            f"{'Benchmark':<32s}  |  Speedup bar (max = {max_sp:.0f}×, {scale_label})"
         )
-        lines_chart.append("─" * 80)
+        lines.append("─" * 80)
 
         idx = 0
         for opt_key, base_key, label in PAIRS:
             pr_opt = pr.get(opt_key)
             pr_base = pr.get(base_key)
             if pr_opt is None or pr_base is None:
-                lines_chart.append(f"{label:<30s}  | (skipped)")
+                lines.append(f"{label:<32s}  | (skipped)")
                 continue
             sp = speedups[idx]
             idx += 1
-            if use_log:
+            if use_log_chart:
                 bar = _bar_log(sp, max_sp, width=BAR_WIDTH)
             else:
                 bar = _bar(sp, max_sp, width=BAR_WIDTH)
-            lines_chart.append(f"{label:<30s}  |{bar} {sp:.1f}×")
+            lines.append(f"{label:<32s}  |{bar} {sp:.1f}×")
 
-        lines_chart.append("```")
-        lines_chart.append("")
-        lines.extend(lines_chart)
+        lines.append("```")
+        lines.append("")
 
     # ── Section 2: Raw timings table ─────────────────────────────────────
     lines.append("### Raw Timings")
