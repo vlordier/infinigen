@@ -53,6 +53,7 @@ class CurriculumConfig:
     max_texture_res: int = 2048
     min_objects: int = 3
     max_objects: int = 80
+    min_scatter_density: float = 0.05
     exponent: float = 2.0
 
     # Derived values (populated by __post_init__)
@@ -64,6 +65,18 @@ class CurriculumConfig:
             raise ValueError(msg)
         if not 0 <= self.stage < self.total_stages:
             msg = f"stage must be in [0, {self.total_stages})"
+            raise ValueError(msg)
+        if self.min_subdiv > self.max_subdiv:
+            msg = f"min_subdiv ({self.min_subdiv}) must be <= max_subdiv ({self.max_subdiv})"
+            raise ValueError(msg)
+        if self.min_texture_res > self.max_texture_res:
+            msg = f"min_texture_res ({self.min_texture_res}) must be <= max_texture_res ({self.max_texture_res})"
+            raise ValueError(msg)
+        if self.min_objects > self.max_objects:
+            msg = f"min_objects ({self.min_objects}) must be <= max_objects ({self.max_objects})"
+            raise ValueError(msg)
+        if self.exponent <= 0:
+            msg = f"exponent must be positive, got {self.exponent}"
             raise ValueError(msg)
         # Exponential ease-in: slow ramp then fast increase
         linear = self.stage / max(self.total_stages - 1, 1)
@@ -94,21 +107,23 @@ class CurriculumConfig:
 
     @property
     def scatter_density(self) -> float:
-        """Scatter-density multiplier in (0, 1] for this stage."""
-        return max(0.05, self._progress)
+        """Scatter-density multiplier in [min_scatter_density, 1] for this stage."""
+        return max(self.min_scatter_density, self._progress)
 
 
 def curriculum_overrides(cfg: CurriculumConfig) -> dict[str, object]:
-    """Return a flat dict of Gin-style overrides for the given curriculum stage.
+    """Return a flat dict of scene-generation overrides for the given curriculum stage.
 
-    The keys follow Gin's ``"scope/function.param"`` convention so they can be
-    passed straight to ``gin.parse_config`` or saved as JSON for later replay.
+    The keys are *logical* parameter names that downstream tooling (e.g. a
+    Gin binding layer or a JSON config driver) can map to actual function
+    parameters.  The ``execute_tasks.generate_resolution`` key matches the
+    real Gin-configurable parameter in ``infinigen.core.execute_tasks``.
     """
     return {
-        "compose_scene.grid_coarsen": max(1, 4 - cfg.subdiv_level),
-        "compose_scene.object_count": cfg.object_count,
-        "scatter.density_multiplier": round(cfg.scatter_density, 4),
-        "render.texture_resolution": cfg.texture_resolution,
+        "grid_coarsen": max(1, 4 - cfg.subdiv_level),
+        "object_count": cfg.object_count,
+        "scatter_density_multiplier": round(cfg.scatter_density, 4),
+        "texture_resolution": cfg.texture_resolution,
         "execute_tasks.generate_resolution": (
             cfg.texture_resolution,
             cfg.texture_resolution,

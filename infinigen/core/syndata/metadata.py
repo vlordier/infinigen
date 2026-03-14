@@ -51,13 +51,28 @@ class DepthStats:
     std_m: float = 10.0
 
     @staticmethod
-    def from_depth_array(depth: np.ndarray) -> DepthStats:
-        """Compute stats from a depth array (any shape)."""
+    def from_depth_array(
+        depth: np.ndarray,
+        *,
+        clip_min: float = 0.0,
+        clip_max: float = 1e4,
+    ) -> DepthStats:
+        """Compute stats from a depth array (any shape).
+
+        Parameters
+        ----------
+        depth : np.ndarray
+            Depth values in metres.  ``inf`` and ``nan`` are excluded.
+        clip_min, clip_max : float
+            Valid depth range — values outside are clipped before computing
+            statistics.  This prevents outliers from dominating the stats.
+        """
         flat = depth.ravel().astype(np.float64)
         # Exclude invalid (inf / nan) values
         valid = flat[np.isfinite(flat)]
         if valid.size == 0:
             return DepthStats()
+        valid = np.clip(valid, clip_min, clip_max)
         return DepthStats(
             min_m=float(np.min(valid)),
             max_m=float(np.max(valid)),

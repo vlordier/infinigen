@@ -118,13 +118,24 @@ class DomainRandomiser:
         return result
 
     def gin_overrides(self) -> dict[str, object]:
-        """Return Gin-compatible overrides derived from current ranges."""
+        """Return a dict of logical overrides derived from current ranges.
+
+        Keys are *logical* parameter names; downstream tooling maps them to
+        actual Gin bindings.  Each value is the *upper bound* of its range,
+        representing the maximum perturbation amplitude for this difficulty.
+        """
         r = self.ranges()
-        sun_lo, sun_hi = r["sun_elevation"]
         return {
-            "lighting.sun_elevation_range": (sun_lo, sun_hi),
+            "lighting.sun_elevation_range": r["sun_elevation"],
+            "lighting.sun_intensity_range": r["sun_intensity"],
+            "configure_render_cycles.exposure": sum(r["exposure"]) / 2,
+            "weather.cloud_density": r["cloud_density"][1],
+            "weather.fog_density": r["fog_density"][1],
+            "weather.wind_speed": r["wind_speed"][1],
             "camera.rotation_jitter": r["camera_rotation_jitter_deg"][1],
             "camera.translation_jitter": r["camera_translation_jitter_m"][1],
+            "material.roughness_variance": r["material_roughness_offset"][1],
+            "material.hue_shift_deg": r["material_color_hue_shift"][1],
         }
 
     @staticmethod

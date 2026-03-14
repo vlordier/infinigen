@@ -53,6 +53,15 @@ class DensityScaler:
         if self.curve not in self._CURVES:
             msg = f"curve must be one of {sorted(self._CURVES)}"
             raise ValueError(msg)
+        if self.min_multiplier < 0:
+            msg = f"min_multiplier must be non-negative, got {self.min_multiplier}"
+            raise ValueError(msg)
+        if self.min_multiplier > self.max_multiplier:
+            msg = f"min_multiplier ({self.min_multiplier}) must be <= max_multiplier ({self.max_multiplier})"
+            raise ValueError(msg)
+        if self.obstacle_min > self.obstacle_max:
+            msg = f"obstacle_min ({self.obstacle_min}) must be <= obstacle_max ({self.obstacle_max})"
+            raise ValueError(msg)
 
     def _t(self) -> float:
         d = self.difficulty
@@ -80,9 +89,13 @@ class DensityScaler:
         return round(self.obstacle_min + t * (self.obstacle_max - self.obstacle_min))
 
     def gin_overrides(self) -> dict[str, object]:
-        """Return Gin-compatible overrides for density parameters."""
+        """Return logical overrides for density parameters.
+
+        Keys are *logical* parameter names; downstream tooling maps them to
+        actual Gin bindings or scene-builder arguments.
+        """
         return {
-            "scatter.density_multiplier": round(self.scatter_multiplier, 4),
-            "instance_scatter.density_multiplier": round(self.instance_multiplier, 4),
-            "compose_scene.obstacle_count": self.obstacle_count,
+            "scatter_density_multiplier": round(self.scatter_multiplier, 4),
+            "instance_density_multiplier": round(self.instance_multiplier, 4),
+            "obstacle_count": self.obstacle_count,
         }

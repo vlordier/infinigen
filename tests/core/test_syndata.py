@@ -74,13 +74,33 @@ class TestCurriculumConfig:
             cfg = CurriculumConfig(stage=i, total_stages=10)
             assert 0.0 < cfg.scatter_density <= 1.0
 
+    def test_inverted_subdiv_raises(self):
+        with pytest.raises(ValueError, match="min_subdiv"):
+            CurriculumConfig(stage=0, total_stages=5, min_subdiv=4, max_subdiv=2)
+
+    def test_inverted_texture_res_raises(self):
+        with pytest.raises(ValueError, match="min_texture_res"):
+            CurriculumConfig(stage=0, total_stages=5, min_texture_res=2048, max_texture_res=64)
+
+    def test_inverted_objects_raises(self):
+        with pytest.raises(ValueError, match="min_objects"):
+            CurriculumConfig(stage=0, total_stages=5, min_objects=100, max_objects=10)
+
+    def test_negative_exponent_raises(self):
+        with pytest.raises(ValueError, match="exponent must be positive"):
+            CurriculumConfig(stage=0, total_stages=5, exponent=-1.0)
+
+    def test_custom_scatter_density_floor(self):
+        cfg = CurriculumConfig(stage=0, total_stages=5, min_scatter_density=0.2)
+        assert cfg.scatter_density >= 0.2
+
 
 class TestCurriculumOverrides:
     def test_returns_dict(self):
         cfg = CurriculumConfig(stage=5, total_stages=10)
         overrides = curriculum_overrides(cfg)
         assert isinstance(overrides, dict)
-        assert "compose_scene.grid_coarsen" in overrides
+        assert "grid_coarsen" in overrides
         assert "execute_tasks.generate_resolution" in overrides
 
     def test_resolution_tuple(self):
@@ -116,6 +136,19 @@ class TestQualityPresets:
         high = drone_preset("high")
         assert preview["configure_render_cycles.num_samples"] < high["configure_render_cycles.num_samples"]
 
+    def test_exposure_present(self):
+        for name in VALID_PRESETS:
+            overrides = drone_preset(name)
+            assert "configure_render_cycles.exposure" in overrides
+
+    def test_resolution_override_too_small(self):
+        with pytest.raises(ValueError, match="resolution too small"):
+            drone_preset("fast", resolution_override=(16, 16))
+
+    def test_resolution_override_too_large(self):
+        with pytest.raises(ValueError, match="resolution too large"):
+            drone_preset("fast", resolution_override=(16384, 16384))
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  3. Scene budget / metrics
@@ -149,6 +182,20 @@ class TestSceneBudget:
         assert "poly_count" in s
         assert "estimated_vram_mb" in s
         assert "estimated_render_seconds" in s
+
+    def test_batch_fits(self):
+        b = SceneBudget(num_samples=16, resolution=(128, 128))
+        assert b.batch_fits(100, max_total_seconds=3600)
+
+    def test_batch_exceeds(self):
+        b = SceneBudget(num_samples=512, resolution=(2048, 2048))
+        assert not b.batch_fits(10000, max_total_seconds=1)
+
+    def test_vram_includes_safety_factor(self):
+        b = SceneBudget(poly_count=100_000)
+        # With 1.5× safety factor, should be higher than raw calculation
+        raw_geo = 100_000 * 120 / (1024 * 1024)
+        assert b.estimated_vram_mb > raw_geo
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -191,6 +238,16 @@ class TestResolution:
             assert (w & (w - 1)) == 0, f"width {w} not power of 2"
             assert (h & (h - 1)) == 0, f"height {h} not power of 2"
 
+    def test_min_greater_than_max_raises(self):
+        with pytest.raises(ValueError, match="min_res"):
+            resolution_for_stage(0, 5, min_res=2048, max_res=64)
+
+    def test_extreme_aspect_ratio_raises(self):
+        with pytest.raises(ValueError, match="aspect_ratio"):
+            resolution_for_stage(0, 5, aspect_ratio=10.0)
+        with pytest.raises(ValueError, match="aspect_ratio"):
+            resolution_for_stage(0, 5, aspect_ratio=0.1)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  5. Domain randomisation
@@ -222,6 +279,11 @@ class TestDomainRandomiser:
         r = DomainRandomiser(difficulty=0.5)
         overrides = r.gin_overrides()
         assert "camera.rotation_jitter" in overrides
+        # All ranges should be exported
+        assert "lighting.sun_elevation_range" in overrides
+        assert "weather.cloud_density" in overrides
+        assert "material.roughness_variance" in overrides
+        assert "configure_render_cycles.exposure" in overrides
 
     def test_from_curriculum_progress(self):
         r = DomainRandomiser.from_curriculum_progress(0.0)
@@ -265,8 +327,20 @@ class TestDensityScaler:
 
     def test_gin_overrides(self):
         overrides = DensityScaler(difficulty=0.5).gin_overrides()
-        assert "scatter.density_multiplier" in overrides
-        assert "compose_scene.obstacle_count" in overrides
+        assert "scatter_density_multiplier" in overrides
+        assert "obstacle_count" in overrides
+
+    def test_inverted_multiplier_raises(self):
+        with pytest.raises(ValueError, match="min_multiplier"):
+            DensityScaler(min_multiplier=1.0, max_multiplier=0.1)
+
+    def test_negative_multiplier_raises(self):
+        with pytest.raises(ValueError, match="min_multiplier must be non-negative"):
+            DensityScaler(min_multiplier=-0.5)
+
+    def test_inverted_obstacle_raises(self):
+        with pytest.raises(ValueError, match="obstacle_min"):
+            DensityScaler(obstacle_min=100, obstacle_max=5)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

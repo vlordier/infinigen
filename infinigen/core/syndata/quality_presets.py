@@ -27,6 +27,7 @@ _PRESETS: dict[str, dict[str, Any]] = {
         "configure_render_cycles.adaptive_threshold": 0.1,
         "configure_render_cycles.time_limit": 5,
         "configure_render_cycles.denoise": False,
+        "configure_render_cycles.exposure": 0.8,
         "execute_tasks.generate_resolution": (128, 128),
         "render.motion_blur": False,
         "render.volume_scatter": False,
@@ -37,6 +38,7 @@ _PRESETS: dict[str, dict[str, Any]] = {
         "configure_render_cycles.adaptive_threshold": 0.05,
         "configure_render_cycles.time_limit": 15,
         "configure_render_cycles.denoise": True,
+        "configure_render_cycles.exposure": 1.0,
         "execute_tasks.generate_resolution": (256, 256),
         "render.motion_blur": False,
         "render.volume_scatter": False,
@@ -47,6 +49,7 @@ _PRESETS: dict[str, dict[str, Any]] = {
         "configure_render_cycles.adaptive_threshold": 0.02,
         "configure_render_cycles.time_limit": 30,
         "configure_render_cycles.denoise": True,
+        "configure_render_cycles.exposure": 1.0,
         "execute_tasks.generate_resolution": (512, 512),
         "render.motion_blur": True,
         "render.volume_scatter": True,
@@ -57,6 +60,7 @@ _PRESETS: dict[str, dict[str, Any]] = {
         "configure_render_cycles.adaptive_threshold": 0.005,
         "configure_render_cycles.time_limit": 120,
         "configure_render_cycles.denoise": True,
+        "configure_render_cycles.exposure": 1.0,
         "execute_tasks.generate_resolution": (1024, 1024),
         "render.motion_blur": True,
         "render.volume_scatter": True,
@@ -96,5 +100,12 @@ def drone_preset(
 
     overrides = dict(_PRESETS[name])
     if resolution_override is not None:
+        w, h = resolution_override
+        if w < 32 or h < 32:
+            msg = f"resolution too small: {resolution_override} (min 32×32)"
+            raise ValueError(msg)
+        if w > 8192 or h > 8192:
+            msg = f"resolution too large: {resolution_override} (max 8192×8192)"
+            raise ValueError(msg)
         overrides["execute_tasks.generate_resolution"] = resolution_override
     return overrides

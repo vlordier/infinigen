@@ -91,7 +91,11 @@ class StageGraph:
                 if by_name[name].depends_on <= completed
             )
             if not wave:
-                msg = "Cycle detected in stage dependencies"
+                cycle_deps = {
+                    name: sorted(by_name[name].depends_on)
+                    for name in remaining
+                }
+                msg = f"Cycle detected in stage dependencies: {cycle_deps}"
                 raise RuntimeError(msg)
             waves.append(wave)
             completed.update(wave)

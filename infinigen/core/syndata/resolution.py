@@ -63,8 +63,14 @@ def resolution_for_stage(
     if min_res < 1 or max_res < 1:
         msg = "min_res and max_res must be positive"
         raise ValueError(msg)
+    if min_res > max_res:
+        msg = f"min_res ({min_res}) must be <= max_res ({max_res})"
+        raise ValueError(msg)
     if aspect_ratio <= 0:
         msg = "aspect_ratio must be positive"
+        raise ValueError(msg)
+    if aspect_ratio < 0.25 or aspect_ratio > 4.0:
+        msg = f"aspect_ratio={aspect_ratio} out of range; use 0.25–4.0"
         raise ValueError(msg)
 
     t = stage / max(total_stages - 1, 1)

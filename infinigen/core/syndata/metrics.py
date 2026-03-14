@@ -24,6 +24,10 @@ class SceneBudget:
     The heuristics intentionally over-estimate so that a scene that *passes*
     budget checks will almost certainly render within the target envelope.
 
+    Heuristic constants are calibrated for Blender 4.x Cycles on an
+    NVIDIA RTX 4090 (24 GB VRAM, CUDA Compute 8.9) with default bounce
+    settings.  Adjust ``_MS_PER_SAMPLE_PER_MPIX`` for other hardware.
+
     Parameters
     ----------
     poly_count : int
@@ -44,19 +48,20 @@ class SceneBudget:
     num_samples: int = 64
     resolution: tuple[int, int] = (256, 256)
 
-    # ------ heuristic constants (empirically tuned) --------------------------
+    # ------ heuristic constants (empirically tuned for RTX 4090) -------------
     _BYTES_PER_TRI: int = 120  # Cycles BVH ≈ 120 B/tri
     _BYTES_PER_TEX_PX: int = 16  # RGBA float32
     _MS_PER_SAMPLE_PER_MPIX: float = 0.35  # rough GPU throughput
+    _VRAM_SAFETY_FACTOR: float = 1.5  # account for caches & intermediates
 
     @property
     def estimated_vram_mb(self) -> float:
-        """Conservative VRAM estimate in MiB."""
+        """Conservative VRAM estimate in MiB (includes safety factor)."""
         geo = self.poly_count * self._BYTES_PER_TRI
         tex = self.texture_pixels * self._BYTES_PER_TEX_PX
         fb_pixels = self.resolution[0] * self.resolution[1]
         framebuffer = fb_pixels * 4 * 4  # 4 channels, float32
-        return (geo + tex + framebuffer) / (1024 * 1024)
+        return (geo + tex + framebuffer) / (1024 * 1024) * self._VRAM_SAFETY_FACTOR
 
     @property
     def estimated_render_seconds(self) -> float:
@@ -73,6 +78,12 @@ class SceneBudget:
             self.estimated_vram_mb <= max_vram_mb
             and self.estimated_render_seconds <= max_seconds
         )
+
+    def batch_fits(
+        self, num_frames: int, *, max_total_seconds: float = 3600
+    ) -> bool:
+        """Return *True* if rendering *num_frames* fits a total time budget."""
+        return self.estimated_render_seconds * num_frames <= max_total_seconds
 
     def summary(self) -> dict[str, float]:
         """Return a JSON-serialisable summary dict."""
