@@ -4,10 +4,13 @@
 # Authors: Lahav Lipson
 
 
+import logging
 import os
 import shutil
 import subprocess
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def listdir(remote_path):
@@ -21,7 +24,7 @@ def listdir(remote_path):
 def download(remote_path, local_folder):
     assert os.path.exists(local_folder) and os.path.isdir(local_folder)
     dest_path = os.path.join(local_folder, os.path.basename(remote_path))
-    print(f"Downloading to {dest_path}")
+    logger.info(f'Downloading to {dest_path}')
     with Path("/dev/null").open("w") as devnull:
         subprocess.run(
             f"{shutil.which('rclone')} copy infinigen_renders:{remote_path} {local_folder}/",

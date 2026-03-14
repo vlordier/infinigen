@@ -36,7 +36,7 @@ def main(thresh, folder):
             pixs[mask] = 0
             img = pixs.reshape(img.shape)
 
-            print(f"Stripped {100 * mask.mean()}% from {imgpath}")
+            logger.info(f'Stripped {100 * mask.mean()}% from {imgpath}')
             imageio.imwrite(out_folder / imgpath.name, img)
 
 

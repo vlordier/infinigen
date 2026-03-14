@@ -136,7 +136,7 @@ def check_intermediate_cleanup(args, scene, idxs, stagetype_name, tasklist):
         for stage_rec in tasklist:
             taskname = stage_rec["name"]
             path = scene[f"{taskname}_output_folder"]
-            print(f"Doing end-of-{stagetype_name} cleanup for {path} for {taskname}")
+            logger.info(f'Doing end-of-{stagetype_name} cleanup for {path} for {taskname}')
             if path is not None and path.exists():
                 rmtree(path)
         scene[key] = True

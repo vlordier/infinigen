@@ -3,12 +3,15 @@
 
 # Authors: Karhan Kayan
 
+import logging
 import os
 import random
 import sys
 
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 def merge_images(
@@ -53,7 +56,7 @@ def merge_images(
         )
     except OSError:
         # If the specific font file is not found, load the default font
-        print("Font not found, using default font.")
+        logger.info('Font not found, using default font.')
         font = ImageFont.load_default()
 
     text_color = (255, 0, 0)  # White color
@@ -111,7 +114,7 @@ def merge_images2(
         )
     except OSError:
         # If the specific font file is not found, load the default font
-        print("Font not found, using default font.")
+        logger.info('Font not found, using default font.')
         font = ImageFont.load_default()
 
     text_color = (255, 0, 0)  # Red color

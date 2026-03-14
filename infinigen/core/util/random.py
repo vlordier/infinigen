@@ -57,7 +57,7 @@ def sample_json_palette(palette_name, n_sample=1):
 
 
 def random_general(var):
-    if not isinstance(var, (tuple, list)):
+    if not isinstance(var, tuple | list):
         return var
 
     func, *args = var

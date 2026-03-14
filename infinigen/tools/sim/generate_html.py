@@ -20,6 +20,8 @@ from PIL import Image
 from infinigen.assets import sim_objects
 from infinigen.core.sim import sim_factory as sf
 
+logger = logging.getLogger(__name__)
+
 HEIGHT = 320
 WIDTH = 480
 DURATION = 8.0
@@ -57,8 +59,8 @@ def render_mjcf(file):
         m = spec.compile()
 
     except Exception as e:
-        print(f"Issue compiling MJCF for {file}")
-        print(e)
+        logger.info(f'Issue compiling MJCF for {file}')
+        logger.info(e)
         return None, None
 
     d = mujoco.MjData(m)
@@ -105,8 +107,8 @@ def render_urdf(file):
     try:
         objid = pybullet.loadURDF(str(file))
     except Exception as e:
-        print(f"Issue compiling URDF for {file}")
-        print(e)
+        logger.info(f'Issue compiling URDF for {file}')
+        logger.info(e)
         return None
 
     camTargetPos = [0, 0, 0]

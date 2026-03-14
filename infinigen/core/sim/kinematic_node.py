@@ -7,8 +7,11 @@
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 
 class KinematicType(Enum):
@@ -137,6 +140,6 @@ def print_subgraph(node: KinematicNode) -> None:
     """
     Prints the acyclic graph starting at the node
     """
-    print(node)
+    logger.info(node)
     for _, child in node.children.items():
         print_subgraph(child)

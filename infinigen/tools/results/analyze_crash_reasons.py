@@ -4,11 +4,14 @@
 # Authors: Alexander Raistrick
 
 import argparse
+import logging
 import re
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def canonicalize_reason(reason):
@@ -42,7 +45,7 @@ def parse_run_folder(run_folder: Path, args: argparse.Namespace):
     crash_reasons = run_folder / "crash_summaries.txt"
 
     if not crash_reasons.exists():
-        print(f"Could not find crash reasons for {run_folder}")
+        logger.info(f'Could not find crash reasons for {run_folder}')
         return
 
     crash_reasons = crash_reasons.read_text().split("\n")
@@ -72,7 +75,7 @@ def parse_run_folder(run_folder: Path, args: argparse.Namespace):
             }
             records.append(record)
         else:
-            print(f"Could not match: {x}")
+            logger.info(f'Could not match: {x}')
 
     df = pd.DataFrame.from_records(records)
 
@@ -82,16 +85,16 @@ def parse_run_folder(run_folder: Path, args: argparse.Namespace):
 def visualize_results(df: pd.DataFrame, args: argparse.Namespace):
     df["reason_canonical"] = df["reason"].apply(canonicalize_reason)
 
-    print("COMMON CRASH REASONS")
-    print(df.value_counts("reason_canonical"))
-    print("")
+    logger.info('COMMON CRASH REASONS')
+    logger.info(df.value_counts('reason_canonical'))
+    logger.info('')
 
-    print("CRASH SCENETYPES")
-    print(df.value_counts("scenetype"))
-    print("")
+    logger.info('CRASH SCENETYPES')
+    logger.info(df.value_counts('scenetype'))
+    logger.info('')
 
     for x in df["reason_canonical"].unique():
-        print(f"REASON: {x}")
+        logger.info(f'REASON: {x}')
 
         examples = df[df["reason_canonical"] == x]
         sample_idxs = np.random.choice(
@@ -100,11 +103,11 @@ def visualize_results(df: pd.DataFrame, args: argparse.Namespace):
 
         stages = examples.value_counts("stage")
         if len(stages) > 1:
-            print(stages)
+            logger.info(stages)
 
         scenetype = examples.value_counts("scenetype")
         if len(scenetype) > 1:
-            print(scenetype)
+            logger.info(scenetype)
 
         for idx in sample_idxs:
             row = " ".join(
@@ -115,8 +118,8 @@ def visualize_results(df: pd.DataFrame, args: argparse.Namespace):
                     ].values
                 ]
             )
-            print(f"  {row}")
-        print("")
+            logger.info(f'  {row}')
+        logger.info('')
 
 
 def main(args):

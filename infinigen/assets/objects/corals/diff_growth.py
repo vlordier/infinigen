@@ -5,7 +5,6 @@
 
 
 import numpy as np
-from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
 from numpy.random import uniform
 
 import infinigen.core.util.blender as butil
@@ -20,6 +19,7 @@ from infinigen.assets.utils.object import data2mesh, mesh2obj
 from infinigen.core import surface
 from infinigen.core.tagging import tag_object
 from infinigen.core.util.math import FixedSeed
+from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
 
 
 class DiffGrowthBaseCoralFactory(BaseCoralFactory):

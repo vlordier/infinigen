@@ -11,6 +11,7 @@ from mathutils import Vector
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"  # This must be done BEFORE import cv2.
 
+import logging
 import subprocess
 
 import cv2
@@ -24,13 +25,15 @@ from infinigen.core.util.logging import Timer
 from infinigen.core.util.organization import AssetFile, LandTile, Materials, Process
 from infinigen.terrain.utils import Mesh
 
+logger = logging.getLogger(__name__)
+
 
 def get_objs_inside_domain(dom, objects):
     ls = []
     min_co = Vector((1e9, 1e9, 1e9))
     max_co = Vector((-1e9, -1e9, -1e9))
     min_co, max_co = obj_bb_minmax(dom)
-    print(min_co, max_co)
+    logger.info("%s %s", min_co, max_co)
     for obj in objects:
         if (
             obj.matrix_world.translation[0] < max_co[0]
@@ -94,7 +97,7 @@ def set_flip_fluid_domain(
     max_whitewater_energy=2.2,
     subdivisions=2,
 ):
-    print("fluid resolution", resolution)
+    logger.info("%s %s", 'fluid resolution', resolution)
     butil.select(dom)
     bpy.context.view_layer.objects.active = dom
     bpy.ops.flip_fluid_operators.flip_fluid_add()
@@ -134,7 +137,7 @@ def set_flip_fluid_domain(
             cache_folder, find_available_cache(cache_folder)
         )
 
-    print(f"cache folder = {cache_folder}")
+    logger.info(f'cache folder = {cache_folder}')
 
     bpy.ops.flip_fluid_operators.helper_select_surface()
     surface = bpy.context.object
@@ -214,7 +217,7 @@ def obj_simulate(
     # assuming we are importing to the origin
     # bpy.ops.import_scene.obj(filepath=obj_filepath)
     terrain = bpy.data.objects[obj_name]
-    print(terrain, terrain.name)
+    logger.info("%s %s", terrain, terrain.name)
     set_flip_fluid_obstacle(terrain)
     obj = create_flip_fluid_inflow(
         location=source_relative_pos,
@@ -232,7 +235,7 @@ def obj_simulate(
         simulation_duration=simulation_duration,
     )
 
-    print(f"resolution: {resolution}")
+    logger.info(f'resolution: {resolution}')
     with Timer("baking"):
         bpy.ops.flip_fluid_operators.bake_fluid_simulation_cmd()
     Path(output_folder).mkdir(exist_ok=True)
@@ -368,7 +371,7 @@ def make_beach(terrain, obstacles, location=(0, 0, 0), output_folder=None):
     obstacle_terrain(terrain, dom, is_planar=False)
     obstacles_restricted = get_objs_inside_domain(dom, obstacles)
     for obst in obstacles_restricted:
-        print(obst)
+        logger.info(obst)
         obstacle_dfs(obst)
     with Timer("baking"):
         bpy.ops.flip_fluid_operators.bake_fluid_simulation_cmd()
@@ -435,13 +438,13 @@ def make_river(
     obstacle_terrain(terrain, dom, is_planar=False, friction=terrain_friction)
     obstacles_restricted = get_objs_inside_domain(dom, obstacles)
     for obst in obstacles_restricted:
-        print("Setting obstacle: ", obst)
+        logger.info("%s %s", 'Setting obstacle: ', obst)
         obstacle_dfs(obst, friction=terrain_friction)
 
     if "scatter" in bpy.data.collections:
-        print("scatter exists")
+        logger.info('scatter exists')
         for obj in bpy.data.collections["scatter"].objects:
-            print("Setting scatter obstacle: ", obj)
+            logger.info("%s %s", 'Setting scatter obstacle: ', obj)
             obstacle_dfs(obj, friction=terrain_friction)
 
     with Timer("baking"):
@@ -493,13 +496,13 @@ def make_tilted_river(
     obstacle_terrain(terrain, dom, friction=terrain_friction, is_planar=False)
     obstacles_restricted = get_objs_inside_domain(dom, obstacles)
     for obst in obstacles_restricted:
-        print(obst)
+        logger.info(obst)
         obstacle_dfs(obst, friction=terrain_friction)
 
     if "scatter" in bpy.data.collections:
-        print("scatter exists")
+        logger.info('scatter exists')
         for obj in bpy.data.collections["scatter"].objects:
-            print(obj)
+            logger.info(obj)
             obstacle_dfs(obj, friction=terrain_friction)
 
     with Timer("baking"):

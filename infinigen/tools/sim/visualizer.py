@@ -6,11 +6,14 @@
 # - Max Gonzalez Saez-Diez: Primary author
 
 import argparse
+import logging
 
 import numpy as np
 
 from infinigen.tools.sim.build_html import generate_html
 from infinigen.tools.sim.vis_mujoco import MujocoAssetInitializer
+
+logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Render MuJoCo asset animations")
@@ -105,7 +108,7 @@ if __name__ == "__main__":
     remove = args.remove_existing if args.remove_existing else False
     failure_seeds = []
     for seed in seeds:
-        print(f"Rendering {args.asset_name} with seed {seed}")
+        logger.info(f'Rendering {args.asset_name} with seed {seed}')
         try:
             vis = MujocoAssetInitializer(
                 asset_name=args.asset_name,
@@ -121,7 +124,7 @@ if __name__ == "__main__":
             vis.render_all_animations()
             remove = False  # Only remove existing on the first iteration
         except Exception as e:
-            print(f"Error rendering asset {args.asset_name} with seed {seed}: {e}")
+            logger.info(f'Error rendering asset {args.asset_name} with seed {seed}: {e}')
             failure_seeds.append(seed)
 
     vis_file_name = (

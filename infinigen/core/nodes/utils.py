@@ -82,5 +82,5 @@ def infer_input_socket(node, input_socket_name):
 
 def isnode(x):
     return isinstance(
-        x, (bpy.types.ShaderNode, bpy.types.NodeInternal, bpy.types.GeometryNode)
+        x, bpy.types.ShaderNode | bpy.types.NodeInternal | bpy.types.GeometryNode
     )

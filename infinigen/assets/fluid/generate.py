@@ -3,6 +3,8 @@
 
 # Authors: Karhan Kayan
 
+import logging
+
 import bpy
 import gin
 
@@ -15,6 +17,8 @@ from infinigen.assets.fluid.fluid import (
 )
 from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.util import blender as butil
+
+logger = logging.getLogger(__name__)
 
 
 @gin.configurable
@@ -46,7 +50,7 @@ class FluidFactory(AssetFactory):
             dom = None
             flow = None
             for obj in emp.children:
-                print(obj, self.fluid_type)
+                logger.info("%s %s", obj, self.fluid_type)
                 bpy.context.collection.objects.link(obj)
                 if "Fluid" not in obj.modifiers:
                     continue
@@ -57,7 +61,7 @@ class FluidFactory(AssetFactory):
             assert dom is not None and flow is not None
 
             bpy.context.view_layer.objects.active = dom
-            print(self.fluid_type)
+            logger.info(self.fluid_type)
             bpy.ops.fluid.bake_all()
             bpy.context.collection.objects.unlink(dom)
             bpy.context.collection.objects.unlink(flow)
@@ -66,7 +70,7 @@ class FluidFactory(AssetFactory):
             settings = mod.domain_settings
             cache_dir = settings.cache_directory
             cache_dirs[i] = cache_dir
-            print("cachedir", cache_dir)
+            logger.info("%s %s", 'cachedir', cache_dir)
             mod.fluid_type = "NONE"
 
         for i in range(len(self.fluid_collection)):
@@ -83,7 +87,7 @@ class FluidFactory(AssetFactory):
             cache_dir = cache_dirs[i]
             mod = dom.modifiers["Fluid"]
             mod.fluid_type = "DOMAIN"
-            print(dom, mod)
+            logger.info("%s %s", dom, mod)
             settings = mod.domain_settings
 
             # have to change this part
@@ -121,7 +125,7 @@ class FluidFactory(AssetFactory):
         obj = None
         dom = None
         if self.fluid_type in ["fire_and_smoke", "fire", "smoke"]:
-            print("creating gas flow")
+            logger.info('creating gas flow')
             turbulence = add_field((0, 0, 3))
             obj = create_gas_flow(
                 location=(0, 0, 1), fluid_type=self.fluid_type, size=0.5

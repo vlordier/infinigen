@@ -200,7 +200,7 @@ class FrontviewSphericalMesher:
         it = 0
         while True:
             if self.verbose:
-                print(f"{it=}")
+                logger.info(f'it={it!r}')
             it += 1
             if cnt == 0:
                 break
@@ -245,9 +245,7 @@ class FrontviewSphericalMesher:
             M = NM[1]
 
         if self.verbose:
-            print(
-                f"Entire in view coarse mesh (without visibility face removal) has {N} vertices and {M} faces"
-            )
+            logger.info(f'Entire in view coarse mesh (without visibility face removal) has {N} vertices and {M} faces')
 
         with Timer("bisection on in view coarse mesh"):
             positions = AC(np.zeros((N * 3,), dtype=np.float64))
@@ -272,7 +270,7 @@ class FrontviewSphericalMesher:
         it = 0
         while True:
             if self.verbose:
-                print(f"{it=}")
+                logger.info(f'it={it!r}')
             it += 1
             if cnt == 0 and self.complete_depth_test:
                 with Timer("complete_depth_test"):
@@ -351,14 +349,10 @@ class FrontviewSphericalMesher:
             NM[:] = 0
             self.get_final_mesh_statistics(ASINT(NM), ASINT(Ns), ASINT(Ms))
             if self.verbose:
-                print(
-                    f"Invisible cleaned coarse mesh has {NM[0]} vertices and {NM[1]} faces"
-                )
+                logger.info(f'Invisible cleaned coarse mesh has {NM[0]} vertices and {NM[1]} faces')
             for e in range(n_elements):
                 if self.verbose:
-                    print(
-                        f"In view fine mesh (element {e}) has {Ns[e]} vertices and {Ms[e]} faces"
-                    )
+                    logger.info(f'In view fine mesh (element {e}) has {Ns[e]} vertices and {Ms[e]} faces')
 
         with Timer("fine bisection"):
             for e in range(n_elements):

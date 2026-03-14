@@ -3,12 +3,15 @@
 
 # Authors: Alexander Raistrick, Abhishek Joshi
 import argparse
+import logging
 from pathlib import Path
 
 import bpy
 
 from infinigen.assets import sim_objects as objects
 from infinigen.core.nodes.node_transpiler import transpiler
+
+logger = logging.getLogger(__name__)
 
 
 def load_blender_file(filepath):
@@ -52,7 +55,7 @@ def transpile_simready(args):
     transpiled_path.parent.mkdir(parents=True, exist_ok=True)
     with open(transpiled_path, "w") as f:
         f.write(res)
-    print(f"Generated transpiled code to {transpiled_path}")
+    logger.info(f'Generated transpiled code to {transpiled_path}')
 
     return transpiled_path, class_name
 

@@ -7,6 +7,8 @@
 # - Abhishek Joshi: Updates for sim
 # - Max Gonzalez Saez-Diez: Updates for sim
 
+import logging
+
 import gin
 from numpy.random import randint, uniform
 
@@ -19,6 +21,8 @@ from infinigen.core.nodes.node_wrangler import Nodes, NodeWrangler
 from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.util import blender as butil
 from infinigen.core.util.random import weighted_sample
+
+logger = logging.getLogger(__name__)
 
 
 @node_utils.to_nodegroup(
@@ -1542,7 +1546,6 @@ class PlierFactory(AssetFactory):
         import numpy as np
 
         from infinigen.assets.materials import metal, plastic
-
         def sample_gray():
             """Generate a gray color variation"""
             # Silver colors are desaturated with high brightness
@@ -1598,9 +1601,7 @@ class PlierFactory(AssetFactory):
             "cut length ratio": uniform(0.65, 0.83),
             "pincer length ratio": uniform(0.6, 0.75),
         }
-        print(
-            f"=======================================================\nDictionary of configs: {return_dict}\n\n"
-        )
+        logger.info(f'=======================================================\nDictionary of configs: {return_dict}\n\n')
         return return_dict
 
     def create_asset(self, asset_params=None, **kwargs):

@@ -3,6 +3,7 @@
 # of this source tree.
 
 import argparse
+import logging
 import os
 import re
 from datetime import timedelta
@@ -10,6 +11,8 @@ from pathlib import Path
 
 import jinja2
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def sizeof_fmt(num, suffix="B"):
@@ -173,7 +176,7 @@ def parse_run_df(run_path: Path):
         "_".join(x.name.split("_")[2:]): x for x in run_path.iterdir() if x.is_dir()
     }
     for k, v in runs.items():
-        print(k, v)
+        logger.info("%s %s", k, v)
 
     records = []
 
@@ -236,7 +239,7 @@ def parse_run_df(run_path: Path):
 
         records.append(record)
 
-    print(f"{run_path=} found {len(records)} records")
+    logger.info(f'run_path={run_path!r} found {len(records)} records')
 
     return pd.DataFrame.from_records(records)
 
@@ -259,7 +262,6 @@ def find_run(base_path: str, run: str) -> Path:
 
 def fuzzy_merge(dfA, dfB, keyA, keyB, threshold=1):
     from rapidfuzz import fuzz, process
-
     matches_A = []
     matches_B = []
 
@@ -270,7 +272,7 @@ def fuzzy_merge(dfA, dfB, keyA, keyB, threshold=1):
         return x
 
     b_names_list = dfB[keyB].apply(preproc)
-    print(list(b_names_list))
+    logger.info(list(b_names_list))
 
     for i, rowA in dfA.iterrows():
         match = process.extractOne(
@@ -283,7 +285,7 @@ def fuzzy_merge(dfA, dfB, keyA, keyB, threshold=1):
         else:
             matched_rowB = {col: pd.NA for col in dfB.columns}
             matched_rowB[keyB] = "No Matching Scene"
-            print(f"No match found for {rowA[keyA].split('/')[-1]}")
+            logger.info(f'No match found for {rowA[keyA].split('/')[-1]}')
 
         matches_A.append(rowA.to_dict())
         matches_B.append(matched_rowB)
@@ -319,11 +321,11 @@ def main():
     if len(runs) == 2:
         lhs = dfs[runs[0]]
         rhs = dfs[runs[1]]
-        print(lhs.columns)
-        print(rhs.columns)
+        logger.info(lhs.columns)
+        logger.info(rhs.columns)
     elif len(runs) == 1:
         lhs = rhs = dfs[runs[0]]
-        print(lhs.columns)
+        logger.info(lhs.columns)
     else:
         raise ValueError("Only 1 or 2 runs supported")
 
@@ -345,7 +347,7 @@ def main():
                 else x
             )
 
-    print(main_df.columns)
+    logger.info(main_df.columns)
 
     categories = [
         "scene_nature",
@@ -361,7 +363,7 @@ def main():
     }
 
     for category, records in path_lookups.items():
-        print(category, len(records))
+        logger.info("%s %s", category, len(records))
 
     jenv = jinja2.Environment(loader=jinja2.FileSystemLoader("."))
     template = jenv.get_template("tests/integration/template.html")
@@ -377,7 +379,7 @@ def main():
     output_path = args.output_path
     if output_path is None:
         output_path = views_folder / name
-    print("Writing to ", output_path)
+    logger.info("%s %s", 'Writing to ', output_path)
     output_path.write_text(html_content)
 
 
