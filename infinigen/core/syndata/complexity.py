@@ -1,0 +1,116 @@
+# Copyright (C) 2024, Princeton University.
+# This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
+# of this source tree.
+
+"""Curriculum complexity scheduler for progressive RL training.
+
+Maps a *stage* index (0 … ``total_stages - 1``) to concrete scene-generation
+parameters: geometry detail, texture resolution, object count, and scatter
+density.  The scaling follows an exponential ease-in so that early stages are
+cheap to render and later stages approach full photorealism.
+
+All public helpers are pure Python / NumPy — no ``bpy`` dependency.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class CurriculumConfig:
+    """Immutable snapshot of curriculum parameters for one training stage.
+
+    Parameters
+    ----------
+    stage : int
+        Current difficulty stage (0-indexed).
+    total_stages : int
+        Total number of stages in the curriculum.
+    min_subdiv : int
+        Minimum subdivision level for the easiest stage.
+    max_subdiv : int
+        Maximum subdivision level for the hardest stage.
+    min_texture_res : int
+        Minimum texture resolution (px) for the easiest stage.
+    max_texture_res : int
+        Maximum texture resolution (px) for the hardest stage.
+    min_objects : int
+        Minimum object count for the easiest stage.
+    max_objects : int
+        Maximum object count for the hardest stage.
+    exponent : float
+        Controls the shape of the difficulty curve.  1.0 = linear,
+        >1 = slow start / fast finish (recommended for RL).
+    """
+
+    stage: int = 0
+    total_stages: int = 10
+    min_subdiv: int = 0
+    max_subdiv: int = 4
+    min_texture_res: int = 64
+    max_texture_res: int = 2048
+    min_objects: int = 3
+    max_objects: int = 80
+    exponent: float = 2.0
+
+    # Derived values (populated by __post_init__)
+    _progress: float = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.total_stages < 1:
+            msg = "total_stages must be >= 1"
+            raise ValueError(msg)
+        if not 0 <= self.stage < self.total_stages:
+            msg = f"stage must be in [0, {self.total_stages})"
+            raise ValueError(msg)
+        # Exponential ease-in: slow ramp then fast increase
+        linear = self.stage / max(self.total_stages - 1, 1)
+        object.__setattr__(self, "_progress", math.pow(linear, self.exponent))
+
+    # ---- derived properties -------------------------------------------------
+
+    @property
+    def progress(self) -> float:
+        """Normalised difficulty in [0, 1] after applying the exponent curve."""
+        return self._progress
+
+    @property
+    def subdiv_level(self) -> int:
+        """Subdivision level for this stage (integer)."""
+        return round(self.min_subdiv + self._progress * (self.max_subdiv - self.min_subdiv))
+
+    @property
+    def texture_resolution(self) -> int:
+        """Texture resolution (px) for this stage, rounded to nearest power-of-2."""
+        raw = self.min_texture_res + self._progress * (self.max_texture_res - self.min_texture_res)
+        return int(2 ** round(math.log2(max(raw, 1))))
+
+    @property
+    def object_count(self) -> int:
+        """Target number of scene objects for this stage."""
+        return round(self.min_objects + self._progress * (self.max_objects - self.min_objects))
+
+    @property
+    def scatter_density(self) -> float:
+        """Scatter-density multiplier in (0, 1] for this stage."""
+        return max(0.05, self._progress)
+
+
+def curriculum_overrides(cfg: CurriculumConfig) -> dict[str, object]:
+    """Return a flat dict of Gin-style overrides for the given curriculum stage.
+
+    The keys follow Gin's ``"scope/function.param"`` convention so they can be
+    passed straight to ``gin.parse_config`` or saved as JSON for later replay.
+    """
+    return {
+        "compose_scene.grid_coarsen": max(1, 4 - cfg.subdiv_level),
+        "compose_scene.object_count": cfg.object_count,
+        "scatter.density_multiplier": round(cfg.scatter_density, 4),
+        "render.texture_resolution": cfg.texture_resolution,
+        "execute_tasks.generate_resolution": (
+            cfg.texture_resolution,
+            cfg.texture_resolution,
+        ),
+    }
