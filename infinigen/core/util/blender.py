@@ -28,6 +28,9 @@ from .logging import Suppress
 
 logger = logging.getLogger(__name__)
 
+# Blender-managed attribute names that should be skipped during custom attribute processing
+BLENDER_INTERNAL_ATTRS = frozenset({"material_index", "uv_map", "UVMap", "sharp_face"})
+
 
 @gin.configurable("geometry")
 def set_geometry_option(material, option="BUMP"):
@@ -910,9 +913,7 @@ def blender_internal_attr(a):
         a = a.name
     if a.startswith("."):
         return True
-    if a in ["material_index", "uv_map", "UVMap", "sharp_face"]:
-        return True
-    return False
+    return a in BLENDER_INTERNAL_ATTRS
 
 
 def merge_by_distance(obj, face_size):
