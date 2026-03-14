@@ -246,7 +246,7 @@ def garbage_collect(targets, keep_in_use=True, keep_names=None, verbose=False):
             if "(no gc)" in o.name:
                 continue
             if verbose:
-                print(f"Garbage collecting {o} from {t}")
+                logger.debug(f"Garbage collecting {o} from {t}")
             t.remove(o)
 
 
@@ -590,7 +590,7 @@ def set_geomod_inputs(mod, inputs: dict):
         try:
             mod[soc.identifier] = v
         except TypeError as e:
-            print(
+            logger.error(
                 f"Error incurred while assigning {v} with {type(v)=} to {soc.identifier=} of {mod.name=}"
             )
             raise e
@@ -671,8 +671,8 @@ def import_mesh(path, **kwargs):
         funcs[ext](filepath=str(path), **kwargs)
 
     if len(bpy.context.selected_objects) > 1 if ext != "usdc" else 2:
-        print(
-            f"Warning: {ext.upper()} Import produced {len(bpy.context.selected_objects)} objects, "
+        logger.warning(
+            f"{ext.upper()} Import produced {len(bpy.context.selected_objects)} objects, "
             f"but only the first is returned by import_obj"
         )
     if ext != "usdc":
@@ -782,7 +782,7 @@ def recalc_normals(obj, inside=False):
 
 def save_blend(path, autopack=False, verbose=False):
     if verbose:
-        print(f"Saving .blend to {path} ({'with' if autopack else 'without'} textures)")
+        logger.info(f"Saving .blend to {path} ({'with' if autopack else 'without'} textures)")
 
     with Suppress():
         if autopack:
@@ -854,7 +854,7 @@ def object_from_VF(vertices, faces, name):
 
 def object_from_trimesh(mesh, name, material=None):
     if name in bpy.data.objects.keys():
-        print("replacing original object")
+        logger.debug("replacing original object")
         delete(bpy.data.objects[name])
     new_object = object_from_VF(mesh.vertices, mesh.faces, name)
     for attr_name in mesh.vertex_attributes:
