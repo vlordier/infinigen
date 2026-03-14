@@ -18,7 +18,6 @@ from collections.abc import Callable
 from itertools import product
 from pathlib import Path
 
-# ruff: noqa: E402
 # NOTE: logging config has to be before imports that use logging
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(module)s] [%(levelname)s] | %(message)s",

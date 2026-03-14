@@ -14,7 +14,6 @@ import numpy as np
 from mathutils import Matrix, Vector, bvhtree
 from tqdm import trange
 
-# ruff: noqa: E402
 # NOTE: logging config has to be before imports that use logging
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(module)s] [%(levelname)s] | %(message)s",

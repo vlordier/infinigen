@@ -173,15 +173,42 @@ select = [
     "E",
     "I",
     "F",
-    "UP",   # pyupgrade: enforce Python 3.11+ syntax
-    "S102", # no exec(),
+    "UP",     # pyupgrade: enforce Python 3.11+ syntax
+    "S102",   # no exec()
     "TID252", # relative imports only allowed for siblings
-
+    "B",      # flake8-bugbear: opinionated bug/design checks
+    "RUF",    # ruff-specific rules
 ]
 ignore = [
-    "E501", # over-length lines, formatter should handle it
-    "E741", # ambigous variable name
-    "F841", # local variable is assigned to but never used
+    "E501",   # over-length lines, formatter should handle it
+    "E741",   # ambiguous variable name
+    "F841",   # local variable is assigned to but never used
+
+    # ---- B (bugbear) rules with too many violations to address at once ----
+    "B006",   # mutable default argument – pervasive in transpiler/assets
+    "B007",   # unused loop variable – many in core; use _var convention where practical
+    "B008",   # function call in default args – common in Blender API wrappers
+    "B020",   # loop variable shadows outer scope
+    "B023",   # function defined inside loop – too common in shader/node builders
+    "B028",   # no explicit stacklevel in warnings.warn
+    "B905",   # zip() without strict= – 100+ call sites; adopt gradually
+
+    # ---- RUF rules with too many violations or low signal-to-noise ----
+    "RUF001", # ambiguous Unicode chars in string literals
+    "RUF002", # ambiguous Unicode chars in docstrings
+    "RUF003", # ambiguous Unicode chars in comments
+    "RUF005", # iterable unpacking instead of concatenation
+    "RUF007", # zip strict
+    "RUF010", # use operator instead of explicit cast
+    "RUF012", # mutable ClassVar – many Blender node group definitions
+    "RUF013", # implicit Optional – widespread; migrate to X | None gradually
+    "RUF015", # unnecessary iterable allocation in first/last
+    "RUF017", # quadratic list summation
+    "RUF019", # unnecessary key check before dict access
+    "RUF021", # parenthesise chained operators
+    "RUF022", # __all__ not sorted
+    "RUF046", # unnecessary cast
+    "RUF059", # unused unpacked variable
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -190,6 +217,17 @@ ignore = [
     "CPY001", # runs during PRs, but no need for copyright on boilerplate/often-empty __init__.py
 ]
 "infinigen/assets/*" = ["F841"] #transpiler currently creates lots of unused variables
+
+# These files intentionally perform setup (logging config, sys.path changes, etc.)
+# before importing other modules; E402 is expected here.
+"infinigen/datagen/manage_jobs.py" = ["E402"]
+"infinigen/tools/isaac_sim.py" = ["E402"]
+"infinigen_examples/generate_asset_demo.py" = ["E402"]
+"infinigen_examples/generate_asset_parameters.py" = ["E402"]
+"infinigen_examples/generate_individual_assets.py" = ["E402"]
+"infinigen_examples/generate_indoors.py" = ["E402"]
+"infinigen_examples/generate_material_balls.py" = ["E402"]
+"infinigen_examples/generate_nature.py" = ["E402"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

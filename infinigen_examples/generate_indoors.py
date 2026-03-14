@@ -6,7 +6,6 @@ import argparse
 import logging
 from pathlib import Path
 
-# ruff: noqa: E402
 # NOTE: logging config has to be before imports that use logging
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(module)s] [%(levelname)s] | %(message)s",
@@ -55,10 +54,6 @@ from infinigen_examples.util.generate_indoors_util import (
     hide_other_rooms,
     place_cam_overhead,
     restrict_solving,
-)
-
-from . import (
-    generate_nature,  # noqa: F401 # needed for nature gin configs to be loaded
 )
 
 logger = logging.getLogger(__name__)

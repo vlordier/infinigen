@@ -963,7 +963,7 @@ def build_joint_sampler(code_str):
         result += f'\t\t\t"{label}": {{\n'
         result += f'\t\t\t\t"stiffness": uniform({replaced_label}_stiffness_min, {replaced_label}_stiffness_max),\n'
         result += f'\t\t\t\t"damping": uniform({replaced_label}_damping_min, {replaced_label}_damping_max)\n'
-        result += f"\t\t\t}},\n"  # noqa
+        result += "\t\t\t}},\n"
     result += "\t\t}"
     return result
 

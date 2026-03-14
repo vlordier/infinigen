@@ -8,8 +8,7 @@
 import numpy as np
 from numpy.random import normal, uniform
 
-# ruff: noqa: F401
-from infinigen.core.util.color import hex2rgba, hsv2rgba, rgb2hsv
+from infinigen.core.util.color import hex2rgba, hsv2rgba, rgb2hsv  # noqa: F401
 from infinigen.core.util.random import (
     log_uniform,
     mixture_of_gaussian,
