@@ -342,7 +342,7 @@ def assign_material(
 
         if len(obj.material_slots) == 0:
             raise ValueError(
-                f"{assign_material.__name__} recieved {selection=} but existing materials to combine with"
+                f"{assign_material.__name__} received {selection=} but existing materials to combine with"
             )
 
         if isinstance(selection, str):
