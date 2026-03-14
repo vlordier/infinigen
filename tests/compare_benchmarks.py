@@ -40,6 +40,16 @@ BENCHMARKS = [
     ("boundary_detection", "boundary (vectorised vs loop)"),
     ("surface_normals", "normals (vectorised vs loop)"),
     ("full_pipeline", "⭐ full pipeline (composite)"),
+    ("rrt_nearest", "RRT nearest (KDTree vs brute-force)"),
+    ("rrt_neighborhood", "RRT neighborhood (KDTree vs repmat)"),
+    ("space_colonisation", "space colonisation (pre-computed vs inline)"),
+    ("color_sampling", "colour sampling (batched vs per-sample)"),
+    ("smooth_attribute", "smooth attribute (sparse matmul vs per-edge loop)"),
+    ("vertex_group", "vertex group (batch vs per-vertex)"),
+    ("mesh_bulk_copy", "mesh bulk copy (NumPy vs loop)"),
+    ("sdf_batch", "SDF batch (stacked vs sequential)"),
+    ("grid_edges", "grid edges (vectorised vs triple loop)"),
+    ("advanced_pipeline", "⭐ advanced pipeline (all new opts)"),
 ]
 
 BAR_WIDTH = 40
