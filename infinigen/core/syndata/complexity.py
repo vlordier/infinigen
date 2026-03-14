@@ -194,6 +194,12 @@ def get_gin_overrides(level: int | ComplexityLevel) -> list[str]:
         f"compose_nature.max_bush_species = {params.max_bush_species}",
         f"compose_nature.tree_density = {params.tree_density}",
         f"configure_render_cycles.num_samples = {params.render_num_samples}",
+        f"compose_nature.terrain_erosion_enabled = {params.enable_terrain_erosion}",
+        f"compose_nature.clouds_enabled = {params.enable_clouds}",
+        f"compose_nature.weather_enabled = {params.enable_weather}",
+        f"compose_nature.creatures_enabled = {params.enable_creatures}",
+        f"compose_nature.scatter_density_multiplier = {params.scatter_density_multiplier}",
+        f"execute_tasks.resolution_scale = {params.resolution_scale}",
     ]
     logger.info(
         "Generated %d gin overrides for complexity level %d", len(overrides), level

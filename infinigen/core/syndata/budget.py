@@ -75,10 +75,22 @@ class SceneBudget:
         return self._rejection_count
 
     def remaining_polygons(self) -> int:
-        return max(0, self.max_polygons - self._used_polygons)
+        remaining = self.max_polygons - self._used_polygons
+        if remaining < 0:
+            logger.warning(
+                "Budget overflow: used %d > max %d polygons",
+                self._used_polygons, self.max_polygons,
+            )
+        return max(0, remaining)
 
     def remaining_objects(self) -> int:
-        return max(0, self.max_objects - self._used_objects)
+        remaining = self.max_objects - self._used_objects
+        if remaining < 0:
+            logger.warning(
+                "Budget overflow: used %d > max %d objects",
+                self._used_objects, self.max_objects,
+            )
+        return max(0, remaining)
 
     def utilisation(self) -> dict[str, float]:
         """Return utilisation fractions for each resource in [0, 1]."""
@@ -168,6 +180,11 @@ class SceneBudget:
         memory_mb: float = 0.0,
     ) -> None:
         """Return previously allocated resources."""
+        if polygons > self._used_polygons:
+            logger.warning(
+                "Releasing %d polygons but only %d used",
+                polygons, self._used_polygons,
+            )
         self._used_polygons = max(0, self._used_polygons - polygons)
         self._used_vertices = max(0, self._used_vertices - vertices)
         self._used_objects = max(0, self._used_objects - objects)

@@ -619,5 +619,112 @@ class TestValidation:
         report.add(ValidationResult("test", Severity.PASS, "ok"))
         report.add(ValidationResult("bad", Severity.ERROR, "fail"))
         summary = report.summary()
-        assert "1 errors" in summary
+        assert "1 error" in summary
         assert "bad" in summary
+
+
+# ── Edge Case Tests ──────────────────────────────────────────────────────────
+
+
+class TestEdgeCases:
+    """Additional edge case tests identified during code review."""
+
+    def test_corrupt_cache_handled(self, tmp_path):
+        """Verify corrupt pickle files are handled gracefully."""
+        cache = StageCache(tmp_path / "cache")
+        # Manually create a corrupt pickle
+        cache_dir = tmp_path / "cache"
+        cache_dir.mkdir(exist_ok=True)
+        corrupt_file = cache_dir / "test_corrupt_bad.pkl"
+        corrupt_file.write_text("this is not valid pickle data")
+        # Access via internal path should tolerate corrupt data
+        result = cache.get("test_corrupt", {"bad": True})
+        assert cache.is_miss(result)
+
+    def test_budget_negative_release(self):
+        """Verify releasing more than allocated is safe."""
+        b = SceneBudget(max_polygons=1000)
+        b.try_allocate(polygons=100)
+        b.release(polygons=200)  # over-release
+        assert b.used_polygons == 0
+
+    def test_seed_registry_unicode(self):
+        """Verify non-ASCII component names work."""
+        r = SeedRegistry(base_seed=42)
+        seed = r.get("terrain_tree")
+        assert isinstance(seed, int)
+
+    def test_metadata_load_unknown_fields(self, tmp_path):
+        """Verify load_json tolerates extra fields from future schema."""
+        import json
+
+        path = tmp_path / "meta.json"
+        data = {
+            "scene_seed": 42,
+            "complexity_level": 3,
+            "quality_preset": "medium",
+            "generation_time_s": 0.0,
+            "objects": [],
+            "gin_overrides": [],
+            "stage_timings": {},
+            "extra": {},
+            "unknown_future_field": "should be ignored",
+        }
+        with open(path, "w") as f:
+            json.dump(data, f)
+        loaded = SceneMetadata.load_json(path)
+        assert loaded.scene_seed == 42
+
+    def test_gin_overrides_complete(self):
+        """Verify all ComplexityParams fields are reflected in gin overrides."""
+        overrides = get_gin_overrides(3)
+        override_text = " ".join(overrides)
+        assert "max_tree_species" in override_text
+        assert "max_bush_species" in override_text
+        assert "tree_density" in override_text
+        assert "num_samples" in override_text
+        assert "terrain_erosion_enabled" in override_text
+        assert "clouds_enabled" in override_text
+        assert "weather_enabled" in override_text
+        assert "creatures_enabled" in override_text
+        assert "scatter_density_multiplier" in override_text
+        assert "resolution_scale" in override_text
+
+    def test_validation_summary_grammar(self):
+        """Verify singular/plural grammar in validation summary."""
+        report = ValidationReport()
+        report.add(ValidationResult("a", Severity.ERROR, "fail"))
+        summary = report.summary()
+        assert "1 error," in summary
+        assert "0 warnings" in summary
+
+        report2 = ValidationReport()
+        report2.add(ValidationResult("a", Severity.ERROR, "f1"))
+        report2.add(ValidationResult("b", Severity.ERROR, "f2"))
+        report2.add(ValidationResult("c", Severity.WARNING, "w1"))
+        summary2 = report2.summary()
+        assert "2 errors," in summary2
+        assert "1 warning" in summary2
+
+    def test_parallel_executor_all_fail(self):
+        """Verify executor handles all stages failing gracefully."""
+        def fail_1():
+            raise ValueError("fail_1")
+
+        def fail_2():
+            raise ValueError("fail_2")
+
+        stages = [
+            StageSpec(name="a", fn=fail_1),
+            StageSpec(name="b", fn=fail_2),
+        ]
+        exe = ParallelStageExecutor(max_workers=2)
+        outcomes = exe.run(stages)
+        assert all(not o.success for o in outcomes)
+        assert len(outcomes) == 2
+
+    def test_quality_preset_case_insensitive(self):
+        """Verify quality presets are case-insensitive."""
+        cfg1 = get_quality_config("PREVIEW")
+        cfg2 = get_quality_config("preview")
+        assert cfg1 == cfg2

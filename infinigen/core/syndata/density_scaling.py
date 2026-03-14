@@ -5,13 +5,13 @@
 """Complexity-aware density scaling for asset placement.
 
 Provides helpers that modulate scatter / placement density as a function of
-the current curriculum :class:`~infinigen.core.complexity.ComplexityLevel`.
+the current curriculum :class:`~infinigen.core.syndata.complexity.ComplexityLevel`.
 
 Instead of hard-coding density values for every asset, callers can use
 :func:`scaled_density` to automatically adapt an asset's base density to
 the active complexity level::
 
-    from infinigen.core.placement import density_scaling
+    from infinigen.core.syndata import density_scaling
 
     # base density is the value used at complexity level 5 (FULL)
     effective = density_scaling.scaled_density(base=0.12, level=3)

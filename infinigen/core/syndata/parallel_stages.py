@@ -89,7 +89,9 @@ class ParallelStageExecutor:
         """All completed stage outcomes."""
         return list(self._outcomes)
 
-    def run(self, stages: list[StageSpec]) -> list[StageOutcome]:
+    def run(
+        self, stages: list[StageSpec], *, timeout_s: float | None = None
+    ) -> list[StageOutcome]:
         """Execute *stages* respecting dependencies, return outcomes.
 
         Parameters
@@ -97,6 +99,8 @@ class ParallelStageExecutor:
         stages : list[StageSpec]
             Stages to execute.  The order within the list does **not** matter;
             dependency edges determine actual execution order.
+        timeout_s : float or None
+            Maximum seconds to wait for all futures.  ``None`` means no limit.
 
         Returns
         -------
@@ -136,21 +140,24 @@ class ParallelStageExecutor:
                 if not futures:
                     # Deadlock detection
                     if pending:
+                        unsatisfied = [
+                            f"  - '{n}' depends on {s.depends_on}"
+                            for n, s in pending.items()
+                        ]
                         raise RuntimeError(
-                            f"Dependency deadlock: stages {list(pending)} "
-                            f"cannot be satisfied"
+                            "Dependency deadlock. Unsatisfiable stages:\n"
+                            + "\n".join(unsatisfied)
                         )
                     break
 
-                # Wait for at least one future to complete
-                done_futures = set()
-                for future in as_completed(futures):
+                # Wait for all currently-submitted futures to complete
+                done_futures: list[Future] = []
+                for future in as_completed(futures, timeout=timeout_s):
                     name = futures[future]
                     outcome = future.result()
                     completed[name] = outcome
                     outcomes.append(outcome)
-                    done_futures.add(future)
-                    break  # process one at a time to unlock dependents
+                    done_futures.append(future)
 
                 for f in done_futures:
                     del futures[f]

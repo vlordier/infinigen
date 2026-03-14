@@ -18,6 +18,18 @@ from dataclasses import asdict, dataclass, field
 
 logger = logging.getLogger(__name__)
 
+# Weight configuration for complexity scoring: attribute -> (weight, reference_max).
+# Adjust to match the expected scale of your dataset.
+DEFAULT_WEIGHT_CONFIG: dict[str, tuple[float, int]] = {
+    "object_count": (0.20, 500),
+    "unique_material_count": (0.15, 50),
+    "total_polygon_count": (0.25, 5_000_000),
+    "total_vertex_count": (0.10, 2_500_000),
+    "scatter_instance_count": (0.15, 100_000),
+    "light_count": (0.05, 10),
+    "max_object_depth": (0.10, 10),
+}
+
 
 @dataclass
 class SceneMetrics:
@@ -25,6 +37,12 @@ class SceneMetrics:
 
     All counts default to ``0``; populate via :func:`compute_metrics` or
     manually in tests.
+
+    The complexity score weights can be customised by overriding
+    the module-level ``DEFAULT_WEIGHT_CONFIG``::
+
+        from infinigen.core.syndata.metrics import DEFAULT_WEIGHT_CONFIG
+        DEFAULT_WEIGHT_CONFIG["object_count"] = (0.30, 1000)
     """
 
     object_count: int = 0
@@ -58,19 +76,8 @@ class SceneMetrics:
 
     def _compute_score(self) -> float:
         """Weighted sum of normalised metrics."""
-        # Reference maximums – rough order-of-magnitude values for a
-        # fully-featured Infinigen nature scene.
-        weights = {
-            "object_count": (0.20, 500),
-            "unique_material_count": (0.15, 50),
-            "total_polygon_count": (0.25, 5_000_000),
-            "total_vertex_count": (0.10, 2_500_000),
-            "scatter_instance_count": (0.15, 100_000),
-            "light_count": (0.05, 10),
-            "max_object_depth": (0.10, 10),
-        }
         score = 0.0
-        for attr, (w, ref_max) in weights.items():
+        for attr, (w, ref_max) in DEFAULT_WEIGHT_CONFIG.items():
             val = getattr(self, attr, 0)
             score += w * min(val / max(ref_max, 1), 1.0)
         return score

@@ -29,8 +29,10 @@ logger = logging.getLogger(__name__)
 def _component_hash(base_seed: int, component: str, max_val: int = 2**32 - 1) -> int:
     """Derive a deterministic integer seed from *base_seed* and *component*.
 
-    Uses MD5 (same as :func:`infinigen.core.util.math.int_hash`) so that
-    the result is consistent across Python versions and platforms.
+    Uses MD5 to match the existing :func:`infinigen.core.util.math.int_hash`
+    convention used throughout the codebase (e.g. ``int_hash((scene_seed, name))``).
+    MD5 is not used for security here – only for deterministic, platform-stable
+    integer derivation.
     """
     m = hashlib.md5()
     m.update(str(base_seed).encode("utf-8"))

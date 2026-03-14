@@ -33,13 +33,14 @@ _MISS = object()
 def _params_hash(params: dict[str, Any]) -> str:
     """Create a deterministic hash of stage parameters.
 
-    Non-serialisable values are converted to their ``repr()`` string
+    Non-serialisable values are converted to their ``str()`` representation
     so the hash function never fails.
     """
     try:
-        raw = json.dumps(params, sort_keys=True, default=repr)
+        raw = json.dumps(params, sort_keys=True, default=str)
     except (TypeError, ValueError):
-        raw = repr(sorted(params.items()))
+        raw = str(sorted((k, str(v)) for k, v in params.items()))
+        logger.debug("Used fallback serialisation for params hash")
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 

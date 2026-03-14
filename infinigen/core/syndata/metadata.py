@@ -113,18 +113,35 @@ class SceneMetadata:
     def save_json(self, path: Path | str) -> None:
         """Write metadata to a JSON file."""
         path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(self.to_dict(), f, indent=2, default=str)
-        logger.info("Saved scene metadata to %s", path)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(self.to_dict(), f, indent=2, default=str)
+            logger.info("Saved scene metadata to %s", path)
+        except OSError as exc:
+            logger.error("Failed to save metadata to %s: %s", path, exc)
+            raise
 
     @classmethod
     def load_json(cls, path: Path | str) -> SceneMetadata:
         """Load metadata from a JSON file."""
-        with open(path) as f:
-            data = json.load(f)
+        path = Path(path)
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as exc:
+            logger.error("Failed to load metadata from %s: %s", path, exc)
+            raise
         objects = [ObjectRecord(**o) for o in data.pop("objects", [])]
-        return cls(objects=objects, **data)
+        # Filter to only known fields to tolerate schema evolution
+        import dataclasses as _dc
+
+        allowed = {f.name for f in _dc.fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in allowed}
+        unexpected = set(data.keys()) - allowed
+        if unexpected:
+            logger.warning("Ignoring unexpected metadata fields: %s", unexpected)
+        return cls(objects=objects, **filtered)
 
 
 class MetadataCollector:

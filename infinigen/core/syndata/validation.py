@@ -66,8 +66,14 @@ class ValidationReport:
         return sum(1 for r in self.results if r.severity == Severity.WARNING)
 
     def summary(self) -> str:
-        lines = [f"Validation: {len(self.results)} checks, "
-                 f"{self.error_count} errors, {self.warning_count} warnings"]
+        ec = self.error_count
+        wc = self.warning_count
+        err_word = "error" if ec == 1 else "errors"
+        warn_word = "warning" if wc == 1 else "warnings"
+        lines = [
+            f"Validation: {len(self.results)} checks, "
+            f"{ec} {err_word}, {wc} {warn_word}"
+        ]
         for r in self.results:
             if r.severity != Severity.PASS:
                 lines.append(f"  [{r.severity.value.upper()}] {r.check_name}: {r.message}")
