@@ -41,9 +41,17 @@ jobs:
         run: |
           uv pip install --system -e ".[dev]"
 
-      - name: Test with pytest
+      - name: Test with pytest (bpy-dependent)
         run: |
-          pytest tests -k 'not skip_for_ci'
+          pytest tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
+
+      - name: Test non-regression suite (no bpy required)
+        run: |
+          pytest tests/test_nonregression.py --noconftest -v
+
+      - name: Test benchmarks suite (no bpy required)
+        run: |
+          pytest tests/test_benchmarks.py --noconftest -v
 
       - name: Check for copyright statements
         run: |
