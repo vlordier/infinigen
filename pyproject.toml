@@ -208,7 +208,6 @@ ignore = [
     "RUF021", # parenthesise chained operators
     "RUF022", # __all__ not sorted
     "RUF046", # unnecessary cast
-    "RUF059", # unused unpacked variable
 ]
 
 [tool.ruff.lint.per-file-ignores]

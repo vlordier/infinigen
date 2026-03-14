@@ -75,16 +75,24 @@ def node_from_slurm_jobid(scene_id):
         return None
 
     try:
-        node_of_scene, *rest = (
+        result = (
             subprocess.check_output(
-                f"{which('sacct')} -j {scene_id} --format Node --noheader".split()
+                f"{which('sacct')} -j {scene_id} --format Node --noheader".split(),
+                timeout=10,
+                stderr=subprocess.PIPE,
             )
             .decode()
             .split()
         )
-        return node_of_scene
-    except Exception as e:
-        logger.warning(f"sacct threw {e}")
+        return result[0] if result else None
+    except subprocess.TimeoutExpired:
+        logger.warning(f"sacct timed out for {scene_id}")
+        return None
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"sacct failed for {scene_id}: {e}")
+        return None
+    except (ValueError, IndexError) as e:
+        logger.warning(f"sacct output could not be parsed for {scene_id}: {e}")
         return None
 
 
@@ -99,7 +107,11 @@ def get_slurm_banned_nodes(config_path=None):
         config_path = os.environ.get(EXCLUDE_FILE_ENVVAR)
     if config_path is None:
         return []
-    with Path(config_path).open("r") as f:
+    config_path = Path(config_path)
+    if not config_path.exists():
+        logger.warning(f"Slurm banned nodes config not found: {config_path}")
+        return []
+    with config_path.open("r") as f:
         return list(f.read().split())
 
 
@@ -176,13 +188,20 @@ def slurm_submit_cmd(
             "Callable with submit_cmd is deprecated, please submit a commandline string"
         )
 
-    while True:
+    max_submit_retries = 10
+    for attempt in range(max_submit_retries):
         try:
             render_fn = submitit.helpers.CommandFunction(cmd)
             return executor.submit(render_fn)
         except submitit.core.utils.FailedJobError as e:
             current_time_str = datetime.now().strftime("%m/%d %I:%M%p")
-            print(f"[{current_time_str}] Job submission failed with error:\n{e}")
+            if attempt >= max_submit_retries - 1:
+                raise RuntimeError(
+                    f"SLURM job submission failed after {max_submit_retries} attempts"
+                ) from e
+            logger.warning(
+                f"[{current_time_str}] Job submission failed (attempt {attempt + 1}/{max_submit_retries}): {e}"
+            )
             time.sleep(60)
 
 
@@ -364,10 +383,23 @@ def update_symlink(scene_folder, scenes):
 
 
 def get_disk_usage(folder):
-    out = subprocess.check_output(
-        f"df -h {folder.resolve()}".replace(" (Princeton)", "").split()
-    ).decode()
-    return int(re.compile("[\s\S]* ([0-9]+)% [\s\S]*").fullmatch(out).group(1)) / 100
+    try:
+        out = subprocess.check_output(
+            f"df -h {folder.resolve()}".replace(" (Princeton)", "").split(),
+            timeout=10,
+            stderr=subprocess.PIPE,
+        ).decode()
+    except subprocess.TimeoutExpired:
+        logger.warning(f"df timed out for {folder}")
+        return 0.0
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"df failed for {folder}: {e}")
+        return 0.0
+    match = re.search(r"([0-9]+)%", out)
+    if not match:
+        logger.warning(f"Could not parse disk usage from df output for {folder}")
+        return 0.0
+    return int(match.group(1)) / 100
 
 
 def make_html_page(output_path, scenes, frame, camera_pair_id, **kwargs):
@@ -473,8 +505,12 @@ def record_crashed_seed(scene, taskname, f, fatal=True):
     stdout_file = args.output_folder / seed / "logs" / f"{taskname}.out"
     stderr_file = args.output_folder / seed / "logs" / f"{taskname}.err"
 
-    scene_id, *_ = stderr_file.resolve().stem.split("_")
-    node = node_from_slurm_jobid(scene_id)
+    parts = stderr_file.resolve().stem.split("_")
+    scene_id = parts[0] if parts else None
+    if not scene_id or not scene_id.isdigit():
+        logger.warning(f"Could not parse SLURM job ID from {stderr_file.stem!r}")
+        scene_id = None
+    node = node_from_slurm_jobid(scene_id) if scene_id is not None else None
     time_str = datetime.now().strftime("%m/%d %I:%M%p")
 
     reason = infer_crash_reason(stdout_file, stderr_file)
