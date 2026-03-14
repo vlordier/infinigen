@@ -36,7 +36,7 @@ def object_to_vertex_attributes(obj, specified=None, skip_internal=True):
             specified is None or attr in specified
         ) and obj.data.attributes[attr].domain == "POINT":
             type_key = obj.data.attributes[attr].data_type
-            tmp = np.zeros(
+            tmp = np.empty(
                 len(obj.data.vertices) * ATTRTYPE_DIMS[type_key], dtype=np.float32
             )
             obj.data.attributes[attr].data.foreach_get(ATTRTYPE_FIELDS[type_key], tmp)
@@ -53,7 +53,7 @@ def object_to_face_attributes(obj, specified=None, skip_internal=True):
             specified is None or attr in specified
         ) and obj.data.attributes[attr].domain == "FACE":
             type_key = obj.data.attributes[attr].data_type
-            tmp = np.zeros(
+            tmp = np.empty(
                 len(obj.data.polygons) * ATTRTYPE_DIMS[type_key], dtype=np.float32
             )
             obj.data.attributes[attr].data.foreach_get(ATTRTYPE_FIELDS[type_key], tmp)
@@ -121,20 +121,27 @@ class Mesh:
             N = heightmap.shape[0]
             heightmap = cv2.resize(heightmap, (N // downsample, N // downsample))
             N = heightmap.shape[0]
-            verts = np.zeros((N, N, 3))
-            for i in range(N):
-                verts[i, :, 0] = (-1 + 2 * i / (N - 1)) * L / 2
-            for j in range(N):
-                verts[:, j, 1] = (-1 + 2 * j / (N - 1)) * L / 2
-            verts[:, :, 2] = heightmap
-            verts = verts.reshape((-1, 3))
-            faces = np.zeros((2, N - 1, N - 1, 3), np.int32)
-            for i in range(N - 1):
-                faces[0, i, :, :] += [i * N, (i + 1) * N, i * N]
-                faces[1, i, :, :] += [i * N, (i + 1) * N, (i + 1) * N]
-            for j in range(N - 1):
-                faces[0, :, j, :] += [j, j, j + 1]
-                faces[1, :, j, :] += [j + 1, j, j + 1]
+            # Vectorized grid creation using meshgrid (replaces per-row/col loops)
+            xs = (-1 + 2 * np.arange(N) / (N - 1)) * L / 2
+            ys = (-1 + 2 * np.arange(N) / (N - 1)) * L / 2
+            gx, gy = np.meshgrid(xs, ys, indexing="ij")
+            verts = np.stack([gx, gy, heightmap], axis=-1).reshape((-1, 3))
+            # Vectorized face index computation using broadcasting
+            i_idx = np.arange(N - 1).reshape(-1, 1)  # (N-1, 1)
+            j_idx = np.arange(N - 1).reshape(1, -1)  # (1, N-1)
+            faces = np.empty((2, N - 1, N - 1, 3), np.int32)
+            faces[0] = np.stack(
+                [i_idx * N + j_idx, (i_idx + 1) * N + j_idx, i_idx * N + j_idx + 1],
+                axis=-1,
+            )
+            faces[1] = np.stack(
+                [
+                    i_idx * N + j_idx + 1,
+                    (i_idx + 1) * N + j_idx,
+                    (i_idx + 1) * N + j_idx + 1,
+                ],
+                axis=-1,
+            )
             faces = faces.reshape((-1, 3))
             _trimesh = trimesh.Trimesh(verts, faces)
         elif vertices is not None:
@@ -278,7 +285,7 @@ class Mesh:
             POINTER(c_double),
         ]
         facewise_mean.restype = None
-        result = AC(np.zeros(len(self.faces), dtype=np.float64))
+        result = AC(np.empty(len(self.faces), dtype=np.float64))
         facewise_mean(
             ASDOUBLE(AC(attr.astype(np.float64))),
             ASINT(AC(self.faces.astype(np.int32))),
@@ -297,7 +304,7 @@ class Mesh:
             POINTER(c_int32),
         ]
         facewise_intmax.restype = None
-        result = AC(np.zeros(len(self.faces), dtype=np.int32))
+        result = AC(np.empty(len(self.faces), dtype=np.int32))
         facewise_intmax(
             ASINT(AC(attr.astype(np.int32))),
             ASINT(AC(self.faces.astype(np.int32))),
@@ -311,7 +318,7 @@ class Mesh:
         get_adjacency = dll.get_adjacency
         get_adjacency.argtypes = [c_int32, c_int32, POINTER(c_int32), POINTER(c_int32)]
         get_adjacency.restype = None
-        result = AC(np.zeros((len(self.faces), 3), dtype=np.int32))
+        result = AC(np.empty((len(self.faces), 3), dtype=np.int32))
         pairs = self._trimesh.face_adjacency.astype(np.int32)
         get_adjacency(len(self.faces), len(pairs), ASINT(AC(pairs)), ASINT(result))
         return result
@@ -327,7 +334,7 @@ class Mesh:
             POINTER(c_double),
         ]
         compute_face_normals.restype = None
-        normals = AC(np.zeros((len(self.faces), 3), dtype=np.float64))
+        normals = AC(np.empty((len(self.faces), 3), dtype=np.float64))
         compute_face_normals(
             ASDOUBLE(AC(self.vertices)),
             ASINT(AC(self.faces.astype(np.int32))),

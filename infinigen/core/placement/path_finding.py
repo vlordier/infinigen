@@ -23,11 +23,11 @@ def camera_rotation_matrix(pointing_direction, up_vector):
 def path_finding(
     bvhtree, bounding_box, start_pose, end_pose, resolution=100000, margin=0.1
 ):
-    volume = np.product(bounding_box[1] - bounding_box[0])
+    volume = np.prod(bounding_box[1] - bounding_box[0])
     N = np.floor(
         (bounding_box[1] - bounding_box[0]) * (resolution / volume) ** (1 / 3)
     ).astype(np.int32)
-    NN = np.product(N)
+    NN = np.prod(N)
     # print(f"{N=}")
     start_location, start_rotation = start_pose
     end_location, end_rotation = end_pose
