@@ -22,7 +22,7 @@ Benchmarks and correctness tests for optimisations:
 13. segmentation_lookup.py – void-view unique_rows replacing np.unique(..., axis=0) bottleneck
 14. tree.py                – List accumulation replacing O(n²) np.append in parse_tree_attributes
 15. tree.py                – Lazy vertex concatenation in TreeVertices
-16. mesh.py                – Batched camera_annotation matrix projection via np.einsum
+16. mesh.py                – Pre-computed combined projection matrices via K @ inv(cam)[:3,:]
 17. mesh.py                – Cached C function argtypes/restype setup
 """
 
@@ -1804,9 +1804,8 @@ def _parent_loc_loop(parents, vtx_pos):
 
 def _parent_loc_vectorized(parents, vtx_pos):
     """Optimised: fancy indexing."""
-    n = len(parents)
     parent_loc = vtx_pos[parents]
-    self_loc = vtx_pos[np.arange(n)]
+    self_loc = vtx_pos.copy()
     return parent_loc, self_loc
 
 

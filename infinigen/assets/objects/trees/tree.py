@@ -213,7 +213,7 @@ def parse_tree_attributes(vtx):
 
     # Vectorized location lookup (replaces per-vertex Python loop)
     parent_loc = vtx_pos[parents]
-    self_loc = vtx_pos[np.arange(n)]
+    self_loc = vtx_pos[:n].copy()
 
     parent_loc[0] = np.array(
         [0, 0, -1], dtype=float
