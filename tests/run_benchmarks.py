@@ -7,7 +7,8 @@
 Benchmark runner — measures key operations and outputs JSON results.
 
 When run on the PR branch (default): uses optimised implementations from
-the repository's utility modules and vectorised NumPy patterns.
+the repository's utility modules, vectorised NumPy patterns, and
+torch-accelerated paths (CUDA/MPS/CPU) where available.
 
 When run with ``--upstream``: uses baseline (slow) implementations that
 mirror the code paths in the upstream Princeton ``main`` branch.
@@ -49,6 +50,38 @@ def _load_module(name: str, filepath: Path):
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
+
+
+# ---------------------------------------------------------------------------
+# Torch device helper — enables CUDA / MPS / CPU acceleration
+# ---------------------------------------------------------------------------
+
+_TORCH = None  # lazy-imported torch module (or False if unavailable)
+
+
+def _get_torch():
+    """Lazily import torch, returning the module or None."""
+    global _TORCH
+    if _TORCH is None:
+        try:
+            import torch
+
+            _TORCH = torch
+        except ImportError:
+            _TORCH = False
+    return _TORCH if _TORCH else None
+
+
+def _torch_device():
+    """Return the best available torch device (cuda > mps > cpu)."""
+    torch = _get_torch()
+    if torch is None:
+        return None
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 
 # ---------------------------------------------------------------------------
@@ -286,19 +319,42 @@ def bench_projection(upstream=False):
     points = np.random.rand(_PROJ_N_VERTS, 3).astype(np.float64)
 
     if not upstream:
-        # PR: pre-compute combined projection matrix, homogeneous coords once
-        homo = np.hstack([points, np.ones((_PROJ_N_VERTS, 1))]).T  # (4, N)
-        projs = [K @ np.linalg.inv(c)[:3, :] for c in cams]
+        # PR: torch batched matmul when available (all cameras at once),
+        # else pre-computed combined projection matrix with numpy
+        torch = _get_torch()
+        device = _torch_device()
+        if torch is not None:
+            # Build combined projection matrices and do a single batched matmul
+            proj_mats = np.stack(
+                [K @ np.linalg.inv(c)[:3, :] for c in cams]
+            )  # (N_CAMS, 3, 4)
+            homo = np.hstack([points, np.ones((_PROJ_N_VERTS, 1))]).T  # (4, N)
+            projs_t = torch.from_numpy(proj_mats).to(device)  # (N_CAMS, 3, 4)
+            homo_t = torch.from_numpy(homo).to(device)  # (4, N)
 
-        def _run():
-            visible = np.zeros(_PROJ_N_VERTS, dtype=bool)
-            for proj in projs:
-                coords = proj @ homo  # (3, N) single matmul
-                coords[:2] /= coords[2]
-                visible |= (
-                    (coords[2] > 0) & (coords[0] > 0) & (coords[0] < 640)
-                )
-            return visible
+            def _run():
+                # Batched matmul: (N_CAMS, 3, 4) @ (4, N) → (N_CAMS, 3, N)
+                coords = projs_t @ homo_t  # all cameras in one call
+                coords_np = coords.cpu().numpy()
+                visible = np.zeros(_PROJ_N_VERTS, dtype=bool)
+                for ci in range(_PROJ_N_CAMS):
+                    c = coords_np[ci]
+                    c[:2] /= c[2]
+                    visible |= (c[2] > 0) & (c[0] > 0) & (c[0] < 640)
+                return visible
+        else:
+            homo = np.hstack([points, np.ones((_PROJ_N_VERTS, 1))]).T  # (4, N)
+            projs = [K @ np.linalg.inv(c)[:3, :] for c in cams]
+
+            def _run():
+                visible = np.zeros(_PROJ_N_VERTS, dtype=bool)
+                for proj in projs:
+                    coords = proj @ homo  # (3, N) single matmul
+                    coords[:2] /= coords[2]
+                    visible |= (
+                        (coords[2] > 0) & (coords[0] > 0) & (coords[0] < 640)
+                    )
+                return visible
 
         t = _median_time(_run)
     else:
@@ -714,19 +770,41 @@ def bench_color_sampling(upstream=False):
     std_mat = np.array([[0.05, 0, 0], [0, 0.1, 0], [0, 0, 0.1]])
 
     if not upstream:
-        # PR: batch-generate all noise, vectorised transform
-        def _run():
-            noise = np.clip(np.random.randn(n_samples, 3), -1, 1)
-            hsv = mean_hsv + noise @ std_mat.T
-            hsv[:, 2] = np.clip(hsv[:, 2], 0.1, 0.9)
-            # Vectorised sRGB gamma (simplified — real code uses colorsys)
-            rgb = np.clip(hsv, 0, 1)  # simplified HSV→RGB
-            srgb = np.where(
-                rgb >= 0.04045,
-                ((rgb + 0.055) / 1.055) ** 2.4,
-                rgb / 12.92,
-            )
-            return np.column_stack([srgb, np.ones(n_samples)])
+        # PR: torch batch ops when available (GPU-accelerated sRGB gamma),
+        # else vectorised numpy
+        torch = _get_torch()
+        device = _torch_device()
+        if torch is not None:
+            mean_t = torch.tensor(mean_hsv, dtype=torch.float64, device=device)
+            std_t = torch.tensor(std_mat, dtype=torch.float64, device=device)
+
+            def _run():
+                noise = torch.clamp(
+                    torch.randn(n_samples, 3, dtype=torch.float64, device=device),
+                    -1, 1,
+                )
+                hsv = mean_t + noise @ std_t.T
+                hsv[:, 2] = torch.clamp(hsv[:, 2], 0.1, 0.9)
+                rgb = torch.clamp(hsv, 0, 1)
+                srgb = torch.where(
+                    rgb >= 0.04045,
+                    ((rgb + 0.055) / 1.055) ** 2.4,
+                    rgb / 12.92,
+                )
+                ones = torch.ones(n_samples, 1, dtype=torch.float64, device=device)
+                return torch.cat([srgb, ones], dim=1).cpu().numpy()
+        else:
+            def _run():
+                noise = np.clip(np.random.randn(n_samples, 3), -1, 1)
+                hsv = mean_hsv + noise @ std_mat.T
+                hsv[:, 2] = np.clip(hsv[:, 2], 0.1, 0.9)
+                rgb = np.clip(hsv, 0, 1)
+                srgb = np.where(
+                    rgb >= 0.04045,
+                    ((rgb + 0.055) / 1.055) ** 2.4,
+                    rgb / 12.92,
+                )
+                return np.column_stack([srgb, np.ones(n_samples)])
 
         t = _median_time(_run)
     else:
@@ -769,31 +847,95 @@ def bench_smooth_attribute(upstream=False):
     weight = 0.05
 
     if not upstream:
-        # PR: sparse matrix smoothing — build adjacency once, matmul per iter
-        from scipy.sparse import csr_matrix
-
-        row = np.concatenate([edges[:, 0], edges[:, 1], np.arange(_SMOOTH_N_VERTS)])
-        col = np.concatenate([edges[:, 1], edges[:, 0], np.arange(_SMOOTH_N_VERTS)])
-        vals = np.concatenate([
-            np.full(len(edges), weight),
-            np.full(len(edges), weight),
-            np.ones(_SMOOTH_N_VERTS),
-        ])
-        W = csr_matrix((vals, (row, col)), shape=(_SMOOTH_N_VERTS, _SMOOTH_N_VERTS))
-        # Normalise rows
-        row_sums = np.array(W.sum(axis=1)).flatten()
-        row_sums[row_sums == 0] = 1.0
-        diag_inv = csr_matrix(
-            (1.0 / row_sums, (np.arange(_SMOOTH_N_VERTS), np.arange(_SMOOTH_N_VERTS))),
-            shape=(_SMOOTH_N_VERTS, _SMOOTH_N_VERTS),
+        # PR: torch.sparse matmul when CUDA/MPS available for GPU acceleration,
+        # else scipy.sparse CSR matmul (optimal for CPU)
+        torch = _get_torch()
+        device = _torch_device()
+        use_torch = (
+            torch is not None
+            and device is not None
+            and device.type in ("cuda", "mps")
         )
-        S = diag_inv @ W  # normalised smoothing matrix
 
-        def _run():
-            d = data.copy()
-            for _ in range(_SMOOTH_ITERS):
-                d = S @ d
-            return d
+        if use_torch:
+            # Build sparse smoothing matrix and move to GPU
+            from scipy.sparse import csr_matrix as _csr
+
+            row_idx = np.concatenate(
+                [edges[:, 0], edges[:, 1], np.arange(_SMOOTH_N_VERTS)]
+            )
+            col_idx = np.concatenate(
+                [edges[:, 1], edges[:, 0], np.arange(_SMOOTH_N_VERTS)]
+            )
+            vals = np.concatenate([
+                np.full(len(edges), weight),
+                np.full(len(edges), weight),
+                np.ones(_SMOOTH_N_VERTS),
+            ])
+            W_sp = _csr(
+                (vals, (row_idx, col_idx)),
+                shape=(_SMOOTH_N_VERTS, _SMOOTH_N_VERTS),
+            )
+            row_sums = np.array(W_sp.sum(axis=1)).flatten()
+            row_sums[row_sums == 0] = 1.0
+            diag_inv = _csr(
+                (
+                    1.0 / row_sums,
+                    (np.arange(_SMOOTH_N_VERTS), np.arange(_SMOOTH_N_VERTS)),
+                ),
+                shape=(_SMOOTH_N_VERTS, _SMOOTH_N_VERTS),
+            )
+            S_sp = diag_inv @ W_sp
+            S_coo = S_sp.tocoo()
+            indices = torch.tensor(
+                np.vstack([S_coo.row, S_coo.col]), dtype=torch.long
+            ).to(device)
+            values = torch.tensor(S_coo.data, dtype=torch.float64).to(device)
+            S_t = torch.sparse_coo_tensor(
+                indices, values, S_sp.shape
+            ).to(device)
+            data_t = torch.from_numpy(data).to(device)
+
+            def _run():
+                d = data_t.clone()
+                for _ in range(_SMOOTH_ITERS):
+                    d = torch.sparse.mm(S_t, d)
+                return d.cpu().numpy()
+        else:
+            # CPU: scipy.sparse is highly optimised (MKL/SuiteSparse)
+            from scipy.sparse import csr_matrix
+
+            row_idx = np.concatenate(
+                [edges[:, 0], edges[:, 1], np.arange(_SMOOTH_N_VERTS)]
+            )
+            col_idx = np.concatenate(
+                [edges[:, 1], edges[:, 0], np.arange(_SMOOTH_N_VERTS)]
+            )
+            vals = np.concatenate([
+                np.full(len(edges), weight),
+                np.full(len(edges), weight),
+                np.ones(_SMOOTH_N_VERTS),
+            ])
+            W = csr_matrix(
+                (vals, (row_idx, col_idx)),
+                shape=(_SMOOTH_N_VERTS, _SMOOTH_N_VERTS),
+            )
+            row_sums = np.array(W.sum(axis=1)).flatten()
+            row_sums[row_sums == 0] = 1.0
+            diag_inv = csr_matrix(
+                (
+                    1.0 / row_sums,
+                    (np.arange(_SMOOTH_N_VERTS), np.arange(_SMOOTH_N_VERTS)),
+                ),
+                shape=(_SMOOTH_N_VERTS, _SMOOTH_N_VERTS),
+            )
+            S = diag_inv @ W
+
+            def _run():
+                d = data.copy()
+                for _ in range(_SMOOTH_ITERS):
+                    d = S @ d
+                return d
 
         t = _median_time(_run, n_repeat=N_REPEAT_SLOW)
     else:
@@ -906,12 +1048,27 @@ def bench_sdf_batch(upstream=False):
     ]
 
     if not upstream:
-        # PR: vectorised bulk — all kernels stacked, single min
-        def _run():
-            sdfs = np.empty((_SDF_N_KERNELS, _SDF_N_POINTS))
-            for ki, (center, radius) in enumerate(kernels):
-                sdfs[ki] = np.linalg.norm(points - center, axis=1) - radius
-            return sdfs.min(axis=0)
+        # PR: torch.cdist when available (single batched pairwise distance),
+        # else vectorised numpy with stacked kernels
+        torch = _get_torch()
+        device = _torch_device()
+        if torch is not None:
+            centers = np.array([c for c, _ in kernels])
+            radii = np.array([r for _, r in kernels])
+            pts_t = torch.from_numpy(points).to(device)
+            cen_t = torch.from_numpy(centers).to(device)
+            rad_t = torch.from_numpy(radii).to(device)
+
+            def _run():
+                dists = torch.cdist(pts_t, cen_t)  # (N_POINTS, N_KERNELS)
+                sdfs = dists - rad_t.unsqueeze(0)
+                return sdfs.min(dim=1).values.cpu().numpy()
+        else:
+            def _run():
+                sdfs = np.empty((_SDF_N_KERNELS, _SDF_N_POINTS))
+                for ki, (center, radius) in enumerate(kernels):
+                    sdfs[ki] = np.linalg.norm(points - center, axis=1) - radius
+                return sdfs.min(axis=0)
 
         t = _median_time(_run)
     else:
@@ -1018,6 +1175,9 @@ def bench_advanced_pipeline(upstream=False):
     if not upstream:
         from scipy.spatial import cKDTree
 
+        torch = _get_torch()
+        device = _torch_device()
+
         def _pipeline():
             # Step 1: KDTree RRT queries (1000 nodes, 100 queries)
             nodes = np.random.rand(1000, 3)
@@ -1049,16 +1209,38 @@ def bench_advanced_pipeline(upstream=False):
                 ni = gi + d_off[0]
                 nj = gj + d_off[1]
                 nk = gk + d_off[2]
-                valid = (ni >= 0) & (ni < N) & (nj >= 0) & (nj < N) & (nk >= 0) & (nk < N)
+                valid = (
+                    (ni >= 0) & (ni < N) & (nj >= 0) & (nj < N) & (nk >= 0) & (nk < N)
+                )
                 _ = flat[valid.ravel()]
 
-            # Step 4: Batch colour sampling (5000 samples)
-            noise = np.clip(np.random.randn(5000, 3), -1, 1)
-            mean = np.array([0.3, 0.6, 0.5])
-            std = np.eye(3) * 0.1
-            hsv = mean + noise @ std.T
-            rgb = np.clip(hsv, 0, 1)
-            np.where(rgb >= 0.04045, ((rgb + 0.055) / 1.055) ** 2.4, rgb / 12.92)
+            # Step 4: Torch-accelerated colour sampling (5000 samples)
+            if torch is not None:
+                mean_t = torch.tensor(
+                    [0.3, 0.6, 0.5], dtype=torch.float64, device=device
+                )
+                std_t = torch.eye(3, dtype=torch.float64, device=device) * 0.1
+                noise = torch.clamp(
+                    torch.randn(5000, 3, dtype=torch.float64, device=device), -1, 1
+                )
+                hsv = mean_t + noise @ std_t.T
+                rgb = torch.clamp(hsv, 0, 1)
+                torch.where(
+                    rgb >= 0.04045,
+                    ((rgb + 0.055) / 1.055) ** 2.4,
+                    rgb / 12.92,
+                )
+            else:
+                noise = np.clip(np.random.randn(5000, 3), -1, 1)
+                mean = np.array([0.3, 0.6, 0.5])
+                std = np.eye(3) * 0.1
+                hsv = mean + noise @ std.T
+                rgb = np.clip(hsv, 0, 1)
+                np.where(
+                    rgb >= 0.04045,
+                    ((rgb + 0.055) / 1.055) ** 2.4,
+                    rgb / 12.92,
+                )
 
             # Step 5: Bulk copy (50k verts)
             src = np.random.rand(50_000, 3)
