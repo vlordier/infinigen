@@ -133,9 +133,9 @@ def build_report(pr: dict, upstream: dict) -> str:
     # Use log scale when the range spans more than 2 orders of magnitude
     use_log_s1 = bar_max / max(min_sp, 1e-9) > 100
 
-    for entry in pair_data:
+    for pair_idx, entry in enumerate(pair_data):
         if entry is None:
-            label = PAIRS[pair_data.index(entry)][2]
+            label = PAIRS[pair_idx][2]
             lines.append(f"{label:<30s} {'N/A':>8s}  {'(benchmark skipped)':40s}")
             continue
         label, speedup, pr_opt, pr_base = entry
@@ -154,7 +154,7 @@ def build_report(pr: dict, upstream: dict) -> str:
     # Re-render with consistent max for better visual comparison
     if speedups:
         max_sp = max(speedups)
-        min_sp = min(s for s in speedups if s > 0)
+        min_sp = min((s for s in speedups if s > 0), default=1)
         # Use log scale when the range spans more than 2 orders of magnitude
         use_log = max_sp / max(min_sp, 1e-9) > 100
         scale_label = "log₁₀ scale" if use_log else "linear"
