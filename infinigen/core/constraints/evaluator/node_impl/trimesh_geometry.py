@@ -236,7 +236,7 @@ def min_dist(
             data._points[b] = data._points["__external"]
             data._points.pop("__external")
             logging.debug(f"WARNING: swapped __external for {b} to make {data.names}")
-    elif isinstance(b, (list, set)):
+    elif isinstance(b, list | set):
         logger.debug(f"min_dist_other({a=}, {b=})")
         col2 = iu.col_from_subset(scene, b, b_tags, bvh_cache)
         dist, data = col.min_distance_other(col2, return_data=True)

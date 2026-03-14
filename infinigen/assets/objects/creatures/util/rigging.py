@@ -139,7 +139,7 @@ def create_bones(parts_atts, arma):
         for j, b in bones.items():
             partname = part.obj.name.split(".")[-1]
 
-            if isinstance(j, (int, float)):
+            if isinstance(j, int | float):
                 b.name = f"{partname}.side({part.side}).bone({j:.2f})"
             elif isinstance(j, str):
                 b.name = f"{partname}.side({part.side}).extra_bone({j})"

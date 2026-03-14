@@ -24,7 +24,7 @@ class accessibility_cost(ScalarExpression):
     dist: float = 1.0
 
     def __post_init__(self):
-        if isinstance(self.normal, (list, tuple)):
+        if isinstance(self.normal, list | tuple):
             self.normal = np.array(self.normal)
         assert isinstance(self.normal, np.ndarray)
 

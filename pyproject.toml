@@ -227,6 +227,8 @@ ignore = [
 "infinigen_examples/generate_indoors.py" = ["E402"]
 "infinigen_examples/generate_material_balls.py" = ["E402"]
 "infinigen_examples/generate_nature.py" = ["E402"]
+"tests/sim/test_joint_export.py" = ["E402"]
+"tests/sim/test_sim_export.py" = ["E402"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

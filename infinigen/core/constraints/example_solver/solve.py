@@ -132,7 +132,7 @@ class Solver:
         t = it / max_it
         names, confs = zip(*moves.items())
         funcs, scheds = zip(*confs)
-        weights = np.array([s if isinstance(s, (float, int)) else s(t) for s in scheds])
+        weights = np.array([s if isinstance(s, float | int) else s(t) for s in scheds])
         return np.random.choice(funcs, p=weights / weights.sum())
 
     def solve_rooms(self, scene_seed, consgraph: "cl.Problem", filter: "r.Domain"):

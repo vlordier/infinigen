@@ -6,7 +6,6 @@
 
 import bpy
 import numpy as np
-from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
 from numpy.random import normal as N
 from numpy.random import uniform
 
@@ -19,6 +18,7 @@ from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.tagging import tag_object
 from infinigen.core.util import blender as butil
 from infinigen.core.util.color import hsv2rgba
+from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
 
 
 class LichenFactory(AssetFactory):
