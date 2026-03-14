@@ -5,7 +5,6 @@
 
 
 import bpy
-from infinigen.infinigen_gpl.surfaces import snow
 from numpy.random import normal as N
 
 from infinigen.assets.materials.terrain import dirt
@@ -14,6 +13,7 @@ from infinigen.core.nodes import node_utils
 from infinigen.core.nodes.node_wrangler import Nodes
 from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.tagging import tag_object
+from infinigen.infinigen_gpl.surfaces import snow
 
 
 def shader_raindrop(nw):

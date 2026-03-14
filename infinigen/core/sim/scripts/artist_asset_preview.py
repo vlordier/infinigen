@@ -5,11 +5,14 @@
 # Authors:
 # - Abhishek Joshi: primary author
 
+import logging
 from typing import Any
 
 import bpy
 import mathutils
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 frame = 1
 obj = bpy.context.active_object
@@ -86,16 +89,11 @@ class SelectObjects:
 
         difference = set(self.objects) - set(bpy.context.selected_objects)
         if len(difference):
-            print(
-                f"{SelectObjects.__name__} failed to select {self.objects=}, result was {bpy.context.selected_objects=}. "
-                "The most common cause is that the objects are in a collection with col.hide_viewport=True"
-            )
+            logger.info(f'{SelectObjects.__name__} failed to select self.objects={self.objects!r}, result was bpy.context.selected_objects={bpy.context.selected_objects!r}. The most common cause is that the objects are in a collection with col.hide_viewport=True')
 
         intended = self._get_intended_active()
         if intended is not None and bpy.context.active_object != intended:
-            print(
-                f"{SelectObjects.__name__} failed to set active object to {intended=}, result was {bpy.context.active_object=}"
-            )
+            logger.info(f'{SelectObjects.__name__} failed to set active object to intended={intended!r}, result was bpy.context.active_object={bpy.context.active_object!r}')
 
     def __enter__(self):
         self.saved_objects = list(bpy.context.selected_objects)
@@ -330,7 +328,7 @@ def is_point_inside_bvh(bvh, point, obj, epsilon=1e-4):
     collides = inside_count == len(directions)
 
     if collides >= 5:
-        print(point, obj.name)
+        logger.info("%s %s", point, obj.name)
 
     return collides
 
@@ -528,7 +526,7 @@ def check_animation_collisions():
         bpy.ops.outliner.orphans_purge()
         return None
 
-    print(f"Frame {frame}. Stepping...")
+    logger.info(f'Frame {frame}. Stepping...')
 
     check_frame_collision()
     bpy.context.view_layer.objects.active = obj

@@ -7,6 +7,7 @@
 
 import argparse
 import json
+import logging
 import os
 import platform
 import shutil
@@ -17,6 +18,8 @@ from datetime import datetime
 from pathlib import Path
 
 from . import smb_client
+
+logger = logging.getLogger(__name__)
 
 RCLONE_PREFIX_ENVVAR = "INFINIGEN_RCLONE_PREFIX"
 
@@ -77,7 +80,7 @@ def apply_manifest_cleanup(scene_folder, manifest):
             if p.is_dir():
                 affected |= set(p.rglob("*"))
 
-        print(f"{glob=} {action=} matched {len(affected)=}")
+        logger.info(f'glob={glob!r} action={action!r} matched len(affected)={len(affected)!r}')
 
         if action == "KEEP":
             keep |= affected
@@ -118,7 +121,7 @@ def rclone_upload_file(src_file, dst_folder):
     assert os.path.exists(src_file), src_file
     cmd = f"{shutil.which('rclone')} copy -P {src_file} {prefix}{dst_folder}"
     subprocess.check_output(cmd.split())
-    print(f"Uploaded {src_file}")
+    logger.info(f'Uploaded {src_file}')
 
 
 def copy_upload_file(src_file, dst_folder, root_dir):
@@ -130,7 +133,7 @@ def copy_upload_file(src_file, dst_folder, root_dir):
         os.makedirs(f"{root_dir}/{dst_folder}")
 
     shutil.copy2(src_file, f"{root_dir}/{dst_folder}")
-    print(f"Copy {src_file}")
+    logger.info(f'Copy {src_file}')
 
 
 def get_commit_hash():
@@ -180,7 +183,7 @@ def write_thumbnail(parent_folder, seed, all_images):
 
 def create_tarball(parent_folder):
     tar_path = parent_folder.with_suffix(".tar.gz")
-    print(f"Tarring {parent_folder} to {tar_path}")
+    logger.info(f'Tarring {parent_folder} to {tar_path}')
     with tarfile.open(tar_path, "w:gz") as tar:
         tar.add(parent_folder, os.path.sep)
     assert tar_path.exists()
@@ -195,7 +198,7 @@ def get_upload_func(method="smbclient"):
     elif method.startswith("copyfile"):
         return lambda x, y: copy_upload_file(x, y, root_dir=method.split(":")[-1])
     elif method == "mock":
-        return lambda x, y: print(f"Mock upload {x} to {y}")
+        return lambda x, y: logger.info("Mock upload %s to %s", x, y)
     else:
         raise ValueError(f"Unrecognized {method=}")
 
@@ -211,7 +214,7 @@ def upload_job_folder(
 ):
     seed = parent_folder.name
 
-    print(f"Performing cleanup on {parent_folder}")
+    logger.info(f'Performing cleanup on {parent_folder}')
     apply_manifest_cleanup(parent_folder, UPLOAD_MANIFEST)
 
     upload_func = get_upload_func(method)
@@ -237,7 +240,7 @@ def upload_job_folder(
     for f in upload_paths:
         if f is None:
             continue
-        print(f"Uploading {f}")
+        logger.info(f'Uploading {f}')
         upload_func(f, upload_dest_folder)
         f.unlink()
 

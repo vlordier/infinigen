@@ -5,6 +5,7 @@
 
 
 import argparse
+import logging
 import os
 import re
 import subprocess
@@ -12,6 +13,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -130,7 +133,7 @@ if __name__ == "__main__":
         "%Y-%m-%d"
     )  # 2022-05-07
     sacct_command = f"sacct --starttime {sacct_start_date} -u {args.user} --noheader -o jobid,jobname%80,AllocTRES%80,ElapsedRaw,stat%30,NodeList,Start,MaxRSS"
-    print(f"Running command: {sacct_command}")
+    logger.info(f'Running command: {sacct_command}')
     sacct_output = subprocess.check_output(sacct_command.split()).decode()
     relevant_started_jobs = []
     mem_dict = dict(re.findall("([0-9]+)\.0 +.* +([0-9]*.?[0-9]*[KMG])", sacct_output))
@@ -158,9 +161,9 @@ if __name__ == "__main__":
         seed_dict[seed].append(j)
     node_info = get_node_info()
     for k, v in sorted(seed_dict.items()):
-        print("-" * len(HEADER) + "\n" + HEADER)
+        logger.info('-' * len(HEADER) + '\n' + HEADER)
         for j in v:
             if j.node is not None:
-                print(f"{j}({node_info[j.node]['group']})")
+                logger.info(f'{j}({node_info[j.node]['group']})')
             else:
-                print(j)
+                logger.info(j)

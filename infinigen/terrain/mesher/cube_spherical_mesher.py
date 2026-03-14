@@ -205,7 +205,7 @@ class CubeSphericalMesher:
         iter = 0
         while cnt > 0:
             if self.verbose:
-                print(f"{iter=}")
+                logger.info(f'iter={iter!r}')
             iter += 1
             with Timer(f"get_coarse_queries of {cnt} blocks"):
                 positions = AC(
@@ -257,7 +257,7 @@ class CubeSphericalMesher:
             iter = 0
             while True:
                 if self.verbose:
-                    print(f"{iter=}")
+                    logger.info(f'iter={iter!r}')
                 iter += 1
                 if cnt == 0 and self.complete_depth_test:
                     with Timer("complete_depth_test"):
@@ -395,7 +395,7 @@ class CubeSphericalMesher:
             self.get_mesh_cnt(ASINT(NM))
 
         if self.verbose:
-            print(f"mesh has {NM[0]} vertices and {NM[1]} faces")
+            logger.info(f'mesh has {NM[0]} vertices and {NM[1]} faces')
 
         with Timer("bisection"):
             positions = AC(np.zeros((NM[0] * 3,), dtype=np.float64))

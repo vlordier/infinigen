@@ -4,7 +4,8 @@
 
 # Authors: Alexander Raistrick
 
-from pprint import pprint
+import logging
+import pprint
 
 import pytest
 
@@ -24,10 +25,12 @@ from infinigen_examples import generate_indoors
 from infinigen_examples.constraints import home as ex
 from infinigen_examples.constraints import util as cu
 
+logger = logging.getLogger(__name__)
+
 
 @pytest.mark.parametrize("key", generate_indoors.default_greedy_stages().keys())
 def test_stages_relations(key):
-    pprint(generate_indoors.default_greedy_stages())
+    logger.debug("%s", pprint.pformat(generate_indoors.default_greedy_stages()))
 
     v = generate_indoors.default_greedy_stages()[key]
 
@@ -141,7 +144,7 @@ def test_example_walldec():
     assert not propose_discrete.active_for_stage(dom, stages["on_floor_freestanding"])
 
     assert t.satisfies(dom.tags, stages["on_wall"].tags)
-    print("ONWALL", stages["on_wall"])
+    logger.info("%s %s", 'ONWALL', stages['on_wall'])
 
     assert propose_discrete.active_for_stage(dom, stages["on_wall"])
 
@@ -352,7 +355,7 @@ def test_room_has_viols_at_init(rtype):
     )
 
     active_count = greedy.update_active_flags(state, {cu.variable_room: ostate_name})
-    print("active", rtype, active_count)
+    logger.info("%s %s %s", 'active', rtype, active_count)
     assert active_count > 0
 
     filter = generate_indoors.default_greedy_stages()["on_floor_freestanding"]

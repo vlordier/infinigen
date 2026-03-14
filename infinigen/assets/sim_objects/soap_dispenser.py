@@ -7,6 +7,8 @@
 # - Abhishek Joshi: Updates for sim
 # - Max Gonzalez Saez-Diez: Updates for sim
 
+import logging
+
 import gin
 from numpy.random import normal, randint, uniform
 
@@ -19,6 +21,8 @@ from infinigen.core.nodes import node_utils
 from infinigen.core.nodes.node_wrangler import Nodes, NodeWrangler
 from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.util import blender as butil
+
+logger = logging.getLogger(__name__)
 
 
 @node_utils.to_nodegroup(
@@ -1411,7 +1415,6 @@ class SoapDispenserFactory(AssetFactory):
 
     def sample_parameters(self):
         from infinigen.assets.materials import ceramic, metal, plastic
-
         height = uniform(0.13, 0.21)
         bottom_nozzle_length = uniform(0.01, 0.03)
         bottom_nozzle_radius = uniform(0.007, 0.018)
@@ -1440,7 +1443,7 @@ class SoapDispenserFactory(AssetFactory):
         # 5) Rough plastic body + Rough plastic top
         # 6) Rough plastic body + Translucent plastic top
         combo_idx = int(randint(0, 6))
-        print(f"material combo_idx: {combo_idx}")
+        logger.info(f'material combo_idx: {combo_idx}')
         if combo_idx == 0:
             base_material = ceramic.Ceramic()()
             nozzle_material = metal.Aluminum()()

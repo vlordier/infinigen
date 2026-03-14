@@ -236,7 +236,7 @@ def min_dist(
             data._points[b] = data._points["__external"]
             data._points.pop("__external")
             logging.debug(f"WARNING: swapped __external for {b} to make {data.names}")
-    elif isinstance(b, (list, set)):
+    elif isinstance(b, list | set):
         logger.debug(f"min_dist_other({a=}, {b=})")
         col2 = iu.col_from_subset(scene, b, b_tags, bvh_cache)
         dist, data = col.min_distance_other(col2, return_data=True)
@@ -901,7 +901,7 @@ def constraint_violated(message):
     if FATAL:
         raise ConstraintViolated(message)
     else:
-        print(f"{ConstraintViolated.__name__}: {message}")
+        logger.info(f'{ConstraintViolated.__name__}: {message}')
 
 
 def constrain_contact(
@@ -930,7 +930,7 @@ def constrain_contact(
 
 def constrain_dist(res: dict, min=None, max=None):
     if res.data is None:  # results from internal distance check on 1 object
-        print("res data error")
+        logger.info('res data error')
         return
 
     if not (min is None or min < res.dist):
@@ -943,7 +943,7 @@ def constrain_dist(res: dict, min=None, max=None):
 
 def constrain_dist_soft(res: dict, min=None, max=None):
     if res.data is None:  # results from internal distance check on 1 object
-        print("res data error")
+        logger.info('res data error')
         return
 
     if res.dist < min:
@@ -958,7 +958,7 @@ def touching_soft(scene, a, b):
     res = any_touching(scene, a, b)
 
     if res.hit is None:
-        print("res hit error")
+        logger.info('res hit error')
         return np.inf  # arises from an internal-contact query on a set of one element
 
     if res.hit:
@@ -1058,9 +1058,7 @@ def accessibility_cost_cuboid_penetration(
 
     if vis:
         bobjs = iu.meshes_from_names(scene, b)
-        print(
-            f"{np.round(origin_to_bbox_center, 3)=} {extent_from_real_origin} {bpy_obj.dimensions}"
-        )
+        logger.info(f'np.round(origin_to_bbox_center, 3)={np.round(origin_to_bbox_center, 3)!r} {extent_from_real_origin} {bpy_obj.dimensions}')
         if not all(name in _accessibility_vis_seen_objs for name in a + b):
             trimesh.Scene(visobjs + bobjs).show()
         _accessibility_vis_seen_objs.update(a + b)

@@ -5,6 +5,9 @@
 
 
 import argparse
+import logging
+
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-f", "--file_path", type=str)
@@ -54,4 +57,4 @@ with open(args.file_path) as f:
                     )
         i += 1
 
-print(code)
+logger.info(code)

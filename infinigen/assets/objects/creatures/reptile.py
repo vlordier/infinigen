@@ -33,6 +33,8 @@ from infinigen.core.util import blender as butil
 from infinigen.core.util.math import FixedSeed, clip_gaussian
 from infinigen.core.util.random import random_general, weighted_sample
 
+logger = logging.getLogger(__name__)
+
 
 def dinosaur():
     open_mouth = U() > 0
@@ -399,7 +401,7 @@ def animate_lizard_run(root, arma, params, ik_targets):
     )
 
     spine = [b for b in arma.pose.bones if "FrontLeg" in b.name]
-    print(spine)
+    logger.info(spine)
     creature_animation.animate_running_front_leg(
         arma=arma,
         bones=spine,
@@ -411,7 +413,7 @@ def animate_lizard_run(root, arma, params, ik_targets):
     )
 
     spine = [b for b in arma.pose.bones if "BackLeg" in b.name]
-    print(spine)
+    logger.info(spine)
     creature_animation.animate_running_back_leg(
         arma=arma,
         bones=spine,

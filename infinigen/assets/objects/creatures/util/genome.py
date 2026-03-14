@@ -95,7 +95,7 @@ def compute_child_matching(a: list[Tree], b: list[Tree]):
 
 def lerp_any(a, b, t):
     def cast(x):
-        if isinstance(x, (tuple, list)):
+        if isinstance(x, tuple | list):
             return np.array(x)
         return x
 

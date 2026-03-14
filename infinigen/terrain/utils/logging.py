@@ -4,6 +4,7 @@
 # Authors: Zeyu Ma
 
 
+import logging
 import os
 
 import gin
@@ -11,10 +12,12 @@ import psutil
 
 from infinigen.core.util.logging import Timer as oTimer
 
+logger = logging.getLogger(__name__)
+
 
 def report_memory():
     process = psutil.Process(os.getpid())
-    print(f"memory usage: {process.memory_info().rss}")
+    logger.info(f'memory usage: {process.memory_info().rss}')
 
 
 @gin.configurable("TerrainTimer")

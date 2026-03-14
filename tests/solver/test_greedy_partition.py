@@ -5,6 +5,7 @@
 # Authors: Alexander Raistrick
 
 import copy
+import logging
 
 import pytest
 from test_greedy_substitutions import make_dummy_state
@@ -21,6 +22,8 @@ from infinigen.core.constraints.example_solver import (
 from infinigen_examples import generate_indoors
 from infinigen_examples.constraints import home as ex
 from infinigen_examples.constraints import util as cu
+
+logger = logging.getLogger(__name__)
 
 
 def test_partition_basecase_irrelevant():
@@ -51,7 +54,7 @@ def test_partition_collapse_binop():
     res, relevant = greedy.filter_constraints(cons, r.Domain({t.Semantics.Room}, []))
     assert relevant
 
-    print("RES", res)
+    logger.info("%s %s", 'RES', res)
 
     expect = cl.scene()[t.Semantics.Room].count().in_range(0, 1)
     assert r.expr_equal(res, expect)
@@ -172,7 +175,7 @@ def test_objects_on_generic_obj():
         cu.variable_obj,
         r.Domain({t.SpecificObject("thatchair"), t.Semantics.Chair}),
     )
-    print("ON_OBJ_FILTER", on_obj)
+    logger.info("%s %s", 'ON_OBJ_FILTER', on_obj)
 
     bathroom = cl.scene()[t.Semantics.Room, t.Semantics.Bathroom]
     storage = cl.scene()[t.Semantics.Object, t.Semantics.Storage]
@@ -323,13 +326,13 @@ def test_greedy_partition_diningroom():
 
     for node in diningroom.traverse():
         if isinstance(node, cl.item):
-            print(node)
+            logger.info(node)
 
     res, relevant = greedy.filter_constraints(diningroom, on_diningroom)
     assert relevant
 
-    print("FILTER", on_diningroom)
-    print("RES", res)
+    logger.info("%s %s", 'FILTER', on_diningroom)
+    logger.info("%s %s", 'RES', res)
 
     assert isinstance(res, cl.ForAll)
     assert res.pred.__class__ is not cl.constant
@@ -382,8 +385,8 @@ def test_multiroom_viol():
     prob, relevant = greedy.filter_constraints(prob, on_diningroom)
     assert relevant
 
-    print("PRED", prob.constraints["storage"].pred)
-    print("OBJS", prob.constraints["storage"].objs)
+    logger.info("%s %s", 'PRED', prob.constraints['storage'].pred)
+    logger.info("%s %s", 'OBJS', prob.constraints['storage'].objs)
 
     result = evaluator.evaluate_problem(prob, state)
     assert (
@@ -471,7 +474,7 @@ def test_forall_narrow_loopvar():
     )
 
     res, rel = greedy.filter_constraints(cons, furn)
-    print(res)
+    logger.info(res)
     assert rel
     assert r.expr_equal(res, cons_narrow)
 

@@ -51,6 +51,8 @@ from infinigen_examples.generate_individual_assets import (
     setup_camera,
 )
 
+logger = logging.getLogger(__name__)
+
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(name)s] [%(levelname)s] | %(message)s",
     datefmt="%H:%M:%S",
@@ -225,7 +227,7 @@ def main(args):
     try:
         build_scene(path, factories, args)
     except Exception as e:
-        print(e)
+        logger.info(e)
 
 
 if __name__ == "__main__":

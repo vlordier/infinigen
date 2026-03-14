@@ -91,7 +91,7 @@ def process_surface_input(_input, default):
     if isinstance(_input, str):
         # e.g. 'ground' will return material_assignments.ground
         return getattr(material_assignments, _input)
-    if isinstance(_input, (list, tuple)):
+    if isinstance(_input, list | tuple):
         # e.g. [('soil.Soil', 1)] will return [(Soil, 1)]
         return [(import_item(k), float(v)) for k, v in _input]
 
