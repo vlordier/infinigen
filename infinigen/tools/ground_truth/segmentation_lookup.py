@@ -15,6 +15,7 @@ import numpy as np
 from imageio.v3 import imread, imwrite
 from numba.types import bool_
 
+from infinigen.core.util.array_ops import unique_rows
 from infinigen.tools.compress_masks import recover
 from infinigen.tools.dataset_loader import get_frame_path
 
@@ -134,8 +135,6 @@ if __name__ == "__main__":
         [object_segmentation_mask, instance_segmentation_mask], "h w *"
     )
     combined_mask = rearrange(combined_mask, "h w d -> (h w) d")
-    from infinigen.core.util.array_ops import unique_rows
-
     uniq_instances, indices = unique_rows(combined_mask, return_inverse=True)
     unique_colors = np.stack([arr2color(row) for row in uniq_instances])
 

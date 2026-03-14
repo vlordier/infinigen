@@ -20,6 +20,7 @@ import numpy as np
 from imageio import imwrite
 from matplotlib import pyplot as plt
 
+from infinigen.core.util.array_ops import unique_rows
 from infinigen.core.util.camera import get_3x4_RT_matrix_from_blender
 
 logger = logging.getLogger(__name__)
@@ -120,8 +121,6 @@ def colorize_depth(depth, scale_vmin=1.0):
 def colorize_int_array(data, color_seed=0):
     H, W, *_ = data.shape
     data = data.reshape((H * W, -1))
-    from infinigen.core.util.array_ops import unique_rows
-
     uniq, indices = unique_rows(data, return_inverse=True)
     random_states = [
         np.random.RandomState(e[:2].astype(np.uint32) + color_seed) for e in uniq

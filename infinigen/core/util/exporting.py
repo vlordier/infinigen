@@ -16,6 +16,7 @@ import numpy as np
 from bpy.types import DepsgraphObjectInstance
 from tqdm import tqdm
 
+from infinigen.core.util.array_ops import unique_rows
 from infinigen.core.util.math import int_hash
 
 
@@ -271,8 +272,6 @@ def save_obj_and_instances(
             matrices = np.asarray(item["matrices"], dtype=np.float32)
             npz_data[f"{mesh_id}_transformations"] = matrices
             instance_ids_array = np.asarray(item["instance_ids"], dtype=np.int32)
-            from infinigen.core.util.array_ops import unique_rows
-
             assert (
                 unique_rows(instance_ids_array).shape == instance_ids_array.shape
             )

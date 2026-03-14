@@ -22,6 +22,7 @@ except ImportError as e:
         "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
     ) from e
 
+from infinigen.core.util.array_ops import unique_rows
 from infinigen.tools.compress_masks import recover
 from infinigen.tools.dataset_loader import get_frame_path
 
@@ -130,8 +131,6 @@ if __name__ == "__main__":
     )
     combined_mask = rearrange(combined_mask, "h w d -> (h w) d")
     # Void-view unique avoids the slow axis=0 lexsort path in np.unique.
-    from infinigen.core.util.array_ops import unique_rows
-
     visible_instances = unique_rows(combined_mask)
     visible_instances = {tuple(row) for row in visible_instances}
 
