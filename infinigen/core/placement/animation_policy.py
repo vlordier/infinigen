@@ -27,6 +27,11 @@ from infinigen.core.util.random import random_general
 
 logger = logging.getLogger(__name__)
 
+# Named constants for gin-configurable retry/attempt bounds
+_WALK_ALTITUDE_DEFAULT_RETRIES: int = 30
+_ANIMATE_MAX_STEP_TRIES_DEFAULT: int = 25
+_ANIMATE_MAX_FULL_RETRIES_DEFAULT: int = 40
+
 
 class PolicyError(ValueError):
     pass
@@ -44,7 +49,7 @@ def walk_same_altitude(
     bvh,
     filter_func=None,
     fall_ratio=1.5,
-    retries=30,
+    retries=_WALK_ALTITUDE_DEFAULT_RETRIES,
     step_up_height=2,
     ignore_missed_rays=False,
     z_move_up=1,
@@ -52,6 +57,8 @@ def walk_same_altitude(
     """
     fall_ratio: what is the slope at which the camera is willing to go down / glide
     """
+    if retries < 1:
+        raise ValueError(f"retries must be >= 1, got {retries}")
 
     # retry until we find something that doesnt walk off the map
     for retry in range(retries):
@@ -449,6 +456,10 @@ def try_animate_with_pathfinding(
     bounding_box,
     turning_limit_degree=10,
 ):
+    if max_step_tries < 1:
+        raise ValueError(
+            f"max_step_tries must be >= 1, got {max_step_tries}"
+        )
     frame_curr = bpy.context.scene.frame_start
     pbar = tqdm(total=duration_frames) if verbose else None
     while frame_curr < bpy.context.scene.frame_start + duration_frames:
@@ -590,8 +601,8 @@ def animate_trajectory(
     bvh,
     policy_func,
     validate_pose_func=None,
-    max_step_tries=25,
-    max_full_retries=40,
+    max_step_tries=_ANIMATE_MAX_STEP_TRIES_DEFAULT,
+    max_full_retries=_ANIMATE_MAX_FULL_RETRIES_DEFAULT,
     retry_rotation=False,
     verbose=True,
     fatal=False,
@@ -599,6 +610,14 @@ def animate_trajectory(
     bounding_box=None,
     path_finding_enabled=False,
 ):
+    if max_full_retries < 1:
+        raise ValueError(
+            f"max_full_retries must be >= 1, got {max_full_retries}"
+        )
+    if max_step_tries < 1:
+        raise ValueError(
+            f"max_step_tries must be >= 1, got {max_step_tries}"
+        )
     duration_frames = bpy.context.scene.frame_end - bpy.context.scene.frame_start
     duration_sec = duration_frames / bpy.context.scene.render.fps
     if duration_sec < 1e-3:
