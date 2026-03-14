@@ -7,18 +7,19 @@
 """
 Benchmarks and correctness tests for optimisations:
 
-1.  evaluate.py   – ChainMap instead of copy.copy(memo) in ForAll/SumOver/MeanOver
-2.  skin_ops.py   – vectorised bevel_cap (single-pass array build, no O(n²) loop)
-3.  logging.py    – time.perf_counter() replacing datetime.now() in Timer
-4.  mesh.py       – Mesh.cat() pre-allocated O(n) concatenation
-5.  ctype_util.py – CDLL kernel caching
-6.  exporting.py  – np.empty pre-allocation & vectorised bbox transform
-7.  mesh.py       – write_attributes() pre-computed boolean masks
-8.  device.py     – Unified PyTorch device selection (CUDA/MPS/CPU)
-9.  mesh.py       – Vectorised heightmap grid + face index computation
-10. device.py     – Device capabilities, optimal dtype/batch/threads
-11. batch_ops.py  – Thread-pooled parallel_map, chunked_concat, batched_apply
-12. path_finding  – np.product → np.prod deprecation fix
+1.  evaluate.py            – ChainMap instead of copy.copy(memo) in ForAll/SumOver/MeanOver
+2.  skin_ops.py            – vectorised bevel_cap (single-pass array build, no O(n²) loop)
+3.  logging.py             – time.perf_counter() replacing datetime.now() in Timer
+4.  mesh.py                – Mesh.cat() pre-allocated O(n) concatenation
+5.  ctype_util.py          – CDLL kernel caching
+6.  exporting.py           – np.empty pre-allocation & vectorised bbox transform
+7.  mesh.py                – write_attributes() pre-computed boolean masks
+8.  device.py              – Unified PyTorch device selection (CUDA/MPS/CPU)
+9.  mesh.py                – Vectorised heightmap grid + face index computation
+10. device.py              – Device capabilities, optimal dtype/batch/threads
+11. batch_ops.py           – Thread-pooled parallel_map, chunked_concat, batched_apply
+12. path_finding           – np.product → np.prod deprecation fix
+13. segmentation_lookup.py – void-view unique_rows replacing np.unique(..., axis=0) bottleneck
 """
 
 import importlib
@@ -1250,6 +1251,182 @@ class TestBatchOpsPerformance:
 
 
 # ---------------------------------------------------------------------------
+# 16. Ground-truth mask processing bottleneck
+#     (np.unique on 2-D arrays, annotated in segmentation_lookup.py and
+#     bounding_boxes_3d.py as "this line is the bottleneck")
+# ---------------------------------------------------------------------------
+
+
+def _make_combined_mask(H: int, W: int, n_objects: int) -> np.ndarray:
+    """Build a synthetic combined (object, instance) segmentation mask.
+
+    Mimics the ``combined_mask`` arrays produced by
+    ``segmentation_lookup.py`` and ``bounding_boxes_3d.py`` before the
+    ``np.unique(..., axis=0)`` bottleneck call.  Each row represents a
+    pixel and contains ``[object_id, instance_id]`` as int32 values.
+    """
+    np.random.seed(42)
+    obj_ids = np.random.randint(0, n_objects, H * W, dtype=np.int32)
+    inst_ids = np.random.randint(0, n_objects * 10, H * W, dtype=np.int32)
+    return np.stack([obj_ids, inst_ids], axis=1)
+
+
+def _unique_rows_reference(arr: np.ndarray) -> np.ndarray:
+    """Original bottleneck: ``np.unique`` on the full 2-D combined mask."""
+    return np.unique(arr, axis=0)
+
+
+def _unique_rows_reference_with_inverse(
+    arr: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Original bottleneck with inverse indices (as used in segmentation_lookup)."""
+    return np.unique(arr, return_inverse=True, axis=0)
+
+
+def _unique_rows_fast(arr: np.ndarray) -> np.ndarray:
+    """Optimised: view each row as a single void element for 1-D unique.
+
+    Instead of asking NumPy to compare rows element-by-element
+    (``np.unique(..., axis=0)`` uses an internal lexsort), we reinterpret
+    each row as an opaque byte blob of fixed size and run the standard 1-D
+    unique algorithm.  The result contains the same set of unique rows
+    (potentially in a different sort order due to little-endian byte
+    comparison, which is fine for set-membership queries).
+    """
+    arr = np.ascontiguousarray(arr)
+    row_dtype = np.dtype((np.void, arr.dtype.itemsize * arr.shape[1]))
+    row_view = arr.view(row_dtype).reshape(-1)
+    uniq_void = np.unique(row_view)
+    return uniq_void.view(arr.dtype).reshape(-1, arr.shape[1])
+
+
+def _unique_rows_fast_with_inverse(
+    arr: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Optimised void-view unique returning inverse indices.
+
+    Returns ``(unique_rows, inverse)`` such that
+    ``unique_rows[inverse]`` reconstructs ``arr`` row-by-row, matching
+    the contract of ``np.unique(..., return_inverse=True, axis=0)``.
+    """
+    arr = np.ascontiguousarray(arr)
+    row_dtype = np.dtype((np.void, arr.dtype.itemsize * arr.shape[1]))
+    row_view = arr.view(row_dtype).reshape(-1)
+    uniq_void, inverse = np.unique(row_view, return_inverse=True)
+    unique_rows = uniq_void.view(arr.dtype).reshape(-1, arr.shape[1])
+    return unique_rows, inverse
+
+
+class TestUniqueRowsCorrectness:
+    """Verify that the void-view optimisation produces the same unique rows
+    as ``np.unique(..., axis=0)`` for realistic segmentation mask inputs."""
+
+    @pytest.mark.parametrize("H,W", [(64, 64), (256, 256)])
+    @pytest.mark.parametrize("n_objects", [5, 50])
+    def test_unique_rows_set_equal(self, H, W, n_objects):
+        """Both methods must return the same *set* of unique rows."""
+        arr = _make_combined_mask(H, W, n_objects)
+        ref = _unique_rows_reference(arr)
+        fast = _unique_rows_fast(arr)
+
+        ref_set = {tuple(row) for row in ref}
+        fast_set = {tuple(row) for row in fast}
+        assert ref_set == fast_set, (
+            f"Unique row sets differ for H={H}, W={W}, n_objects={n_objects}: "
+            f"ref has {len(ref_set)} rows, fast has {len(fast_set)} rows"
+        )
+
+    @pytest.mark.parametrize("H,W", [(64, 64), (256, 256)])
+    def test_unique_rows_inverse_reconstructs_input(self, H, W):
+        """unique_rows[inverse] must equal the original combined mask row-by-row."""
+        arr = _make_combined_mask(H, W, n_objects=20)
+        fast_uniq, fast_inv = _unique_rows_fast_with_inverse(arr)
+        reconstructed = fast_uniq[fast_inv]
+        np.testing.assert_array_equal(
+            reconstructed,
+            arr,
+            err_msg=f"Reconstruction failed for H={H}, W={W}",
+        )
+
+    def test_unique_rows_inverse_matches_reference(self):
+        """Inverse-index variant must reconstruct the array identically to the
+        reference ``np.unique(..., return_inverse=True, axis=0)`` variant."""
+        arr = _make_combined_mask(128, 128, n_objects=30)
+        ref_uniq, ref_inv = _unique_rows_reference_with_inverse(arr)
+        fast_uniq, fast_inv = _unique_rows_fast_with_inverse(arr)
+
+        # Both must reconstruct the original array
+        np.testing.assert_array_equal(ref_uniq[ref_inv], arr)
+        np.testing.assert_array_equal(fast_uniq[fast_inv], arr)
+
+        # The sets of unique rows must be identical
+        ref_set = {tuple(row) for row in ref_uniq}
+        fast_set = {tuple(row) for row in fast_uniq}
+        assert ref_set == fast_set
+
+    def test_unique_rows_single_object(self):
+        """Edge case: all pixels belong to the same (object, instance) pair."""
+        arr = np.zeros((100, 2), dtype=np.int32)
+        fast = _unique_rows_fast(arr)
+        assert fast.shape == (1, 2)
+        np.testing.assert_array_equal(fast[0], [0, 0])
+
+    def test_unique_rows_all_distinct(self):
+        """Edge case: every pixel is a unique (object, instance) pair."""
+        N = 50
+        arr = np.arange(N * 2, dtype=np.int32).reshape(N, 2)
+        fast = _unique_rows_fast(arr)
+        assert fast.shape[0] == N
+
+
+class TestUniqueRowsPerformance:
+    """Benchmark the void-view ``unique_rows`` against the original
+    ``np.unique(..., axis=0)`` bottleneck for realistic HD mask sizes.
+
+    The annotated bottleneck in ``segmentation_lookup.py`` (line 139) and
+    ``bounding_boxes_3d.py`` (line 132) is called on full-resolution
+    combined masks, so 960×540 and 1920×1080 are representative sizes.
+    """
+
+    def _time_ms(self, fn, arr: np.ndarray, n_repeat: int = 5) -> float:
+        """Return the median elapsed time (ms) for calling ``fn(arr)``."""
+        times = []
+        for _ in range(n_repeat):
+            t0 = time.perf_counter()
+            fn(arr)
+            times.append(time.perf_counter() - t0)
+        return float(np.median(times)) * 1000
+
+    @pytest.mark.parametrize("H,W", [(540, 960), (1080, 1920)])
+    def test_unique_rows_speedup(self, H, W):
+        n_objects = 100
+        arr = _make_combined_mask(H, W, n_objects)
+
+        t_ref_ms = self._time_ms(_unique_rows_reference, arr)
+        t_fast_ms = self._time_ms(_unique_rows_fast, arr)
+        speedup = t_ref_ms / t_fast_ms
+        assert speedup >= 1.3, (
+            f"Expected ≥1.3× speedup for {H}×{W} mask, got {speedup:.2f}× "
+            f"(ref={t_ref_ms:.1f} ms, fast={t_fast_ms:.1f} ms)"
+        )
+
+    def test_unique_rows_with_inverse_speedup(self):
+        """Inverse-index variant (used in segmentation_lookup.py) should also
+        be faster than the 2-D reference."""
+        H, W = 1080, 1920
+        arr = _make_combined_mask(H, W, n_objects=100)
+
+        t_ref_ms = self._time_ms(_unique_rows_reference_with_inverse, arr)
+        t_fast_ms = self._time_ms(_unique_rows_fast_with_inverse, arr)
+        speedup = t_ref_ms / t_fast_ms
+        assert speedup >= 1.3, (
+            f"Expected ≥1.3× speedup for {H}×{W} mask (with inverse), "
+            f"got {speedup:.2f}× "
+            f"(ref={t_ref_ms:.1f} ms, fast={t_fast_ms:.1f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
 # 15. Baseline comparison framework
 # ---------------------------------------------------------------------------
 
@@ -1271,6 +1448,7 @@ class TestBaselineComparison:
         "mesh_cat_50_ms": 25.0,
         "heightmap_256_ms": 40.0,
         "bbox_transform_5k_ms": 50.0,
+        "unique_rows_1080p_ms": 500.0,
     }
 
     def test_bevel_cap_within_budget(self):
@@ -1341,4 +1519,18 @@ class TestBaselineComparison:
         budget = self._BASELINES["bbox_transform_5k_ms"]
         assert elapsed_ms < budget * 5, (
             f"bbox transform (5k iters) took {elapsed_ms:.2f} ms, budget {budget} ms"
+        )
+
+    def test_unique_rows_within_budget(self):
+        """The void-view unique_rows must complete within budget for 1080p masks."""
+        arr = _make_combined_mask(1080, 1920, n_objects=100)
+        times = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            _unique_rows_fast(arr)
+            times.append((time.perf_counter() - t0) * 1000)
+        median_ms = float(np.median(times))
+        budget = self._BASELINES["unique_rows_1080p_ms"]
+        assert median_ms < budget * 5, (
+            f"unique_rows 1080p took {median_ms:.2f} ms, budget {budget} ms (5× headroom)"
         )
