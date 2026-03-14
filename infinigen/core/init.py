@@ -38,6 +38,11 @@ CYCLES_GPUTYPES_PREFERENCE = [
     "CPU",
 ]
 
+# Cycles volume rendering defaults
+CYCLES_VOLUME_STEP_RATE = 0.1
+CYCLES_VOLUME_MAX_STEPS = 32
+CYCLES_VOLUME_BOUNCES = 4
+
 # Cached device enumeration result to avoid repeated Blender API calls
 _cached_devices: list | None = None
 
@@ -228,10 +233,10 @@ def configure_render_cycles(
     )
     bpy.context.scene.cycles.time_limit = time_limit
     bpy.context.scene.cycles.film_exposure = exposure
-    bpy.context.scene.cycles.volume_step_rate = 0.1
-    bpy.context.scene.cycles.volume_preview_step_rate = 0.1
-    bpy.context.scene.cycles.volume_max_steps = 32
-    bpy.context.scene.cycles.volume_bounces = 4
+    bpy.context.scene.cycles.volume_step_rate = CYCLES_VOLUME_STEP_RATE
+    bpy.context.scene.cycles.volume_preview_step_rate = CYCLES_VOLUME_STEP_RATE
+    bpy.context.scene.cycles.volume_max_steps = CYCLES_VOLUME_MAX_STEPS
+    bpy.context.scene.cycles.volume_bounces = CYCLES_VOLUME_BOUNCES
 
     # Enable persistent data when rendering multiple frames
     frame_start = bpy.context.scene.frame_start
