@@ -44,13 +44,14 @@ jobs:
 
       - name: Install benchmark dependencies
         run: |
-          uv pip install --system pytest numpy scipy opencv-python-headless torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install pytest numpy scipy opencv-python-headless
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Run PR branch benchmarks
         id: pr_bench
         working-directory: pr-branch
         run: |
-          python tests/run_benchmarks.py --output /tmp/pr_results.json
+          uv run python tests/run_benchmarks.py --output /tmp/pr_results.json
 
       - name: Run upstream benchmarks
         id: upstream_bench
@@ -58,13 +59,13 @@ jobs:
         run: |
           # The upstream may not have our benchmark runner, use the PR's version
           cp ../pr-branch/tests/run_benchmarks.py /tmp/run_benchmarks_upstream.py
-          python /tmp/run_benchmarks_upstream.py --output /tmp/upstream_results.json --upstream
+          uv run python /tmp/run_benchmarks_upstream.py --output /tmp/upstream_results.json --upstream
 
       - name: Generate comparison report
         id: report
         working-directory: pr-branch
         run: |
-          python tests/compare_benchmarks.py \
+          uv run python tests/compare_benchmarks.py \
             --pr /tmp/pr_results.json \
             --upstream /tmp/upstream_results.json \
             --output /tmp/benchmark_report.md
