@@ -45,6 +45,10 @@ jobs:
         run: |
           pytest tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
 
+      - name: Install CPU-only torch for device tests
+        run: |
+          uv pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+
       - name: Test non-regression suite (no bpy required)
         run: |
           pytest tests/test_nonregression.py --noconftest -v

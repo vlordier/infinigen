@@ -39,7 +39,7 @@ PAIRS = [
     ),
     ("projection precomputed", "projection separate steps", "projection (combined K)"),
     (
-        "distance_transform_edt 512x512",
+        "distance_transform_edt 64x64",
         "grid_distance loop 64x64",
         "distance_transform (EDT)",
     ),
@@ -126,7 +126,7 @@ def build_report(pr: dict, upstream: dict) -> str:
         lines_chart.append("")
         lines_chart.append("```")
         lines_chart.append(
-            f"{'Benchmark':<30s} {'':1s}{'|':1s}{'  Speedup bar (max = '}{max_sp:.0f}×)'"
+            f"{'Benchmark':<30s}  |  Speedup bar (max = {max_sp:.0f}×)"
         )
         lines_chart.append("─" * 80)
 

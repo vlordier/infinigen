@@ -134,7 +134,7 @@ def bench_meshgrid_loop():
 def bench_tree_vertices_lazy():
     """Lazy concatenation pattern (append list + final concat)."""
     np.random.seed(7)
-    parts = [np.random.rand(100, 3) for _ in range(500)]
+    parts = [np.random.rand(100, 3) for _ in range(200)]
 
     def _lazy():
         acc = []
@@ -149,7 +149,7 @@ def bench_tree_vertices_lazy():
 def bench_tree_vertices_eager():
     """Eager O(n²) np.append pattern (reference)."""
     np.random.seed(7)
-    parts = [np.random.rand(100, 3) for _ in range(200)]  # fewer for speed
+    parts = [np.random.rand(100, 3) for _ in range(200)]
 
     def _eager():
         arr = np.empty((0, 3))
@@ -199,20 +199,21 @@ def bench_projection_separate():
 
 
 def bench_distance_transform():
-    """scipy distance_transform_edt on 512×512 binary mask."""
+    """scipy distance_transform_edt on 64×64 binary mask."""
     try:
         from scipy.ndimage import distance_transform_edt
     except ImportError:
         return ("distance_transform_edt", float("nan"))
 
     np.random.seed(42)
-    mask = (np.random.rand(512, 512) > 0.5).astype(np.float64)
+    N = 64
+    mask = (np.random.rand(N, N) > 0.5).astype(np.float64)
     t = _median_time(lambda: distance_transform_edt(mask))
-    return ("distance_transform_edt 512x512", t)
+    return ("distance_transform_edt 64x64", t)
 
 
 def bench_distance_loop():
-    """Loop-based grid distance (reference) on small 64×64 mask."""
+    """Loop-based grid distance (reference) on 64×64 mask."""
     np.random.seed(42)
     N = 64
     mask = (np.random.rand(N, N) > 0.5).astype(np.float64)
@@ -261,6 +262,10 @@ def main():
         help="Running against upstream (may lack some optimised modules)",
     )
     args = parser.parse_args()
+
+    if args.upstream:
+        print("Running in upstream mode — optimised modules may be missing; "
+              "benchmarks will fall back to baseline implementations.")
 
     results = {}
     for bench_fn in ALL_BENCHMARKS:

@@ -44,8 +44,7 @@ jobs:
 
       - name: Install benchmark dependencies
         run: |
-          uv pip install pytest numpy scipy opencv-python-headless
-          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+          uv pip install pytest numpy scipy opencv-python-headless torch --extra-index-url https://download.pytorch.org/whl/cpu
 
       - name: Run PR branch benchmarks
         id: pr_bench
