@@ -134,9 +134,13 @@ if __name__ == "__main__":
         [object_segmentation_mask, instance_segmentation_mask], "h w *"
     )
     combined_mask = rearrange(combined_mask, "h w d -> (h w) d")
-    uniq_instances, indices = np.unique(
-        combined_mask, return_inverse=True, axis=0
-    )  # this line is the bottleneck
+    # Void-view unique: reinterpret each row as an opaque byte blob so NumPy
+    # runs a fast 1-D unique instead of the slow axis=0 lexsort path.
+    combined_mask = np.ascontiguousarray(combined_mask)
+    void_row_dtype = np.dtype((np.void, combined_mask.dtype.itemsize * combined_mask.shape[1]))
+    void_view = combined_mask.view(void_row_dtype).reshape(-1)
+    unique_void_rows, indices = np.unique(void_view, return_inverse=True)
+    uniq_instances = unique_void_rows.view(combined_mask.dtype).reshape(-1, combined_mask.shape[1])
     unique_colors = np.stack([arr2color(row) for row in uniq_instances])
 
     if args.boxes:
