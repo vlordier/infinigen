@@ -114,7 +114,7 @@ exclude = [
 
 [tool.setuptools.package-data]
 
-"*" = ["*.gin", "*.txt", "*.json"]
+"*" = ["*.gin", "*.txt", "*.json", "py.typed"]
 
 # Must be specified as paths relative to infinigen/
 "infinigen" = [
@@ -150,7 +150,7 @@ test-extras = ["dev"]
 test-command = "pytest tests"
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 
 exclude = [
 

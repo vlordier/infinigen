@@ -109,7 +109,7 @@ def import_material(factory_name):
                     if hasattr(module, factory_name):
                         return getattr(module, factory_name)
             else:
-                raise Exception(f"{factory_name} not Found.")
+                raise ModuleNotFoundError(f"{factory_name} not Found.")
 
 
 room_ceiling_fns = defaultdict(

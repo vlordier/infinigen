@@ -19,8 +19,6 @@ from pathlib import Path
 import bpy
 import gin
 
-timer_results = logging.getLogger("times")
-
 
 def lazydebug(logger: logging.Logger, msg: typing.Callable, *args, **kwargs):
     if logger.isEnabledFor(logging.DEBUG):
@@ -56,18 +54,21 @@ class Timer:
 
 
 class Suppress:
-    def __enter__(self, logfile=os.devnull):
-        open(logfile, "w").close()
+    def __init__(self, logfile=os.devnull):
+        self.logfile = logfile
+
+    def __enter__(self):
         self.old = os.dup(1)
         sys.stdout.flush()
-        os.close(1)
-        os.open(logfile, os.O_WRONLY)
+        devnull_fd = os.open(self.logfile, os.O_WRONLY)
+        os.dup2(devnull_fd, 1)
+        os.close(devnull_fd)
         self.level = logging.root.manager.disable
         logging.disable(logging.CRITICAL)
 
-    def __exit__(self, type, value, traceback):
-        os.close(1)
-        os.dup(self.old)
+    def __exit__(self, exc_type, exc_val, traceback):
+        sys.stdout.flush()
+        os.dup2(self.old, 1)
         os.close(self.old)
         logging.disable(self.level)
 

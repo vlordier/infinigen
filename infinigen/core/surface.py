@@ -461,7 +461,7 @@ def add_geomod(
             if o.socket_type != "NodeSocketGeometry"
         ]
         if len(non_geometries) != len(attributes):
-            raise Exception(
+            raise ValueError(
                 f"has {len(non_geometries)} identifiers, but {len(attributes)} attributes. Specifically, "
                 f"{non_geometries=} and {attributes=}"
             )
@@ -474,7 +474,7 @@ def add_geomod(
 
         inputs = ng_inputs(mod.node_group)
         if not any(att_name is None for att_name in input_attributes):
-            raise Exception("None should be provided for Geometry inputs.")
+            raise ValueError("None should be provided for Geometry inputs.")
         for i, att_name in zip(inputs.values(), input_attributes):
             o = i.identifier
             if att_name is not None:
