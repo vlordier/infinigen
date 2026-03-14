@@ -21,6 +21,20 @@ from .camera import getK
 from .ctype_util import ASDOUBLE, ASINT, load_cdll
 from .kernelizer_util import ATTRTYPE_DIMS, ATTRTYPE_FIELDS, NPTYPEDIM_ATTR, Vars
 
+# Cache configured C functions to avoid repeated argtypes/restype setup.
+_c_funcs: dict = {}
+
+
+def _get_c_func(name, argtypes, restype=None):
+    """Return a configured ctypes function, caching after first setup."""
+    if name not in _c_funcs:
+        dll = load_cdll("terrain/lib/cpu/meshing/utils.so")
+        func = getattr(dll, name)
+        func.argtypes = argtypes
+        func.restype = restype
+        _c_funcs[name] = func
+    return _c_funcs[name]
+
 
 class NormalMode:
     Mean = "mean"
@@ -276,17 +290,12 @@ class Mesh:
             return w_normals
 
     def facewise_mean(self, attr):
-        dll = load_cdll("terrain/lib/cpu/meshing/utils.so")
-        facewise_mean = dll.facewise_mean
-        facewise_mean.argtypes = [
-            POINTER(c_double),
-            POINTER(c_int32),
-            c_int32,
-            POINTER(c_double),
-        ]
-        facewise_mean.restype = None
+        func = _get_c_func(
+            "facewise_mean",
+            [POINTER(c_double), POINTER(c_int32), c_int32, POINTER(c_double)],
+        )
         result = AC(np.empty(len(self.faces), dtype=np.float64))
-        facewise_mean(
+        func(
             ASDOUBLE(AC(attr.astype(np.float64))),
             ASINT(AC(self.faces.astype(np.int32))),
             len(self.faces),
@@ -295,17 +304,12 @@ class Mesh:
         return result
 
     def facewise_intmax(self, attr):
-        dll = load_cdll("terrain/lib/cpu/meshing/utils.so")
-        facewise_intmax = dll.facewise_intmax
-        facewise_intmax.argtypes = [
-            POINTER(c_int32),
-            POINTER(c_int32),
-            c_int32,
-            POINTER(c_int32),
-        ]
-        facewise_intmax.restype = None
+        func = _get_c_func(
+            "facewise_intmax",
+            [POINTER(c_int32), POINTER(c_int32), c_int32, POINTER(c_int32)],
+        )
         result = AC(np.empty(len(self.faces), dtype=np.int32))
-        facewise_intmax(
+        func(
             ASINT(AC(attr.astype(np.int32))),
             ASINT(AC(self.faces.astype(np.int32))),
             len(self.faces),
@@ -314,28 +318,23 @@ class Mesh:
         return result
 
     def get_adjacency(self):
-        dll = load_cdll("terrain/lib/cpu/meshing/utils.so")
-        get_adjacency = dll.get_adjacency
-        get_adjacency.argtypes = [c_int32, c_int32, POINTER(c_int32), POINTER(c_int32)]
-        get_adjacency.restype = None
+        func = _get_c_func(
+            "get_adjacency",
+            [c_int32, c_int32, POINTER(c_int32), POINTER(c_int32)],
+        )
         result = AC(np.empty((len(self.faces), 3), dtype=np.int32))
         pairs = self._trimesh.face_adjacency.astype(np.int32)
-        get_adjacency(len(self.faces), len(pairs), ASINT(AC(pairs)), ASINT(result))
+        func(len(self.faces), len(pairs), ASINT(AC(pairs)), ASINT(result))
         return result
 
     @property
     def face_normals(self):
-        dll = load_cdll("terrain/lib/cpu/meshing/utils.so")
-        compute_face_normals = dll.compute_face_normals
-        compute_face_normals.argtypes = [
-            POINTER(c_double),
-            POINTER(c_int32),
-            c_int32,
-            POINTER(c_double),
-        ]
-        compute_face_normals.restype = None
+        func = _get_c_func(
+            "compute_face_normals",
+            [POINTER(c_double), POINTER(c_int32), c_int32, POINTER(c_double)],
+        )
         normals = AC(np.empty((len(self.faces), 3), dtype=np.float64))
-        compute_face_normals(
+        func(
             ASDOUBLE(AC(self.vertices)),
             ASINT(AC(self.faces.astype(np.int32))),
             len(self.faces),
@@ -418,23 +417,27 @@ class Mesh:
 
         self.vertex_attributes["invisible"] = np.zeros(len(self.vertices), bool)
 
-        for cam_pose in cam_poses:
-            coords = np.matmul(
-                K,
-                np.matmul(
-                    np.linalg.inv(cam_pose),
-                    np.concatenate(
-                        (self.vertices.transpose(), np.ones((1, len(self.vertices)))), 0
-                    ),
-                )[:3, :],
-            )
+        # Pre-compute combined projection matrices: K @ inv(cam)[:3, :]
+        # Fuses intrinsic multiplication into the view transform so the inner
+        # loop performs a single (3, 4) @ (4, nv) matmul instead of two.
+        nv = len(self.vertices)
+        homo_verts = np.concatenate(
+            (self.vertices.T, np.ones((1, nv))), axis=0
+        )  # (4, nv)
+        projs = [K @ np.linalg.inv(cp)[:3, :] for cp in cam_poses]
+        neg_relax_W = -relax * W
+        upper_W = (1 + relax) * W
+        neg_relax_H = -relax * H
+        upper_H = (1 + relax) * H
+        for proj in projs:
+            coords = proj @ homo_verts  # (3, nv) — single matmul
             coords[:2, :] /= coords[2]
             self.vertex_attributes["invisible"] |= (
                 (coords[2] > 0)
-                & (coords[0] > -relax * W)
-                & (coords[0] < (1 + relax) * W)
-                & (coords[1] > -relax * H)
-                & (coords[1] < (1 + relax) * H)
+                & (coords[0] > neg_relax_W)
+                & (coords[0] < upper_W)
+                & (coords[1] > neg_relax_H)
+                & (coords[1] < upper_H)
             )
 
         self.vertex_attributes["invisible"] = (

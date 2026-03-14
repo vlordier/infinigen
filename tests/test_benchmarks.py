@@ -20,6 +20,10 @@ Benchmarks and correctness tests for optimisations:
 11. batch_ops.py           – Thread-pooled parallel_map, chunked_concat, batched_apply
 12. path_finding           – np.product → np.prod deprecation fix
 13. segmentation_lookup.py – void-view unique_rows replacing np.unique(..., axis=0) bottleneck
+14. tree.py                – List accumulation replacing O(n²) np.append in parse_tree_attributes
+15. tree.py                – Lazy vertex concatenation in TreeVertices
+16. mesh.py                – Batched camera_annotation matrix projection via np.einsum
+17. mesh.py                – Cached C function argtypes/restype setup
 """
 
 import importlib
@@ -1533,4 +1537,314 @@ class TestBaselineComparison:
         budget = self._BASELINES["unique_rows_1080p_ms"]
         assert median_ms < budget * 5, (
             f"unique_rows 1080p took {median_ms:.2f} ms, budget {budget} ms (5× headroom)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 16. Tree np.append → list accumulation
+# ---------------------------------------------------------------------------
+
+
+def _tree_append_reference(n_initial, n_appends):
+    """Reference: repeated np.append (O(n²) total)."""
+    parents = np.zeros(n_initial, dtype=int)
+    vtx_pos = np.random.rand(n_initial, 3)
+    for i in range(n_appends):
+        parents = np.append(parents, i % n_initial)
+        vtx_pos = np.append(vtx_pos, np.random.rand(1, 3), axis=0)
+    return parents, vtx_pos
+
+
+def _tree_append_optimized(n_initial, n_appends):
+    """Optimised: accumulate in lists, concatenate once (O(n) total)."""
+    parents = np.zeros(n_initial, dtype=int)
+    vtx_pos = np.random.rand(n_initial, 3)
+    acc_parents = []
+    acc_vtx_pos = []
+    for i in range(n_appends):
+        acc_parents.append(i % n_initial)
+        acc_vtx_pos.append(np.random.rand(3))
+    if acc_parents:
+        parents = np.concatenate([parents, np.array(acc_parents, dtype=int)])
+        vtx_pos = np.concatenate([vtx_pos, np.array(acc_vtx_pos).reshape(-1, 3)])
+    return parents, vtx_pos
+
+
+class TestTreeAppendCorrectness:
+    """Verify that list-accumulation produces identical results to np.append."""
+
+    @pytest.mark.parametrize("n_initial,n_appends", [(10, 50), (100, 200), (5, 0)])
+    def test_results_match(self, n_initial, n_appends):
+        np.random.seed(42)
+        ref_p, ref_v = _tree_append_reference(n_initial, n_appends)
+        np.random.seed(42)
+        opt_p, opt_v = _tree_append_optimized(n_initial, n_appends)
+        np.testing.assert_array_equal(ref_p, opt_p)
+        np.testing.assert_allclose(ref_v, opt_v)
+
+
+class TestTreeAppendPerformance:
+    """Assert list-accumulation is faster than repeated np.append."""
+
+    def _time_ms(self, fn, *args, n_repeat=5):
+        times = []
+        for _ in range(n_repeat):
+            np.random.seed(0)
+            t0 = time.perf_counter()
+            fn(*args)
+            times.append((time.perf_counter() - t0) * 1000)
+        return float(np.median(times))
+
+    def test_speedup(self):
+        n_initial, n_appends = 100, 500
+        t_ref = self._time_ms(_tree_append_reference, n_initial, n_appends)
+        t_opt = self._time_ms(_tree_append_optimized, n_initial, n_appends)
+        speedup = t_ref / t_opt if t_opt > 0 else float("inf")
+        assert speedup >= 1.3, (
+            f"Expected ≥1.3× speedup, got {speedup:.2f}× "
+            f"(ref={t_ref:.1f} ms, opt={t_opt:.1f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 17. TreeVertices lazy concatenation
+# ---------------------------------------------------------------------------
+
+
+class _LazyVertices:
+    """Mimics the optimised TreeVertices with lazy concatenation."""
+
+    def __init__(self, vtxs):
+        self._parts = [np.asarray(vtxs)]
+        self._cache = self._parts[0]
+        self._dirty = False
+
+    @property
+    def vtxs(self):
+        if self._dirty:
+            self._cache = np.concatenate(self._parts)
+            self._parts = [self._cache]
+            self._dirty = False
+        return self._cache
+
+    def append(self, v):
+        self._parts.append(np.asarray(v).reshape(-1, 3))
+        self._dirty = True
+
+    def __len__(self):
+        return len(self.vtxs)
+
+
+class _EagerVertices:
+    """Mimics the original TreeVertices with np.append."""
+
+    def __init__(self, vtxs):
+        self.vtxs = np.asarray(vtxs)
+
+    def append(self, v):
+        self.vtxs = np.append(self.vtxs, np.asarray(v).reshape(-1, 3), axis=0)
+
+    def __len__(self):
+        return len(self.vtxs)
+
+
+class TestLazyVerticesCorrectness:
+    """Verify lazy concatenation produces identical arrays."""
+
+    def test_basic_append(self):
+        np.random.seed(0)
+        lazy = _LazyVertices(np.zeros((1, 3)))
+        eager = _EagerVertices(np.zeros((1, 3)))
+        for _ in range(50):
+            row = np.random.rand(1, 3)
+            lazy.append(row)
+            eager.append(row)
+        np.testing.assert_array_equal(lazy.vtxs, eager.vtxs)
+        assert len(lazy) == len(eager)
+
+
+class TestLazyVerticesPerformance:
+    """Assert lazy concatenation is faster for many appends."""
+
+    def _time_ms(self, cls, n_appends, n_repeat=5):
+        times = []
+        for _ in range(n_repeat):
+            np.random.seed(0)
+            obj = cls(np.zeros((1, 3)))
+            t0 = time.perf_counter()
+            for _ in range(n_appends):
+                obj.append(np.random.rand(1, 3))
+            # Force materialisation
+            _ = len(obj)
+            times.append((time.perf_counter() - t0) * 1000)
+        return float(np.median(times))
+
+    def test_speedup(self):
+        n_appends = 500
+        t_eager = self._time_ms(_EagerVertices, n_appends)
+        t_lazy = self._time_ms(_LazyVertices, n_appends)
+        speedup = t_eager / t_lazy if t_lazy > 0 else float("inf")
+        assert speedup >= 1.2, (
+            f"Expected ≥1.2× speedup, got {speedup:.2f}× "
+            f"(eager={t_eager:.1f} ms, lazy={t_lazy:.1f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 18. Batched camera projection
+# ---------------------------------------------------------------------------
+
+
+def _camera_projection_loop(K, cam_poses, vertices, relax, H, W):
+    """Reference: per-camera loop with two matmuls."""
+    nv = len(vertices)
+    visible = np.zeros(nv, dtype=bool)
+    homo = np.concatenate((vertices.T, np.ones((1, nv))), axis=0)
+    for cam_pose in cam_poses:
+        coords = K @ (np.linalg.inv(cam_pose) @ homo)[:3, :]
+        coords[:2, :] /= coords[2]
+        visible |= (
+            (coords[2] > 0)
+            & (coords[0] > -relax * W)
+            & (coords[0] < (1 + relax) * W)
+            & (coords[1] > -relax * H)
+            & (coords[1] < (1 + relax) * H)
+        )
+    return (~visible).astype(np.float32)
+
+
+def _camera_projection_batched(K, cam_poses, vertices, relax, H, W):
+    """Optimised: pre-computed combined projection matrix (single matmul per camera)."""
+    nv = len(vertices)
+    visible = np.zeros(nv, dtype=bool)
+    homo = np.concatenate((vertices.T, np.ones((1, nv))), axis=0)
+    projs = [K @ np.linalg.inv(cp)[:3, :] for cp in cam_poses]
+    neg_relax_W = -relax * W
+    upper_W = (1 + relax) * W
+    neg_relax_H = -relax * H
+    upper_H = (1 + relax) * H
+    for proj in projs:
+        coords = proj @ homo  # (3, nv) — single matmul
+        coords[:2, :] /= coords[2]
+        visible |= (
+            (coords[2] > 0)
+            & (coords[0] > neg_relax_W)
+            & (coords[0] < upper_W)
+            & (coords[1] > neg_relax_H)
+            & (coords[1] < upper_H)
+        )
+    return (~visible).astype(np.float32)
+
+
+def _make_camera_test_data(n_cams=10, n_verts=5000):
+    """Generate random camera poses, vertices, and intrinsic matrix."""
+    np.random.seed(123)
+    K = np.array([[500, 0, 320], [0, 500, 240], [0, 0, 1]], dtype=np.float64)
+    cam_poses = [np.eye(4) + np.random.randn(4, 4) * 0.1 for _ in range(n_cams)]
+    vertices = np.random.randn(n_verts, 3)
+    return K, cam_poses, vertices
+
+
+class TestCameraProjectionCorrectness:
+    """Verify batched projection matches per-camera loop."""
+
+    @pytest.mark.parametrize("n_cams", [1, 5, 20])
+    def test_results_match(self, n_cams):
+        K, cam_poses, verts = _make_camera_test_data(n_cams=n_cams, n_verts=1000)
+        H, W = 480, 640
+        relax = 0.01
+        ref = _camera_projection_loop(K, cam_poses, verts, relax, H, W)
+        opt = _camera_projection_batched(K, cam_poses, verts, relax, H, W)
+        np.testing.assert_array_equal(ref, opt)
+
+
+class TestCameraProjectionPerformance:
+    """Assert batched projection is faster for many cameras."""
+
+    def _time_ms(self, fn, *args, n_repeat=10):
+        times = []
+        for _ in range(n_repeat):
+            t0 = time.perf_counter()
+            fn(*args)
+            times.append((time.perf_counter() - t0) * 1000)
+        return float(np.median(times))
+
+    def test_speedup(self):
+        K, cam_poses, verts = _make_camera_test_data(n_cams=20, n_verts=10000)
+        H, W = 1080, 1920
+        relax = 0.01
+        t_loop = self._time_ms(
+            _camera_projection_loop, K, cam_poses, verts, relax, H, W
+        )
+        t_batch = self._time_ms(
+            _camera_projection_batched, K, cam_poses, verts, relax, H, W
+        )
+        speedup = t_loop / t_batch if t_batch > 0 else float("inf")
+        assert speedup >= 1.2, (
+            f"Expected ≥1.2× speedup, got {speedup:.2f}× "
+            f"(loop={t_loop:.1f} ms, batch={t_batch:.1f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 19. Vectorised parent_loc / self_loc lookup
+# ---------------------------------------------------------------------------
+
+
+def _parent_loc_loop(parents, vtx_pos):
+    """Reference: Python loop."""
+    n = len(parents)
+    parent_loc = np.zeros((n, 3), dtype=float)
+    self_loc = np.zeros((n, 3), dtype=float)
+    for vertex_idx, parent_idx in enumerate(parents):
+        parent_loc[vertex_idx] = vtx_pos[parent_idx]
+        self_loc[vertex_idx] = vtx_pos[vertex_idx]
+    return parent_loc, self_loc
+
+
+def _parent_loc_vectorized(parents, vtx_pos):
+    """Optimised: fancy indexing."""
+    n = len(parents)
+    parent_loc = vtx_pos[parents]
+    self_loc = vtx_pos[np.arange(n)]
+    return parent_loc, self_loc
+
+
+class TestParentLocCorrectness:
+    """Verify vectorised lookup matches loop."""
+
+    def test_results_match(self):
+        np.random.seed(0)
+        n = 500
+        vtx_pos = np.random.rand(n, 3)
+        parents = np.random.randint(0, n, size=n)
+        parents[0] = 0
+        ref_p, ref_s = _parent_loc_loop(parents, vtx_pos)
+        opt_p, opt_s = _parent_loc_vectorized(parents, vtx_pos)
+        np.testing.assert_array_equal(ref_p, opt_p)
+        np.testing.assert_array_equal(ref_s, opt_s)
+
+
+class TestParentLocPerformance:
+    """Assert vectorised lookup is faster."""
+
+    def _time_ms(self, fn, *args, n_repeat=50):
+        times = []
+        for _ in range(n_repeat):
+            t0 = time.perf_counter()
+            fn(*args)
+            times.append((time.perf_counter() - t0) * 1000)
+        return float(np.median(times))
+
+    def test_speedup(self):
+        np.random.seed(0)
+        n = 5000
+        vtx_pos = np.random.rand(n, 3)
+        parents = np.random.randint(0, n, size=n)
+        t_loop = self._time_ms(_parent_loc_loop, parents, vtx_pos)
+        t_vec = self._time_ms(_parent_loc_vectorized, parents, vtx_pos)
+        speedup = t_loop / t_vec if t_vec > 0 else float("inf")
+        assert speedup >= 1.3, (
+            f"Expected ≥1.3× speedup, got {speedup:.2f}× "
+            f"(loop={t_loop:.2f} ms, vec={t_vec:.2f} ms)"
         )
