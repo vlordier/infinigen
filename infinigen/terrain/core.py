@@ -205,7 +205,7 @@ class Terrain:
         }
 
         if Terrain.instance is not None:
-            self.__dict__ = Terrain.instance.__dict__.copy()
+            self.__dict__.update(Terrain.instance.__dict__)
             return
 
         with Timer("Create terrain"):

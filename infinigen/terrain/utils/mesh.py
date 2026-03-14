@@ -337,42 +337,53 @@ class Mesh:
         return normals
 
     def cat(meshes):
-        verts = np.zeros((0, 3))
-        faces = np.zeros((0, 3), dtype=int)
-        lenv = 0
-        vertex_attributes = {}
+        if not meshes:
+            return Mesh(
+                vertices=np.zeros((0, 3)),
+                faces=np.zeros((0, 3), np.int32),
+                vertex_attributes={},
+            )
+
+        # Pre-compute total sizes for single-pass allocation
+        total_verts = sum(len(m.vertices) for m in meshes)
+        total_faces = sum(len(m.faces) for m in meshes)
+
+        verts = np.empty((total_verts, 3), dtype=np.float64)
+        faces = np.empty((total_faces, 3), dtype=int)
+
+        # Collect attribute metadata (shape, dtype) across all meshes
+        attr_meta = {}
         for mesh in meshes:
-            verts = np.concatenate((verts, mesh.vertices), 0)
-            faces = np.concatenate((faces, mesh.faces + lenv), 0)
-
-            for attr in mesh.vertex_attributes:
-                if mesh.vertex_attributes[attr].ndim == 1:
-                    mesh.vertex_attributes[attr] = mesh.vertex_attributes[attr].reshape(
-                        (-1, 1)
-                    )
-                mesh_va = mesh.vertex_attributes[attr]
-                if attr not in vertex_attributes:
-                    va = np.zeros(
-                        (lenv, mesh.vertex_attributes[attr].shape[1]),
-                        dtype=mesh.vertex_attributes[attr].dtype,
-                    )
+            for attr, arr in mesh.vertex_attributes.items():
+                if arr.ndim == 1:
+                    cols = 1
                 else:
-                    va = vertex_attributes[attr]
-                vertex_attributes[attr] = np.concatenate((va, mesh_va))
-            lenv += len(mesh.vertices)
+                    cols = arr.shape[1]
+                if attr not in attr_meta:
+                    attr_meta[attr] = (cols, arr.dtype)
 
-            for attr in vertex_attributes:
-                if len(vertex_attributes[attr]) != lenv:
-                    fillup = np.zeros(
-                        (
-                            lenv - len(vertex_attributes[attr]),
-                            vertex_attributes[attr].shape[1],
-                        ),
-                        dtype=vertex_attributes[attr].dtype,
-                    )
-                    vertex_attributes[attr] = np.concatenate(
-                        (vertex_attributes[attr], fillup)
-                    )
+        # Pre-allocate attribute arrays (zero-filled for meshes missing an attr)
+        vertex_attributes = {
+            attr: np.zeros((total_verts, cols), dtype=dtype)
+            for attr, (cols, dtype) in attr_meta.items()
+        }
+
+        v_offset = 0
+        f_offset = 0
+        for mesh in meshes:
+            nv = len(mesh.vertices)
+            nf = len(mesh.faces)
+            verts[v_offset : v_offset + nv] = mesh.vertices
+            faces[f_offset : f_offset + nf] = mesh.faces + v_offset
+
+            for attr, arr in mesh.vertex_attributes.items():
+                if arr.ndim == 1:
+                    arr = arr.reshape((-1, 1))
+                vertex_attributes[attr][v_offset : v_offset + nv] = arr
+
+            v_offset += nv
+            f_offset += nf
+
         return Mesh(vertices=verts, faces=faces, vertex_attributes=vertex_attributes)
 
     def camera_annotation(self, cameras, fs, fe, relax=0.01):
@@ -451,19 +462,24 @@ def write_attributes(elements, mesh=None, meshes=[]):
             axis=-1
         )
 
+        # Pre-compute boolean masks for each element (avoids recomputation in inner loop)
+        element_masks = [surface_element == i for i in range(n_elements)]
+
         attributes = {}
         for i in range(n_elements):
             if hasattr(elements[i], "tag"):
                 returns[i][Attributes.ElementTag] = (
                     np.zeros(N, dtype=np.int32) + elements[i].tag
                 )
+            mask_1d = element_masks[i]
+            mask_2d = mask_1d[:, np.newaxis]  # Pre-shaped for broadcasting
             for output in returns[i]:
                 if output == Vars.SDF or output == Vars.Offset:
                     continue
                 if returns[i][output].ndim == 1:
-                    returns[i][output] *= surface_element == i
+                    returns[i][output] *= mask_1d
                 else:
-                    returns[i][output] *= (surface_element == i).reshape((-1, 1))
+                    returns[i][output] *= mask_2d
 
                 if output not in attributes:
                     attributes[output] = returns[i][output]

@@ -38,7 +38,7 @@ surfaces=(
 )
 
 nvcc_location=/usr/local/cuda/bin/nvcc
-alias nx="$nvcc_location -O3 -Xcompiler -fPIC -shared "
+alias nx="$nvcc_location -O3 -Xcompiler -fPIC -Xcompiler -march=native -shared "
 
 # cuda part
 if ! [ -x "$nvcc_location" ]; then
@@ -88,8 +88,8 @@ else
     fi
 fi
 
-alias gx1="${compiler} \$CXXFLAGS -O3 -c -fpic -fopenmp "
-alias gx2="${compiler} \$LDFLAGS -O3 -shared -fopenmp "
+alias gx1="${compiler} \$CXXFLAGS -O3 -march=native -c -fpic -fopenmp "
+alias gx2="${compiler} \$LDFLAGS -O3 -march=native -shared -fopenmp -flto "
 
 mkdir -p lib/cpu/utils
 gx1 -o lib/cpu/utils/FastNoiseLite.o source/cpu/utils/FastNoiseLite.cpp
