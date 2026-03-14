@@ -66,7 +66,7 @@ wheels = [
 [[package]]
 name = "bpy"
 version = "4.5.7"
-source = { registry = "https://pypi.org/simple" }
+source = { registry = "https://download.blender.org/pypi/bpy/" }
 dependencies = [
     { name = "cython" },
     { name = "numpy" },
@@ -74,11 +74,11 @@ dependencies = [
     { name = "zstandard" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/76/20258dddd4d23d4cc799929db6b47563fb8a80950ec2bc65484f77a89926/bpy-4.5.7-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:53e6d4f780af844faa817f91a10b2ec8ca78baf3d5a581681eb7041971c4743a", size = 220064241, upload-time = "2026-02-17T13:38:47.231Z" },
-    { url = "https://files.pythonhosted.org/packages/b9/51/0032efafb9f768fc850077c7db731c4ae188c4fa368870edf3c1463be5bf/bpy-4.5.7-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:e2ae8cec86af8107edefc11826e8444cac42b21638dbc4b1eec53306f9a7d188", size = 235149148, upload-time = "2026-02-17T13:30:10.29Z" },
-    { url = "https://files.pythonhosted.org/packages/c7/d5/fc02acf1f717c4e679115743e7f9383b9158442e5d2b4fc8525ecbe410a7/bpy-4.5.7-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:b3c7bbe2c2a2b46ddf27b5844f0f0abe9c87bd0f1d67db46bc14e57710ebcf64", size = 373032968, upload-time = "2026-02-17T13:38:06.646Z" },
-    { url = "https://files.pythonhosted.org/packages/fc/44/dc3d1cb12f8aade0b4edbb25ea967fdd610ba087672dc0ac96ca7995f766/bpy-4.5.7-cp311-cp311-win_amd64.whl", hash = "sha256:a42b62f687461037546ff674b8405fd82b14e92781afcc37e52ff42467d9e69a", size = 326575443, upload-time = "2026-02-17T13:28:39.998Z" },
-    { url = "https://files.pythonhosted.org/packages/e2/da/3cb7c5b9fba2d539779c5c6e9a984bb019169947cb5840ecb6fb2588c9dc/bpy-4.5.7-cp311-cp311-win_arm64.whl", hash = "sha256:98e321138879c315e99a64594908cec6738c11b2178ba44d74591b133fdd01e2", size = 194087423, upload-time = "2026-02-17T13:38:29.158Z" },
+    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:53e6d4f780af844faa817f91a10b2ec8ca78baf3d5a581681eb7041971c4743a", size = 220064241 },
+    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:e2ae8cec86af8107edefc11826e8444cac42b21638dbc4b1eec53306f9a7d188", size = 235149148 },
+    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:b3c7bbe2c2a2b46ddf27b5844f0f0abe9c87bd0f1d67db46bc14e57710ebcf64", size = 373032968 },
+    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-win_amd64.whl", hash = "sha256:a42b62f687461037546ff674b8405fd82b14e92781afcc37e52ff42467d9e69a", size = 326575443 },
+    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-win_arm64.whl", hash = "sha256:98e321138879c315e99a64594908cec6738c11b2178ba44d74591b133fdd01e2", size = 194087423 },
 ]
 
 [[package]]
