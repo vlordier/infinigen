@@ -651,7 +651,7 @@ class TestEdgeCases:
     def test_seed_registry_unicode(self):
         """Verify non-ASCII component names work."""
         r = SeedRegistry(base_seed=42)
-        seed = r.get("terrain_tree")
+        seed = r.get("terrain_\u6a39")  # 樹 = tree in Chinese
         assert isinstance(seed, int)
 
     def test_metadata_load_unknown_fields(self, tmp_path):

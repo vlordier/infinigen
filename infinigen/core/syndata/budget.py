@@ -180,11 +180,16 @@ class SceneBudget:
         memory_mb: float = 0.0,
     ) -> None:
         """Return previously allocated resources."""
-        if polygons > self._used_polygons:
-            logger.warning(
-                "Releasing %d polygons but only %d used",
-                polygons, self._used_polygons,
-            )
+        for name, releasing, used in [
+            ("polygons", polygons, self._used_polygons),
+            ("vertices", vertices, self._used_vertices),
+            ("objects", objects, self._used_objects),
+            ("memory_mb", memory_mb, self._used_memory_mb),
+        ]:
+            if releasing > used:
+                logger.warning(
+                    "Releasing %s %s but only %s used", releasing, name, used,
+                )
         self._used_polygons = max(0, self._used_polygons - polygons)
         self._used_vertices = max(0, self._used_vertices - vertices)
         self._used_objects = max(0, self._used_objects - objects)
