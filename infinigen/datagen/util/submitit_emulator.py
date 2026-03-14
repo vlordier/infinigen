@@ -115,8 +115,12 @@ def job_wrapper(
                 env=env,
                 bufsize=1,
             )
-            assert proc.stdout is not None
-            assert proc.stderr is not None
+            assert proc.stdout is not None, (
+                "proc.stdout should not be None when using subprocess.PIPE"
+            )
+            assert proc.stderr is not None, (
+                "proc.stderr should not be None when using subprocess.PIPE"
+            )
 
             def drain(pipe, sinks):
                 for line in pipe:

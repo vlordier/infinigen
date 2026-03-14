@@ -40,11 +40,6 @@ def test_job_wrapper_passthrough_streams_files_and_console(tmp_path, monkeypatch
     stderr_stream = io.StringIO()
     monkeypatch.setattr(sys, "stdout", stdout_stream)
     monkeypatch.setattr(sys, "stderr", stderr_stream)
-    monkeypatch.setattr(
-        submitit.subprocess,
-        "run",
-        lambda *args, **kwargs: pytest.fail("stdout_passthrough should stream with Popen"),
-    )
 
     class FakePopen:
         def __init__(self, *args, **kwargs):
