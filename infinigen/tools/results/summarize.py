@@ -22,10 +22,10 @@ from tqdm import tqdm
 try:
     import flow_vis  # run pip install flow_vis
     from einops import repeat
-except ImportError:
+except ImportError as e:
     raise ImportError(
         "GT visualization requires extra dependencies. Please install optional extras via `pip install .[vis]`."
-    )
+    ) from e
 
 
 def make_defaultdict(inner):

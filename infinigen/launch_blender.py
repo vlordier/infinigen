@@ -27,12 +27,12 @@ HEADLESS_ARGS = [
 def get_standalone_blender_path():
     try:
         return next(x for x in BLENDER_BINARY_RELATIVE if x.exists())
-    except StopIteration:
+    except StopIteration as e:
         raise ValueError(
             "Could not find blender binary - please check you have completed "
             "'Infinigen as a Blender-Python script' section of docs/Installation.md"
             f" and that one of {BLENDER_BINARY_RELATIVE} exists"
-        )
+        ) from e
 
 
 if __name__ == "__main__":

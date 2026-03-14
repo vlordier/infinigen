@@ -46,23 +46,30 @@ def read(input_heightmap_path):
 
 
 def grid_distance(source, downsample):
+    """Compute per-pixel distance to the nearest boundary of *source*.
+
+    Replaces an O(N²·B) nested Python loop (where B is the number of
+    boundary pixels) with ``scipy.ndimage.distance_transform_edt``,
+    which runs in O(N²) time via a Euclidean distance transform.
+    """
+    from scipy.ndimage import distance_transform_edt
+
     M = source.shape[0]
     source = cv2.resize(source.astype(float), (downsample, downsample)) > 0.5
-    dist = np.zeros_like(source, dtype=np.float32) + 1e9
     N = source.shape[0]
-    I, J = np.meshgrid(np.arange(N), np.arange(N), indexing="ij")
+
+    # Identify boundary pixels: interior source pixels adjacent to non-source.
     boundary = np.zeros_like(source, dtype=bool)
     boundary[:-1, :] |= ~source[1:, :]
     boundary[1:, :] |= ~source[:-1, :]
     boundary[:, :-1] |= ~source[:, 1:]
     boundary[:, 1:] |= ~source[:, :-1]
     boundary &= source
-    for i in range(N):
-        for j in range(N):
-            if boundary[i, j]:
-                dist = np.minimum(
-                    dist, (((I - i) / N) ** 2 + ((J - j) / N) ** 2) ** 0.5
-                )
+
+    # distance_transform_edt measures distance to the nearest zero (False).
+    # We want distance to the nearest boundary pixel, so invert boundary
+    # and compute EDT, then normalise to [0, 1] as before (divide by N).
+    dist = distance_transform_edt(~boundary).astype(np.float32) / N
     dist[source] = 0
     dist = cv2.resize(dist, (M, M))
     return dist

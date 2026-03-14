@@ -282,7 +282,7 @@ def _replace_materials_with_flat_shading(obj: bpy.types.Object):
             raise RuntimeError(
                 f"Error in blendergt flat_shading {_replace_shader_with_randcolor.__name__} for "
                 f"{obj.name} with material slot {i} {mat.name}: {e}"
-            )
+            ) from e
 
 
 def global_flat_shading():
@@ -302,7 +302,7 @@ def global_flat_shading():
             raise RuntimeError(
                 f"Error in blendergt flat_shading {_remove_volume_shading.__name__} for "
                 f"{obj.name} with material {mat.name}: {e}"
-            )
+            ) from e
 
     bpy.context.view_layer.update()
 

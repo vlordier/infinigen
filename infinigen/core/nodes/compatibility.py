@@ -77,7 +77,7 @@ def make_virtual_transfer_attribute(nw, orig_type, input_args, attrs, input_kwar
         mapped_type = Nodes.SampleIndex
         map_dict_keys(input_kwargs, {"Source": "Geometry", "Attribute": "Value"})
     else:
-        assert False
+        raise AssertionError
 
     logger.warning(
         f"Converting request for Nodes.TransferAttribute to {mapped_type}"

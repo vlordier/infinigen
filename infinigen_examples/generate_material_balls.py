@@ -102,8 +102,8 @@ def build_scene_surface(factory_name, idx):
                     template.apply(asset, alternating=idx % 4 in [0, 1])
                 else:
                     template.apply(asset)
-    except ModuleNotFoundError:
-        raise Exception(f"{factory_name} not Found.")
+    except ModuleNotFoundError as e:
+        raise Exception(f"{factory_name} not Found.") from e
     return asset
 
 

@@ -24,20 +24,20 @@ def infer_output_socket(item):
         # take the first active socket
         try:
             res = next(o for o in item.outputs if o.enabled)
-        except StopIteration:
+        except StopIteration as e:
             raise ValueError(
                 f"Attempted to get output socket for {item} but none are enabled!"
-            )
+            ) from e
     elif isinstance(item, tuple) and isnode(item[0]):
         node, socket_name = item
         if isinstance(socket_name, int):
             return node.outputs[socket_name]
         try:
             res = next(o for o in node.outputs if o.enabled and o.name == socket_name)
-        except StopIteration:
+        except StopIteration as e:
             raise ValueError(
                 f"Couldnt find an enabled socket on {node} corresponding to requested tuple {item}"
-            )
+            ) from e
     else:
         return None
 

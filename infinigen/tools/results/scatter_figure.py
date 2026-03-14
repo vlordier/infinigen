@@ -116,7 +116,7 @@ def apply_scatters(obj, mode, index):
         all_objects.append(pio)
         all_objects.append(co)
     else:
-        assert False
+        raise AssertionError
 
     bpy.context.scene.render.film_transparent = True
     bpy.context.scene.render.image_settings.color_mode = "RGBA"

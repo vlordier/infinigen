@@ -151,8 +151,8 @@ class RoomConstants:
             if not is_valid_polygon(p):
                 raise NotImplementedError("Invalid polygon")
             return orient(p)
-        except AttributeError:
-            raise NotImplementedError("Invalid multi polygon")
+        except AttributeError as e:
+            raise NotImplementedError("Invalid multi polygon") from e
 
     def filter(self, ses, margin=None):
         margin = self.segment_margin if margin is None else margin

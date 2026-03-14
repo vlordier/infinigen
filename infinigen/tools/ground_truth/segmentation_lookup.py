@@ -20,10 +20,10 @@ from infinigen.tools.dataset_loader import get_frame_path
 
 try:
     from einops import pack, rearrange, repeat
-except ImportError:
+except ImportError as e:
     raise ImportError(
         "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
-    )
+    ) from e
 
 """
 Usage: python -m tools.ground_truth.segmentation_lookup <scene-folder> <frame-index> [--query <query>] [--boxes]

@@ -67,7 +67,7 @@ def _compute_node_val(node: cl.Node, state: State, memo: dict):
             }
             kwargs = {}
             if hasattr(node, "others_tags"):
-                kwargs["others_tags"] = getattr(node, "others_tags")
+                kwargs["others_tags"] = node.others_tags
             return impl_func(node, state, child_vals, **kwargs)
         case cl.Problem():
             raise TypeError(

@@ -133,8 +133,8 @@ def check_init_valid(
         try:
             a = obj_planes[ind][0]
             b = assigned_planes[ind][0]
-        except IndexError:
-            raise ValueError(f"Invalid {ind=} {obj_planes=} {assigned_planes=}")
+        except IndexError as e:
+            raise ValueError(f"Invalid {ind=} {obj_planes=} {assigned_planes=}") from e
 
         a_plane = obj_planes[ind]
         b_plane = assigned_planes[ind]

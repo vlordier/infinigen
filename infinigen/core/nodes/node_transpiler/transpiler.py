@@ -361,10 +361,10 @@ def represent_label_value_expression(expression):
 
             try:
                 args.append(parse_arg(arg))
-            except ValueError:
+            except ValueError as e:
                 raise ValueError(
                     f"Could not parse node label expression {repr(arg_str)}, item {repr(arg)} was not a valid argument"
-                )
+                ) from e
 
         return args
 
@@ -776,11 +776,11 @@ def write_function_body(target):
 
     try:
         output_node = next(n for n in node_tree.nodes if n.bl_idname == output_node_id)
-    except StopIteration:
+    except StopIteration as e:
         logging.info([n.bl_idname for n in node_tree.nodes])
         raise ValueError(
             f"Couldnt find expected {output_node_id=} for node tree type {node_tree.bl_idname=}"
-        )
+        ) from e
 
     memo = {}
     final_varname, code, new_transpile_targets = create_node(
