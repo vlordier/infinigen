@@ -281,7 +281,7 @@ def dict_lerp(a, b, t):
 
 
 def dict_convex_comb(dicts, weights):
-    assert all(d.keys == dicts[0].keys() for d in dicts[1:])
+    assert all(d.keys() == dicts[0].keys() for d in dicts[1:])
     weights = np.array(weights)
     vals = {k: np.array([d[k] for d in dicts]) for k in dicts[0]}
     return {k: (v * weights).sum() for k, v in vals.items()}
