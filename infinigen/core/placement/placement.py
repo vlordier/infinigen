@@ -160,7 +160,7 @@ def filter_populate_targets(
 
     results = []
 
-    for i, p in enumerate(placeholders):
+    for _i, p in enumerate(placeholders):
         classname, *_ = parse_asset_name(p.name)
 
         if classname is None:

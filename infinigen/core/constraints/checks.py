@@ -31,7 +31,7 @@ def iter_domains(node: "cl.Node") -> typing.Iterator["r.Domain"]:
         case cl.ObjectSetExpression():
             yield node, r.constraint_domain(node)
         case cl.Expression() | cl.Problem():
-            for k, c in node.children():
+            for _k, c in node.children():
                 yield from iter_domains(c)
         case _:
             raise ValueError(f"iter_domains found unmatched {type(node)=} {node=}")

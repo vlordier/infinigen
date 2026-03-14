@@ -26,7 +26,7 @@ def apply_cutter(state, objkey, cutter):
     os = state.objs[objkey]
 
     cut_objs = []
-    for i, relation_state in enumerate(os.relations):
+    for _i, relation_state in enumerate(os.relations):
         # TODO in theory we maybe should check if they actually intersect
 
         parent_obj = state.objs[relation_state.target_name].obj

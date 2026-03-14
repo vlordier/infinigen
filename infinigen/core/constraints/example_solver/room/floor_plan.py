@@ -78,7 +78,7 @@ class FloorPlanSolver:
                 width, height = self.widths[-1], self.heights[-1]
                 graph = graph_maker.make_graph(np.random.randint(1e6))
             else:
-                for j in range(self.n_trials):
+                for _j in range(self.n_trials):
                     graph = graph_maker.make_graph(np.random.randint(1e6))
                     args = (
                         [self.widths[-1], self.heights[-1]]
@@ -92,7 +92,7 @@ class FloorPlanSolver:
                     raise RuntimeError("Invalid graph")
             self.graphs.append(graph)
             while len(self.contours) <= i:
-                for j in range(self.n_trials):
+                for _j in range(self.n_trials):
                     if self.fixed_contour and i > 0:
                         self.contours.append(self.contours[-1])
                         break

@@ -31,7 +31,7 @@ from infinigen.core.util import blender as butil
 def remove_materials(obj):
     with butil.SelectObjects(obj):
         obj.active_material_index = 0
-        for i in range(len(obj.material_slots)):
+        for _i in range(len(obj.material_slots)):
             bpy.ops.object.material_slot_remove({"object": obj})
 
 

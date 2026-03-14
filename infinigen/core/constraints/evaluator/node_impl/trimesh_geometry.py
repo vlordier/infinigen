@@ -565,7 +565,7 @@ def angle_alignment_cost_tagged(
         b_surfs.append(b_surf)
 
     b_surf_names = []
-    for i, b_surf in enumerate(b_surfs):
+    for _i, b_surf in enumerate(b_surfs):
         add_to_scene(state.trimesh_scene, b_surf)
         b_surf_names.append(b_surf.name)
 
@@ -768,7 +768,7 @@ def focus_score(
                 ax.fill(x, y, alpha=0.5, fc="red", ec="black", label="Polygon b")
 
     score = 0
-    for a_poly, a_mesh, a_obj in zip(a_polys, a_meshes, a_blender_objs):
+    for a_poly, _a_mesh, a_obj in zip(a_polys, a_meshes, a_blender_objs):
         axis = get_axis(state, a_obj)[1][:2]
         a_centroid = a_poly.centroid
         b_centroid = b_poly.centroid
@@ -1168,7 +1168,7 @@ def center_stable_surface(scene, a, state):
     for name, mesh in zip(a, a_trimeshes):
         obj_state = state.objs[name]
         obj = obj_state.obj
-        for i, relation_state in enumerate(obj_state.relations):
+        for _i, relation_state in enumerate(obj_state.relations):
             relation = relation_state.relation
             parent_obj = state.objs[relation_state.target_name].obj
             obj_tags = relation.child_tags

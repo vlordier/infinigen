@@ -395,7 +395,7 @@ class Domain:
 
     def traverse(self):
         yield self
-        for rel, dom in self.relations:
+        for _rel, dom in self.relations:
             yield from dom.traverse()
 
     def all_vartags(self) -> set[t.Variable]:

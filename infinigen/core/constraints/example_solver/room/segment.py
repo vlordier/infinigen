@@ -243,7 +243,7 @@ class SegmentMaker:
 
     def plot(self, segments):
         plt.clf()
-        for k, s in segments.items():
+        for _k, s in segments.items():
             shapely.plotting.plot_polygon(s, color=uniform(0, 1, 3))
         plt.tight_layout()
         plt.show()

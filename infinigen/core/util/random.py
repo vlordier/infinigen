@@ -38,7 +38,7 @@ def sample_json_palette(palette_name, n_sample=1):
     probs = probs[selected]
     i = np.random.choice(range(len(colors)), 1, p=probs / np.sum(probs))[0]
     color_samples = []
-    for j in range(n_sample):
+    for _j in range(n_sample):
         color = np.array(means[i]) + np.matmul(
             np.array(stds[i]).reshape((3, 3)),
             np.clip(np.random.randn(3), a_min=-1, a_max=1),

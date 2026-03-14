@@ -34,7 +34,7 @@ class PredefinedBlueprintSolidifier(BlueprintSolidifier):
     def make_interior_cutters(self, neighbours, shared_edges, segments, exterior):
         open_cutters = defaultdict(list)
         opens = self.config.get("opens", {})
-        for o, open in opens.items():
+        for _o, open in opens.items():
             open_cutter = self.make_open_cutter(open["shape"])
             for r, room in self.config["rooms"].items():
                 if (
@@ -47,7 +47,7 @@ class PredefinedBlueprintSolidifier(BlueprintSolidifier):
                     open_cutters[r].extend(open_cutter)
         interior_cutters = defaultdict(list)
         interiors = self.config.get("interiors", {})
-        for i, interior in interiors.items():
+        for _i, interior in interiors.items():
             interior_cutter = self.make_window_cutter(
                 interior["shape"], interior.get("is_panoramic", False)
             )
@@ -64,7 +64,7 @@ class PredefinedBlueprintSolidifier(BlueprintSolidifier):
                     interior_cutters[r].extend(interior_cutter)
         door_cutters = defaultdict(list)
         doors = self.config.get("doors", {})
-        for d, door in doors.items():
+        for _d, door in doors.items():
             door_cutter = self.make_door_cutter(door["shape"], (0, 0, 0))
             for r, room in self.config["rooms"].items():
                 if (
@@ -80,7 +80,7 @@ class PredefinedBlueprintSolidifier(BlueprintSolidifier):
     def make_exterior_cutters(self, exterior_edges, exterior_shape):
         window_cutters = defaultdict(list)
         windows = self.config.get("windows", {})
-        for w, window in windows.items():
+        for _w, window in windows.items():
             window_cutter = self.make_window_cutter(
                 window["shape"], window.get("is_panoramic", False)
             )
@@ -95,7 +95,7 @@ class PredefinedBlueprintSolidifier(BlueprintSolidifier):
                     window_cutters[r].extend(window_cutter)
         entrance_cutters = defaultdict(list)
         entrances = self.config.get("entrance", {})
-        for e, entrance in entrances.items():
+        for _e, entrance in entrances.items():
             entrance_cutter = self.make_door_cutter(entrance["shape"], (0, 0, 0))
             for r, room in self.config["rooms"].items():
                 if (

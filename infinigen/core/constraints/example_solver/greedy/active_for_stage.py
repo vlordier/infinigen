@@ -101,7 +101,7 @@ def set_active(state, objkey, active):
 
 def update_active_flags(state: state_def.State, var_assignments: dict[t.Variable, str]):
     count = 0
-    for objkey, objstate in state.objs.items():
+    for objkey, _objstate in state.objs.items():
         active = _is_active_room_object(state, objkey, var_assignments)
         set_active(state, objkey, active)
         count += active
