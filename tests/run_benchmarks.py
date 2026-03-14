@@ -848,7 +848,8 @@ def bench_smooth_attribute(upstream=False):
 
     if not upstream:
         # PR: torch.sparse matmul when CUDA/MPS available for GPU acceleration,
-        # else scipy.sparse CSR matmul (optimal for CPU)
+        # else scipy.sparse CSR matmul (optimal for CPU — MKL/SuiteSparse
+        # outperforms torch.sparse on CPU for typical mesh sizes)
         torch = _get_torch()
         device = _torch_device()
         use_torch = (
@@ -1061,7 +1062,7 @@ def bench_sdf_batch(upstream=False):
 
             def _run():
                 dists = torch.cdist(pts_t, cen_t)  # (N_POINTS, N_KERNELS)
-                sdfs = dists - rad_t.unsqueeze(0)
+                sdfs = dists - rad_t.unsqueeze(0)  # broadcast (1, K) across N rows
                 return sdfs.min(dim=1).values.cpu().numpy()
         else:
             def _run():
