@@ -223,7 +223,7 @@ def configure_render_cycles(
     if denoise:
         try:
             bpy.context.scene.cycles.denoiser = "OPTIX"
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning(f"Cannot use OPTIX denoiser {e}")
 
     bpy.context.scene.cycles.samples = num_samples  # i.e. infinity
@@ -336,7 +336,7 @@ def require_blender_addon(addon: str, fail: str = "fatal", allow_online=False):
                 repo_index=0, pkg_id=addon, enable_on_install=True
             )
             bpy.ops.preferences.addon_enable(module=long)
-    except Exception as e:
+    except (RuntimeError, TypeError) as e:
         report_fail(f"Failed to install {addon=} due to {e=}")
 
     if long not in bpy.context.preferences.addons.keys():
