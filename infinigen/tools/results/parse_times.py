@@ -6,6 +6,7 @@
 
 import argparse
 import datetime
+import logging
 import os
 import re
 import subprocess
@@ -13,6 +14,8 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 REGEX_PATTERN = "(\[.*\]) *([^ ]+) -> ([^ ]+) \| ([0-9\.]+)h:([0-9\.]+)m:([0-9\.]+)s"
 
@@ -102,4 +105,4 @@ if __name__ == "__main__":
         )
 
     for _, s in sorted(to_print):
-        print(s)
+        logger.info(s)

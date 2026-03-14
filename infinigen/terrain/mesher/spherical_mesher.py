@@ -4,6 +4,8 @@
 # Authors: Zeyu Ma
 
 
+import logging
+
 import gin
 import numpy as np
 
@@ -12,6 +14,8 @@ from infinigen.terrain.utils import Mesh, Vars, get_caminfo
 
 from .cube_spherical_mesher import CubeSphericalMesher
 from .frontview_spherical_mesher import FrontviewSphericalMesher
+
+logger = logging.getLogger(__name__)
 
 magnifier = 1e6
 
@@ -99,15 +103,9 @@ class OpaqueSphericalMesher(SphericalMesher):
             )
         base_90d_resolution = base_90d_resolution // test_downscale * test_downscale
 
-        print(
-            f"In view visible mesh angle resolution 90d/{base_90d_resolution * inview_upscale_fine}, about {base_90d_resolution * inview_upscale_fine * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel"
-        )
-        print(
-            f"In view invisible mesh angle resolution 90d/{base_90d_resolution * inview_upscale_coarse}, about {base_90d_resolution * inview_upscale_coarse * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel"
-        )
-        print(
-            f"Out view mesh angle resolution 90d/{base_90d_resolution * outview_upscale}, about {base_90d_resolution * outview_upscale * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel"
-        )
+        logger.info(f'In view visible mesh angle resolution 90d/{base_90d_resolution * inview_upscale_fine}, about {base_90d_resolution * inview_upscale_fine * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel')
+        logger.info(f'In view invisible mesh angle resolution 90d/{base_90d_resolution * inview_upscale_coarse}, about {base_90d_resolution * inview_upscale_coarse * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel')
+        logger.info(f'Out view mesh angle resolution 90d/{base_90d_resolution * outview_upscale}, about {base_90d_resolution * outview_upscale * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel')
 
         fov = self.fov
         base_angle_resolution = np.pi / 2 / base_90d_resolution
@@ -125,7 +123,7 @@ class OpaqueSphericalMesher(SphericalMesher):
         H = (base_90d_resolution - N0 * 2) * upscale1
         W = (base_90d_resolution - N1 * 2) * upscale1
         R = base_R * upscale1
-        print(f"In view invisible mesh marching cube resolution {H}x{W}x{R}")
+        logger.info(f'In view invisible mesh marching cube resolution {H}x{W}x{R}')
         self.frontview_mesher = FrontviewSphericalMesher(
             self.cam_pose,
             rounded_fov[0],
@@ -195,12 +193,8 @@ class TransparentSphericalMesher(SphericalMesher):
             / (np.pi / 2 / base_90d_resolution)
             / r_lengthen
         )
-        print(
-            f"In view mesh angle resolution 90d/{base_90d_resolution * inv_scale}, about {base_90d_resolution * inv_scale * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel"
-        )
-        print(
-            f"Out view mesh angle resolution 90d/{base_90d_resolution}, about {base_90d_resolution * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel"
-        )
+        logger.info(f'In view mesh angle resolution 90d/{base_90d_resolution * inv_scale}, about {base_90d_resolution * inv_scale * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel')
+        logger.info(f'Out view mesh angle resolution 90d/{base_90d_resolution}, about {base_90d_resolution * self.fov[0] / np.pi * 2 / self.H: .2f} marching cube per pixel')
 
         fov = self.fov
         base_angle_resolution = np.pi / 2 / base_90d_resolution

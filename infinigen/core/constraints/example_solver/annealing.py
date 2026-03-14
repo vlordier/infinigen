@@ -6,9 +6,9 @@
 
 import logging
 import os
+import pprint
 import time
 import typing
-from pprint import pprint
 
 import bpy
 import gin
@@ -154,9 +154,9 @@ class SimulatedAnnealingSolver:
             if test_memo[key] == lazy:
                 continue
 
-            print("\n\n INVALID")
-            pprint(n, depth=3)
-            print(f"memo for node is out of sync, got {lazy=} yet {test_memo[key]=}")
+            logger.info('\n\n INVALID')
+            logger.debug("%s", pprint.pformat(n, depth=3))
+            logger.info(f'memo for node is out of sync, got lazy={lazy!r} yet test_memo[key]={test_memo[key]!r}')
         raise ValueError(f"{real_result.loss()=:.4f} {prop_result.loss()=:.4f}")
 
     @gin.configurable
@@ -351,27 +351,23 @@ class SimulatedAnnealingSolver:
                         )
                     )
                 ]
-                print(
-                    self.last_eval_result.viol_count(),
-                    self.curr_result.viol_count(),
-                    prop_result.viol_count(),
-                )
+                logger.info("%s %s %s", self.last_eval_result.viol_count(), self.curr_result.viol_count(), prop_result.viol_count())
                 last_df.index = ["prev_" + x for x in last_df.index]
                 df = pd.concat([last_df[diff_cols], df[diff_cols]])
 
-            print(df)
+            logger.info(df)
 
         if self.curr_iteration % BPY_GARBAGE_COLLECT_FREQUENCY == 0:
             butil.garbage_collect(butil.get_all_bpy_data_targets())
 
         if self.curr_iteration != 0 and self.curr_iteration % 50 == 0:
-            print(f"CLUTTER REPORT {self.curr_iteration=}")
-            print("  State Size", len(state.objs))
-            print("  Trimesh", len(state.trimesh_scene.graph.nodes))
-            print("  Objects", len(bpy.data.objects))
-            print("  Meshes", len(bpy.data.meshes))
-            print("  Materials", len(bpy.data.materials))
-            print("  Textures", len(bpy.data.materials))
+            logger.info(f'CLUTTER REPORT self.curr_iteration={self.curr_iteration!r}')
+            logger.info("%s %s", '  State Size', len(state.objs))
+            logger.info("%s %s", '  Trimesh', len(state.trimesh_scene.graph.nodes))
+            logger.info("%s %s", '  Objects', len(bpy.data.objects))
+            logger.info("%s %s", '  Meshes', len(bpy.data.meshes))
+            logger.info("%s %s", '  Materials', len(bpy.data.materials))
+            logger.info("%s %s", '  Textures', len(bpy.data.materials))
 
         self.curr_iteration += 1
         if prop_result is not None:

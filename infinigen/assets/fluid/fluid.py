@@ -729,7 +729,7 @@ def import_obj_simulate(
     # assuming we are importing to the origin
     bpy.ops.import_scene.obj(filepath=obj_filepath)
     terrain = bpy.context.selected_objects[0]
-    print(terrain, terrain.name)
+    logger.info("%s %s", terrain, terrain.name)
     make_liquid_effector(terrain)
     obj = create_liquid_flow(
         location=source_relative_pos,

@@ -3,8 +3,12 @@
 
 # Authors: Karhan Kayan
 
+import logging
+
 import bpy
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def test_exists_fire_in_scene():
@@ -59,12 +63,12 @@ def test_depth_not_infinite_all_pixels():
     pixels = bpy.data.images["Viewer Node"].pixels
     pixels = np.array(pixels)
 
-    print(pixels[:100])
+    logger.info(pixels[:100])
 
     for x in pixels:
         assert not np.isclose(x, 1e10)
 
-    print(np.max(pixels))
+    logger.info(np.max(pixels))
 
 
 def test_depth_infinity_portion():
@@ -97,5 +101,5 @@ def test_depth_infinity_portion():
             cnt += 1
     cnt = cnt / 3
     n = len(pixels) / 4
-    print(cnt / n)
+    logger.info(cnt / n)
     assert cnt / n < eps

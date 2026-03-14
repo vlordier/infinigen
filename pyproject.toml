@@ -178,6 +178,7 @@ select = [
     "TID252", # relative imports only allowed for siblings
     "B",      # flake8-bugbear: opinionated bug/design checks
     "RUF",    # ruff-specific rules
+    "T20",    # flake8-print: no print() or pprint()
 ]
 ignore = [
     "E501",   # over-length lines, formatter should handle it
@@ -240,6 +241,10 @@ ignore = [
 "infinigen/assets/objects/particles/lichen.py" = ["I001"]
 "infinigen/assets/objects/particles/particles.py" = ["I001"]
 "infinigen/assets/objects/underwater/seaweed.py" = ["I001"]
+
+# Benchmark and comparison scripts are CLI tools that use print() for output.
+"tests/run_benchmarks.py" = ["T20"]
+"tests/compare_benchmarks.py" = ["T20"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

@@ -5,6 +5,7 @@
 
 
 import argparse
+import logging
 import os
 import re
 import subprocess
@@ -13,6 +14,8 @@ from pathlib import Path
 
 import numpy as np
 import seaborn as sns
+
+logger = logging.getLogger(__name__)
 
 plt = sns.mpl.pyplot
 
@@ -55,7 +58,7 @@ if __name__ == "__main__":
     parser.add_argument("--assume_resample", action="store_true")
     args = parser.parse_args()
 
-    print("Running sacct...")
+    logger.info('Running sacct...')
     sacct = (
         subprocess.check_output(
             "sacct --allusers --starttime 2022-10-31 --endtime 2022-11-07 -o JobID,JobName%100,MaxRSS,Elapsed,AllocTres%100,State%30".split()
@@ -64,7 +67,7 @@ if __name__ == "__main__":
         .splitlines()
     )
     # sacct = Path("sacct_saved.txt").read_text().splitlines()
-    print("Processing")
+    logger.info('Processing')
 
     scene_lookup = defaultdict(set)
     relevant_jobs = {}
@@ -73,7 +76,7 @@ if __name__ == "__main__":
     for folder in args.pipeline_dirs:
         run_name = folder.stem
         finished_seeds = set((folder / "finished_seeds.txt").read_text().splitlines())
-        print(f"Total number of scenes: {len(finished_seeds)}")
+        logger.info(f'Total number of scenes: {len(finished_seeds)}')
 
         for line in sacct:
             match = re.fullmatch(

@@ -5,6 +5,7 @@
 
 
 import json
+import logging
 import re
 from itertools import chain, product
 from pathlib import Path
@@ -18,6 +19,8 @@ from tqdm import tqdm
 
 from infinigen.core.util.array_ops import unique_rows
 from infinigen.core.util.math import int_hash
+
+logger = logging.getLogger(__name__)
 
 
 def get_mesh_data(obj):
@@ -232,16 +235,14 @@ def save_obj_and_instances(
                 (running_total_verts + current_obj_num_verts) >= MAX_NUM_VERTS
             ):
                 np.savez(filename, **npz_data)
-                print(f"Saving to {filename}")
+                logger.info(f'Saving to {filename}')
                 npz_data.clear()
                 running_total_verts = 0
                 npz_number += 1
                 filename = output_folder / f"saved_mesh_{npz_number:04d}.npz"
 
             if current_obj_num_verts > MAX_NUM_VERTS:
-                print(
-                    f"WARNING: Object {object_name} is very large, with {current_obj_num_verts} vertices."
-                )
+                logger.info(f'WARNING: Object {object_name} is very large, with {current_obj_num_verts} vertices.')
 
         else:
             is_instance = item["is_instance"]
@@ -316,7 +317,7 @@ def save_obj_and_instances(
 
     if len(npz_data) > 0:
         np.savez(filename, **npz_data)
-        print(f"Saving to {filename}")
+        logger.info(f'Saving to {filename}')
 
     for obj in bpy.data.objects:
         if obj.hide_viewport:

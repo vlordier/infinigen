@@ -31,6 +31,8 @@ from infinigen.core.sim.physics import material_physics as mtlphysics
 from infinigen.core.util import blender as butil
 from infinigen.tools.export import bake_object, skipBake, triangulate_mesh
 
+logger = logging.getLogger(__name__)
+
 
 class UnsupportedAxisError(Exception):
     pass
@@ -436,12 +438,7 @@ class USDBuilder(SimBuilder):
                 # determine preprocessing mode
                 preprocess_mode = "off"
                 if not tri_mesh.is_volume:
-                    print(
-                        tri_mesh.is_watertight,
-                        tri_mesh.is_winding_consistent,
-                        np.isfinite(tri_mesh.center_mass).all(),
-                        tri_mesh.volume > 0.0,
-                    )
+                    logger.info("%s %s %s %s", tri_mesh.is_watertight, tri_mesh.is_winding_consistent, np.isfinite(tri_mesh.center_mass).all(), tri_mesh.volume > 0.0)
                     preprocess_mode = "on"
                     if len(tri_mesh.vertices) < 4:
                         logging.warning(

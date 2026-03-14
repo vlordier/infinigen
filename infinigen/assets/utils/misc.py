@@ -1,6 +1,7 @@
 # Copyright (C) 2023, Princeton University.
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
 # of this source tree.
+import logging
 import string
 from functools import update_wrapper, wraps
 
@@ -12,6 +13,8 @@ from infinigen.assets.utils.object import origin2lowest
 from infinigen.core.nodes import Nodes, NodeWrangler
 from infinigen.core.util import blender as butil
 from infinigen.core.util.math import clip_gaussian
+
+logger = logging.getLogger(__name__)
 
 # Authors: Lingjie Mei
 
@@ -30,7 +33,7 @@ class CountInstance:
 
     def __exit__(self, *args):
         count = self.count_instance()
-        print(f"{count - self.count} {self.name} instances created.")
+        logger.info(f'{count - self.count} {self.name} instances created.')
 
 
 def sample_direction(min_z):

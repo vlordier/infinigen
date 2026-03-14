@@ -5,12 +5,15 @@
 
 import argparse
 import json
+import logging
 import subprocess
 import urllib.request
 from collections import OrderedDict
 from functools import partial
 from multiprocessing import Pool
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_DATARELEASE_FORMATS = {"0.2.0"}
 
@@ -99,7 +102,7 @@ def wget_path(args, path):
 def untar_path(args, tarfile):
     assert tarfile.exists()
     cmd = f"tar -xzf {tarfile} -C {args.output_folder}"
-    print(cmd)
+    logger.info(cmd)
     subprocess.check_call(cmd.split())
     tarfile.unlink()
 
@@ -122,25 +125,23 @@ def user_select_string_list(values, descriptions_dict=None, extra_msg=None):
 
         values = sorted(values, key=sort_by_description_order)
 
-    print(TEXT_SEPARATOR_LINE)
+    logger.info(TEXT_SEPARATOR_LINE)
     for i, v in enumerate(values):
         prompt = f"({i}) {v:<25}"
         if descriptions_dict is not None and v in descriptions_dict:
             desc = descriptions_dict[v]
             prompt += f" - {desc}"
-        print(prompt)
+        logger.info(prompt)
 
     if extra_msg is not None:
-        print(extra_msg)
+        logger.info(extra_msg)
 
-    print(TEXT_SEPARATOR_LINE)
+    logger.info(TEXT_SEPARATOR_LINE)
 
-    print(
-        'Please enter your choices from above, as a space-separated list of integers or strings, or type "ALL"'
-    )
+    logger.info('Please enter your choices from above, as a space-separated list of integers or strings, or type "ALL"')
     selections = input("Enter your selection: ")
 
-    print("\n")
+    logger.info('\n')
 
     if selections == "ALL":
         return values
@@ -166,7 +167,7 @@ def user_select_string_list(values, descriptions_dict=None, extra_msg=None):
     selections = [x.strip().strip(",") for x in selections.split()]
     selections = [postprocess(x) for x in selections]
 
-    print("Selected: ", selections)
+    logger.info("%s %s", 'Selected: ', selections)
     return selections
 
 
@@ -185,9 +186,7 @@ def check_and_preprocess_args(args, metadata):
             extra_msg="\nNote: See https://docs.blender.org/manual/en/latest/render/layers/passes.html for a description of Blender-Cycles' render passes",
         )
         if not any("Image" in x for x in args.data_types):
-            print(
-                "WARNING: User did not request Image_png or Image_exr, this is unusual. Please restart if this was not intended."
-            )
+            logger.info('WARNING: User did not request Image_png or Image_exr, this is unusual. Please restart if this was not intended.')
     else:
         missing = set(args.data_types) - set(metadata["data_types"])
         if len(missing):
@@ -197,10 +196,7 @@ def check_and_preprocess_args(args, metadata):
 
     if args.seeds is None:
         n = len(metadata["seeds"])
-        print(
-            f"How many videos do you wish to download? "
-            f"Enter a quantity from 1 to {n}, or type SELECT to pick specific seeds"
-        )
+        logger.info(f'How many videos do you wish to download? Enter a quantity from 1 to {n}, or type SELECT to pick specific seeds')
         selection = input("Enter your selection: ")
         if selection == "SELECT":
             args.seeds = user_select_string_list(metadata["seeds"])
@@ -231,20 +227,18 @@ def process_path(args, path):
 
 def main(args):
     if args.release_name is None:
-        print(
-            f"Please specify a --release_name. Go to {args.repo_url} in your browser to see what folders are available."
-        )
+        logger.info(f'Please specify a --release_name. Go to {args.repo_url} in your browser to see what folders are available.')
         exit()
 
     metadata_url = f"{args.repo_url}/{args.release_name}/metadata.json"
     metadata = json.loads(url_to_text(metadata_url))
 
-    print(TEXT_SEPARATOR_LINE)
-    print(f"Description for release {repr(args.release_name)}:")
-    print(metadata["description"])
-    print(TEXT_SEPARATOR_LINE)
+    logger.info(TEXT_SEPARATOR_LINE)
+    logger.info(f'Description for release {repr(args.release_name)}:')
+    logger.info(metadata['description'])
+    logger.info(TEXT_SEPARATOR_LINE)
     input("Press Enter to continue...")
-    print("\n")
+    logger.info('\n')
 
     check_and_preprocess_args(args, metadata)
 
@@ -257,12 +251,8 @@ def main(args):
                 name = f"{seed}_{imgtype}_{camera}.tar.gz"
                 paths.append(toplevel / seed / name)
 
-    print(
-        f"User requested {len(args.seeds)} seeds x {len(args.cameras)} cameras x {len(args.data_types)} data types"
-    )
-    print(
-        f"This script will download and untar {len(paths)} tarballs from {args.repo_url}"
-    )
+    logger.info(f'User requested {len(args.seeds)} seeds x {len(args.cameras)} cameras x {len(args.data_types)} data types')
+    logger.info(f'This script will download and untar {len(paths)} tarballs from {args.repo_url}')
     choice = input("Do you wish to proceed? [y/n]: ")
     if not (choice == "" or choice in " yY1"):
         exit()

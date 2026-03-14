@@ -5,6 +5,7 @@
 
 import argparse
 import json
+import logging
 import shutil
 import subprocess
 import tarfile
@@ -22,6 +23,8 @@ from infinigen.datagen.util import smb_client
 from infinigen.tools.suffixes import get_suffix, parse_suffix
 
 from . import compress_masks, dataset_loader
+
+logger = logging.getLogger(__name__)
 
 TOOLKIT_VERSION = "0.2.0"
 
@@ -86,7 +89,7 @@ def untar(p):
     command = f"tar -xf {str(p)} -C {str(p.parent)} --one-top-level"
     dest_path = p.parent / (p.name.split(".")[0])
     assert not dest_path.exists()
-    print("Untarring", p, " --> ", dest_path)
+    logger.info("%s %s %s %s", 'Untarring', p, ' --> ', dest_path)
     subprocess.run(command, check=True, shell=True)
     return dest_path
 
@@ -150,7 +153,7 @@ def fix_scene_structure(p, n_subcams):
 def fix_metadata(p, override_version="1.0.4b"):
     metadata_path = p.parent / (p.name + "_metadata.json")
     if not metadata_path.exists():
-        print(f"{p} is missing {metadata_path=}")
+        logger.info(f'{p} is missing metadata_path={metadata_path!r}')
         return False
 
     with metadata_path.open("r") as f:
@@ -242,9 +245,7 @@ def optimize_groundtruth_filesize(scene_folder):
                 )
 
             for target_path in targets:
-                print(
-                    target_path.relative_to(scene_folder.parent), action, interp_method
-                )
+                logger.info("%s %s %s", target_path.relative_to(scene_folder.parent), action, interp_method)
                 match action:
                     case "SINGLE_RES":
                         resize_inplace(target_path, base_img_res, interp_method)
@@ -281,17 +282,17 @@ def parse_jobscene_path(args):
 def cleanup_smb(smb_parent_folder):
     for f1, ftype, *_ in smb_client.listdir(smb_parent_folder, extras=True):
         if ftype != "D":
-            print(f"Ignoring {f1}, not a directory")
+            logger.info(f'Ignoring {f1}, not a directory')
             continue
 
         files = list(smb_client.listdir(f1))
         n_files = len(files)
 
         if n_files <= 1:
-            print(f"Removing {f1} {n_files}")
+            logger.info(f'Removing {f1} {n_files}')
             smb_client.remove(f1)
         else:
-            print(f"Keeping {f1} {n_files}")
+            logger.info(f'Keeping {f1} {n_files}')
 
 
 def fix_missing_camviewdata(local_folder, dummy):
@@ -374,7 +375,7 @@ def retar_for_distribution(local_folder, distrib_path):
                 if tar_path.exists():
                     continue
                 tar_path.parent.mkdir(exist_ok=True, parents=True)
-                print(f"Creating {tar_path}")
+                logger.info(f'Creating {tar_path}')
                 with tarfile.open(tar_path, "w:gz") as f:
                     for img in camera_folder.glob(f"*{ext}"):
                         f.add(img, arcname=img.relative_to(local_folder.parent))
@@ -397,24 +398,24 @@ def process_one_scene(p, args):
             local_s = args.local_path / s
             local_s.parent.mkdir(exist_ok=True, parents=True)
             if local_s == local_tar and local_folder.exists():
-                print(f"Skipping {s} as {local_folder} exists")
+                logger.info(f'Skipping {s} as {local_folder} exists')
                 continue
             if not local_s.exists():
-                print(f"Downloading {s}")
+                logger.info(f'Downloading {s}')
                 smb_client.download(args.smb_root / s, dest_folder=local_s.parent)
             assert local_s.exists()
 
         if not local_folder.exists():
-            print(f"Untarring {local_folder}")
+            logger.info(f'Untarring {local_folder}')
             assert local_tar.exists()
             untar_folder = untar(local_tar)
             assert untar_folder == local_folder
         else:
-            print(f"Skipping untar {local_tar}")
+            logger.info(f'Skipping untar {local_tar}')
         assert local_folder.exists()
 
         if not (local_folder / "PREPROCESSED.txt").exists():
-            print(f"Postprocessing {local_folder=}")
+            logger.info(f'Postprocessing local_folder={local_folder!r}')
             fix_scene_structure(local_folder, n_subcams=2)
             fix_metadata(local_folder)
             optimize_groundtruth_filesize(local_folder)
@@ -426,7 +427,7 @@ def process_one_scene(p, args):
     if not local_folder.exists():
         return
 
-    print(f"Validating {local_folder=}")
+    logger.info(f'Validating local_folder={local_folder!r}')
     dset = dataset_loader.InfinigenSceneDataset(
         local_folder, data_types=dataset_loader.ALLOWED_IMAGE_TYPES
     )
@@ -444,7 +445,7 @@ def try_process(p, args):
     try:
         pass
     except Exception as e:
-        print("FAILED", p, e)
+        logger.info("%s %s %s", 'FAILED', p, e)
         with (Path() / "failures.txt").open("a") as f:
             f.write(f"{p} | {e}\n")
         folder_name = p.parent / (p.name.split(".")[0])
@@ -470,7 +471,7 @@ def main(args):
         key=sort_key,
     )
 
-    print(f"Found {len(job_scene_paths)=}")
+    logger.info(f'Found len(job_scene_paths)={len(job_scene_paths)!r}')
 
     mapfunc(partial(try_process, args=args), job_scene_paths, n_workers=args.n_workers)
 

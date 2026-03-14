@@ -5,6 +5,7 @@
 
 import argparse
 import json
+import logging
 import multiprocessing as mp
 import os
 import re
@@ -18,6 +19,8 @@ import skimage.measure
 from imageio.v3 import imread
 from matplotlib import pyplot as plt
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 try:
     import flow_vis  # run pip install flow_vis
@@ -136,7 +139,7 @@ def frames_to_video(file_path, frames: list, fps=24):
         video.write(img)
     video.release()
     assert os.path.exists(file_path)
-    print(f"Wrote {file_path}")
+    logger.info(f'Wrote {file_path}')
 
 
 def depth_to_jet(depth, scale_vmin=1.0):
@@ -155,7 +158,7 @@ def process_scene_folder(folder, preview):
     folder_data = json.loads(summary_json.read_text())
 
     missing = what_is_missing(folder_data)
-    print("\n".join(missing))
+    logger.info('\n'.join(missing))
 
     if not preview:
         return
