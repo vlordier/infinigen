@@ -8,7 +8,7 @@ Non-regression tests for Blender API compatibility.
 
 These tests document and verify the specific Blender API behaviors that
 the infinigen codebase depends on, to detect regressions when upgrading
-to a newer Blender/bpy version (e.g. from 4.2 to 4.5).
+to a newer Blender/bpy version (e.g. from 4.5 to 5.0).
 
 Each test targets a specific API path used in infinigen/core/util/blender.py,
 infinigen/core/surface.py, or infinigen/core/nodes/node_wrangler.py.
@@ -39,6 +39,15 @@ def test_bpy_app_version_string_non_empty():
     """bpy.app.version_string must be a non-empty string."""
     assert isinstance(bpy.app.version_string, str)
     assert len(bpy.app.version_string) > 0
+
+
+def test_bpy_version_is_5_0():
+    """Verify that we are running on the expected bpy 5.0.x release."""
+    major, minor, _patch = bpy.app.version
+    assert (major, minor) == (5, 0), (
+        f"Expected bpy 5.0.x but got {bpy.app.version_string}. "
+        "Please ensure bpy==5.0.1 is installed."
+    )
 
 
 # ---------------------------------------------------------------------------

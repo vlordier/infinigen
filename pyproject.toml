@@ -24,7 +24,7 @@ dependencies = [
     # NOTE: many less-than dependencies could likely be loosened
     #   we attempted to restrict to only versions that are known to be working
 
-    "bpy==4.5.7",
+    "bpy==5.0.1",
     "gin_config>=0.5.0",
     "imageio<2.32.0",      # e.g. 2.31.1
     "matplotlib",
@@ -86,7 +86,9 @@ wandb = [
     "wandb"
 ]
 
-# Use the official Blender PyPI as the primary source for bpy wheels.
+# bpy 5.0.1 is available on the official Blender PyPI archive and on PyPI proper.
+# The Blender PyPI index is kept as an explicit source so that `uv sync` resolves
+# from there; `uv pip install` (used in CI) resolves directly from PyPI.
 # To regenerate uv.lock from this index, run:
 #   INFINIGEN_MINIMAL_INSTALL=True uv lock
 # (requires access to download.blender.org)

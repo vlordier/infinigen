@@ -48,3 +48,58 @@ jobs:
       - name: Check for copyright statements
         run: |
           ruff check --output-format=github --preview --select CPY001 .
+
+  # ---------------------------------------------------------------------------
+  # Cross-platform tests: verify bpy 5.0.1 installs and core API works on
+  # each supported platform / compute backend.
+  #
+  #  • ubuntu-latest  → Linux x86_64 (CPU; CUDA requires a self-hosted runner)
+  #  • macos-latest   → macOS ARM64 / Apple Silicon (MPS-capable hardware)
+  #
+  # The INFINIGEN_TORCH_DEVICE variable pins the PyTorch backend so the device
+  # selection helpers in infinigen/core/util/device.py are exercised explicitly.
+  # ---------------------------------------------------------------------------
+  test-platforms:
+    name: Test on ${{ matrix.os }} (${{ matrix.compute }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64 – CPU compute (standard GitHub runner)
+          - os: ubuntu-latest
+            compute: cpu
+            INFINIGEN_TORCH_DEVICE: cpu
+
+          # macOS ARM64 (Apple Silicon) – MPS-capable host; MPS may or may not
+          # be available inside the runner VM, so we request it but allow
+          # graceful fallback to CPU if MPS is absent.
+          - os: macos-latest
+            compute: mps
+            INFINIGEN_TORCH_DEVICE: mps
+
+    env:
+      INFINIGEN_TORCH_DEVICE: ${{ matrix.INFINIGEN_TORCH_DEVICE }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install infinigen & dependencies
+        run: |
+          uv pip install --system -e ".[dev]"
+
+      - name: Test Blender version compatibility
+        run: |
+          pytest tests/test_blender_version_compatibility.py -v
+
+      - name: Test compute device utilities (CUDA/MPS/CPU)
+        run: |
+          pytest tests/test_benchmarks.py -k 'TestDeviceUtility' -v --noconftest
