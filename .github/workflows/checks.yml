@@ -27,22 +27,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
       - name: Lint with ruff
         run: |
-          pip install ruff
+          uv pip install --system ruff
           # stop the build if there are Python syntax errors or undefined names
           ruff check --output-format=github --select=E9,F63,F7,F82 .
           # default set of ruff rules with GitHub Annotations
           ruff check --output-format=github .
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
       - name: Install infinigen & dependencies
         run: |
-          pip install ".[dev]"
+          uv pip install --system -e ".[dev]"
 
       - name: Test with pytest
         run: |
