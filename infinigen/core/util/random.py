@@ -20,8 +20,8 @@ def log_uniform(low, high, size=None):
     return np.exp(uniform(np.log(low), np.log(high), size))
 
 
-def sample_json_palette(pallette_name, n_sample=1):
-    rel = f"infinigen_examples/configs_nature/palette/{pallette_name}.json"
+def sample_json_palette(palette_name, n_sample=1):
+    rel = f"infinigen_examples/configs_nature/palette/{palette_name}.json"
 
     with (infinigen.repo_root() / rel).open("r") as f:
         color_template = json.load(f)
