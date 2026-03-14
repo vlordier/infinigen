@@ -28,7 +28,8 @@ from .logging import Suppress
 
 logger = logging.getLogger(__name__)
 
-# Blender-managed attribute names that should be skipped during custom attribute processing
+# Blender-managed attribute names that should be skipped during custom attribute processing.
+# Note: attributes prefixed with "." are also treated as internal (checked separately in blender_internal_attr).
 BLENDER_INTERNAL_ATTRS = frozenset({"material_index", "uv_map", "UVMap", "sharp_face"})
 
 
