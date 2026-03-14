@@ -106,6 +106,7 @@ def _bar_log(value: float, max_value: float, width: int = BAR_WIDTH) -> str:
 
 
 def _speedup_emoji(speedup: float) -> str:
+    # Thresholds: 10× = exceptional, 3× = significant, 1.5× = meaningful
     if speedup >= 10:
         return "🚀"
     if speedup >= 3:
@@ -119,10 +120,11 @@ def _speedup_emoji(speedup: float) -> str:
 
 def _geometric_mean(values):
     """Compute the geometric mean of a list of positive floats."""
-    if not values:
+    positive = [v for v in values if v > 0]
+    if not positive:
         return float("nan")
-    log_sum = sum(math.log(v) for v in values if v > 0)
-    return math.exp(log_sum / len(values))
+    log_sum = sum(math.log(v) for v in positive)
+    return math.exp(log_sum / len(positive))
 
 
 def build_report(pr: dict, upstream: dict) -> str:

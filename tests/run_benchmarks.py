@@ -54,8 +54,8 @@ N_REPEAT_VERY_SLOW = 2  # for benchmarks > 1 s each
 def _median_time(fn, n_repeat=N_REPEAT):
     """Run *fn* *n_repeat* times and return the median wall-clock time (s).
 
-    A single warm-up call is executed first (not counted) so JIT-like
-    effects (branch prediction, memory mapping) don't skew the first
+    A single warm-up call is executed first (not counted) so OS-level
+    caching effects (page faults, memory mapping) don't skew the first
     measurement.
     """
     fn()  # warm-up
