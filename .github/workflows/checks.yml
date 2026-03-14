@@ -34,12 +34,12 @@ jobs:
 
       - name: Lint with ruff (Python 3.11 stringent – rules in pyproject.toml)
         run: |
-          uv pip install ruff
+          uv pip install 'ruff<0.9.0'
           ruff check --output-format=github .
 
       - name: Install infinigen & dependencies
         run: |
-          uv pip install -e ".[dev]"
+          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
 
       - name: Test with pytest (bpy-dependent)
         run: |
