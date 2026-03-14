@@ -653,7 +653,7 @@ _SC_N_ATTS = 2_000
 
 
 def bench_space_colonisation(upstream=False):
-    """Compute new growth directions for 2k tree nodes from 10k attractors."""
+    """Compute new growth directions for 500 tree nodes from 2k attractors."""
     np.random.seed(22)
     nodes = np.random.rand(_SC_N_NODES, 3).astype(np.float64)
     # Each attractor is assigned to a node (simulates curr_match)
@@ -761,7 +761,7 @@ _SMOOTH_ITERS = 10
 
 
 def bench_smooth_attribute(upstream=False):
-    """Smooth 50k-vertex attribute over 120k edges for 20 iterations."""
+    """Smooth 10k-vertex attribute over 25k edges for 10 iterations."""
     np.random.seed(44)
     data = np.random.rand(_SMOOTH_N_VERTS, 1).astype(np.float64)
     # Random edges (pairs of vertex indices)
@@ -976,8 +976,10 @@ def bench_grid_edges(upstream=False):
                 flat_to = (ni * N * N + nj * N + nk)
                 src = flat_from[valid.ravel()]
                 dst = flat_to.ravel()[valid.ravel()]
-                row.extend([src, dst])
-                col.extend([dst, src])
+                row.append(src)
+                row.append(dst)
+                col.append(dst)
+                col.append(src)
             return np.concatenate(row), np.concatenate(col)
 
         t = _median_time(_run)
@@ -1074,18 +1076,19 @@ def bench_advanced_pipeline(upstream=False):
                 dists = np.linalg.norm(nodes - q, axis=1)
                 np.argmin(dists)
 
-            # Step 2: Smooth attribute with alloc each iter
+            # Step 2: Smooth attribute with per-edge loop
             nv, ne = 10_000, 25_000
-            d = np.random.rand(nv, 1)
+            d = np.random.rand(nv, 1).ravel()
             edges = np.random.randint(0, nv, (ne, 2))
             for _ in range(10):
                 vw = np.ones(nv)
                 d_o = d.copy()
-                d_o[edges[:, 0]] += d[edges[:, 1]] * 0.05
-                vw[edges[:, 0]] += 0.05
-                d_o[edges[:, 1]] += d[edges[:, 0]] * 0.05
-                vw[edges[:, 1]] += 0.05
-                d = d_o / vw[:, None]
+                for e0, e1 in edges:
+                    d_o[e0] += d[e1] * 0.05
+                    vw[e0] += 0.05
+                    d_o[e1] += d[e0] * 0.05
+                    vw[e1] += 0.05
+                d = d_o / vw
 
             # Step 3: Triple loop grid edges (15×15×15)
             N = 15
