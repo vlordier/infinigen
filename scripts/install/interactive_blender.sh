@@ -12,33 +12,33 @@ OS=$(uname -s)
 ARCH=$(uname -m)
 
 if [ "${OS}" = "Linux" ]; then
-    BLENDER_WGET_LINK='https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz'
+    BLENDER_WGET_LINK='https://download.blender.org/release/Blender4.5/blender-4.5.0-linux-x64.tar.xz'
     BLENDER_WGET_FILE='blender.tar.xz'
 
-    BLENDER_UNTAR_DIR='blender-4.2.0-linux-x64'
+    BLENDER_UNTAR_DIR='blender-4.5.0-linux-x64'
     BLENDER_DIR='blender'
-    BLENDER_PYTHON="${BLENDER_DIR}/4.2/python/bin/python3.11"
-    BLENDER_INCLUDE="${BLENDER_DIR}/4.2/python/include/python3.11"
-    BLENDER_PACKAGES="${BLENDER_DIR}/4.2/python/lib/python3.11/site-packages"
-    BLENDER_ADDONS="${BLENDER_DIR}/4.2/scripts/addons"
+    BLENDER_PYTHON="${BLENDER_DIR}/4.5/python/bin/python3.11"
+    BLENDER_INCLUDE="${BLENDER_DIR}/4.5/python/include/python3.11"
+    BLENDER_PACKAGES="${BLENDER_DIR}/4.5/python/lib/python3.11/site-packages"
+    BLENDER_ADDONS="${BLENDER_DIR}/4.5/scripts/addons"
     BLENDER_EXE="${BLENDER_DIR}/blender"
 
 elif [ "${OS}" = "Darwin" ]; then
 
     if [ "${ARCH}" = "arm64" ]; then
-        BLENDER_WGET_LINK='https://download.blender.org/release/Blender4.2/blender-4.2.0-macos-arm64.dmg'
+        BLENDER_WGET_LINK='https://download.blender.org/release/Blender4.5/blender-4.5.0-macos-arm64.dmg'
     else
-        BLENDER_WGET_LINK='https://download.blender.org/release/Blender4.2/blender-4.2.0-macos-x64.dmg'
+        BLENDER_WGET_LINK='https://download.blender.org/release/Blender4.5/blender-4.5.0-macos-x64.dmg'
     fi
     
     BLENDER_WGET_FILE='blender.dmg'
 
     BLENDER_VOLM='/Volumes/Blender'
     BLENDER_DIR='./Blender.app'
-    BLENDER_PYTHON="${BLENDER_DIR}/Contents/Resources/4.2/python/bin/python3.11"
-    BLENDER_INCLUDE="${BLENDER_DIR}/Contents/Resources/4.2/python/include/python3.11"
-    BLENDER_PACKAGES="${BLENDER_DIR}/Contents/Resources/4.2/python/lib/python3.11/site-packages"
-    BLENDER_ADDONS="${BLENDER_DIR}/Contents/Resources/4.2/scripts/addons"
+    BLENDER_PYTHON="${BLENDER_DIR}/Contents/Resources/4.5/python/bin/python3.11"
+    BLENDER_INCLUDE="${BLENDER_DIR}/Contents/Resources/4.5/python/include/python3.11"
+    BLENDER_PACKAGES="${BLENDER_DIR}/Contents/Resources/4.5/python/lib/python3.11/site-packages"
+    BLENDER_ADDONS="${BLENDER_DIR}/Contents/Resources/4.5/scripts/addons"
     BLENDER_EXE="${BLENDER_DIR}/Contents/MacOS/Blender"
 
 else
