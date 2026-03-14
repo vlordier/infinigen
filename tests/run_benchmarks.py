@@ -46,6 +46,8 @@ def _load_module(name: str, filepath: Path):
 # ---------------------------------------------------------------------------
 
 N_REPEAT = 5
+N_REPEAT_SLOW = 2
+N_REPEAT_VERY_SLOW = 1
 
 
 def _median_time(fn, n_repeat=N_REPEAT):
@@ -125,7 +127,7 @@ def bench_meshgrid_loop():
                 verts.append([i / (N - 1), h[i, j], j / (N - 1)])
         return np.array(verts, dtype=np.float32)
 
-    t = _median_time(_loop, n_repeat=2)  # loops are slow, fewer repeats
+    t = _median_time(_loop, n_repeat=N_REPEAT_SLOW)  # loops are slow, fewer repeats
     return ("meshgrid loop 256x256", t)
 
 
@@ -155,7 +157,7 @@ def bench_tree_vertices_eager():
             arr = np.append(arr, p, axis=0)
         return arr
 
-    t = _median_time(_eager, n_repeat=2)
+    t = _median_time(_eager, n_repeat=N_REPEAT_SLOW)
     return ("tree vertices eager append", t)
 
 
@@ -226,7 +228,7 @@ def bench_distance_loop():
                         dist[i, j] = d
         return np.sqrt(dist)
 
-    t = _median_time(_loop, n_repeat=1)
+    t = _median_time(_loop, n_repeat=N_REPEAT_VERY_SLOW)
     return ("grid_distance loop 64x64", t)
 
 

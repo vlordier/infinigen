@@ -110,7 +110,7 @@ class TestUniqueRowsNonRegression:
         with pytest.raises(ValueError, match="2-D"):
             mod.unique_rows(np.array([1, 2, 3]))
 
-    def test_large_deterministic(self):
+    def test_large_array_correctness(self):
         """A large fixed-seed array must always produce the same count."""
         mod = _get_array_ops()
         np.random.seed(12345)

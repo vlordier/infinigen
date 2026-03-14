@@ -46,7 +46,10 @@ PAIRS = [
 ]
 
 
-def _bar(value: float, max_value: float, width: int = 40) -> str:
+BAR_WIDTH = 40
+
+
+def _bar(value: float, max_value: float, width: int = BAR_WIDTH) -> str:
     """Render a horizontal bar using Unicode block characters."""
     if max_value <= 0 or math.isnan(value):
         return "N/A"
@@ -106,7 +109,7 @@ def build_report(pr: dict, upstream: dict) -> str:
             speedup = pr_base / pr_opt
 
         speedups.append(speedup)
-        bar = _bar(speedup, max(speedups + [10]), width=40)
+        bar = _bar(speedup, max(speedups + [10]), width=BAR_WIDTH)
         emoji = _speedup_emoji(speedup)
         lines.append(
             f"{label:<30s} {speedup:>7.1f}×  {bar:40s}  {pr_opt*1000:>9.2f}  {pr_base*1000:>9.2f}  {emoji}"
@@ -136,7 +139,7 @@ def build_report(pr: dict, upstream: dict) -> str:
                 continue
             sp = speedups[idx]
             idx += 1
-            bar = _bar(sp, max_sp, width=40)
+            bar = _bar(sp, max_sp, width=BAR_WIDTH)
             lines_chart.append(f"{label:<30s}  |{bar} {sp:.1f}×")
 
         lines_chart.append("```")
