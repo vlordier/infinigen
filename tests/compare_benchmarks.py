@@ -5,9 +5,15 @@
 
 """
 Compare benchmark results from PR branch vs upstream and produce a Markdown
-report with detailed ASCII horizontal bar charts and an overall speedup.
+report showing cross-branch speedups with ASCII bar charts.
 
-Usage:
+Each benchmark key exists in *both* JSON files (PR uses the optimised
+implementation, upstream uses the baseline).  The speedup is::
+
+    speedup = upstream_time / pr_time
+
+Usage::
+
     python tests/compare_benchmarks.py \\
         --pr /tmp/pr_results.json \\
         --upstream /tmp/upstream_results.json \\
@@ -20,57 +26,21 @@ import math
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Paired benchmarks: (optimised_key, baseline_key, friendly_label)
-# These pairs let us compute speedup ratios.
-# NOTE: chunked_concat is intentionally excluded — np.concatenate holds the
-# GIL so threading cannot outperform a single call.  Both timings still
-# appear in the Raw Timings table.
+# Benchmark keys and human-friendly labels for the speedup chart.
+# Each entry: (json_key, display_label)
 # ---------------------------------------------------------------------------
 
-PAIRS = [
-    ("unique_rows (optimised)", "np.unique axis=0 baseline", "unique_rows (void-view)"),
-    (
-        "heightmap grid vectorised 256",
-        "heightmap grid loop 256",
-        "heightmap grid (vectorised)",
-    ),
-    (
-        "mesh cat prealloc 50×2k",
-        "mesh cat naive vstack 50×2k",
-        "mesh cat (pre-alloc)",
-    ),
-    (
-        "tree vertices lazy concat",
-        "tree vertices eager append",
-        "tree vertices (lazy)",
-    ),
-    (
-        "projection precomputed 10cam",
-        "projection separate 10cam",
-        "projection (combined K)",
-    ),
-    (
-        "distance_transform_edt 128",
-        "grid_distance loop 128 (extrapolated)",
-        "distance transform (EDT)",
-    ),
-    (
-        "boundary vectorised 256",
-        "boundary loop 256",
-        "boundary detection",
-    ),
-    (
-        "normals vectorised 256",
-        "normals loop 256",
-        "surface normals",
-    ),
-    (
-        "pipeline optimised",
-        "pipeline baseline",
-        "⭐ full pipeline (composite)",
-    ),
+BENCHMARKS = [
+    ("unique_rows", "unique_rows (void-view vs np.unique)"),
+    ("heightmap_grid", "heightmap grid (vectorised vs loop)"),
+    ("mesh_cat", "mesh cat (pre-alloc vs vstack)"),
+    ("tree_vertices", "tree vertices (lazy vs eager)"),
+    ("projection", "projection (combined K vs separate)"),
+    ("distance_transform", "distance transform (EDT vs loop)"),
+    ("boundary_detection", "boundary (vectorised vs loop)"),
+    ("surface_normals", "normals (vectorised vs loop)"),
+    ("full_pipeline", "⭐ full pipeline (composite)"),
 ]
-
 
 BAR_WIDTH = 40
 
@@ -89,7 +59,7 @@ def _bar(value: float, max_value: float, width: int = BAR_WIDTH) -> str:
 
 
 def _bar_log(value: float, max_value: float, width: int = BAR_WIDTH) -> str:
-    """Render a bar using log scale — better when speedups span many orders of magnitude."""
+    """Render a bar using log₁₀ scale for wide speedup ranges."""
     if max_value <= 1 or value <= 0 or math.isnan(value):
         return "N/A"
     log_val = math.log10(max(value, 1.0))
@@ -119,7 +89,7 @@ def _speedup_emoji(speedup: float) -> str:
 
 
 def _geometric_mean(values):
-    """Compute the geometric mean of a list of positive floats."""
+    """Geometric mean of positive floats."""
     positive = [v for v in values if v > 0]
     if not positive:
         return float("nan")
@@ -133,126 +103,103 @@ def build_report(pr: dict, upstream: dict) -> str:
     lines.append("## 📊 Benchmark Results — PR vs Upstream (Princeton main)")
     lines.append("")
     lines.append(
-        "> Automated micro-benchmark comparison.  "
-        "Lower times are better; speedup > 1× means the PR is faster."
+        "> Cross-branch comparison: same benchmark name runs optimised code on the PR "
+        "and baseline code on upstream.  Speedup = upstream_time / pr_time."
     )
     lines.append("")
 
-    # ── Section 1: Paired speedup chart ──────────────────────────────────
-    lines.append("### Optimisation Speedups")
+    # ── Section 1: Cross-branch speedup chart ────────────────────────────
+    lines.append("### Speedups (PR optimised vs Upstream baseline)")
     lines.append("")
     lines.append("```")
     lines.append(
-        f"{'Benchmark':<32s} {'Speedup':>8s}  {'Bar':40s}  {'PR (ms)':>10s}  {'Base (ms)':>10s}"
+        f"{'Benchmark':<40s} {'Speedup':>8s}  "
+        f"{'Bar':40s}  {'PR (ms)':>10s}  {'Upstream (ms)':>14s}"
     )
-    lines.append("─" * 110)
+    lines.append("─" * 120)
 
-    # Pre-compute all speedups so bars use a consistent max across rows
+    # Pre-compute speedups for consistent bar scaling
     speedups = []
-    pair_data = []  # (label, speedup, pr_opt, pr_base) or None for skipped
-    for opt_key, base_key, label in PAIRS:
-        pr_opt = pr.get(opt_key)
-        pr_base = pr.get(base_key)
+    row_data = []  # (label, speedup, pr_ms, up_ms) or None
+    for key, label in BENCHMARKS:
+        pr_t = pr.get(key)
+        up_t = upstream.get(key)
 
-        if pr_opt is None or pr_base is None:
-            pair_data.append(None)
+        if pr_t is None or up_t is None or pr_t <= 0:
+            row_data.append(None)
             continue
 
-        if pr_opt <= 0:
-            speedup = float("inf")
-        else:
-            speedup = pr_base / pr_opt
-
+        speedup = up_t / pr_t
         speedups.append(speedup)
-        pair_data.append((label, speedup, pr_opt, pr_base))
+        row_data.append((label, speedup, pr_t * 1000, up_t * 1000))
 
     bar_max = max(speedups + [10]) if speedups else 10
     min_sp = min((s for s in speedups if s > 0), default=1)
-    # Use log scale when the range spans more than 2 orders of magnitude
     use_log = bar_max / max(min_sp, 1e-9) > 100
 
-    for pair_idx, entry in enumerate(pair_data):
+    for idx, entry in enumerate(row_data):
         if entry is None:
-            label = PAIRS[pair_idx][2]
-            lines.append(f"{label:<32s} {'N/A':>8s}  {'(benchmark skipped)':40s}")
+            label = BENCHMARKS[idx][1]
+            lines.append(
+                f"{label:<40s} {'N/A':>8s}  {'(benchmark skipped)':40s}"
+            )
             continue
-        label, speedup, pr_opt, pr_base = entry
+        label, speedup, pr_ms, up_ms = entry
         if use_log:
             bar = _bar_log(speedup, bar_max, width=BAR_WIDTH)
         else:
             bar = _bar(speedup, bar_max, width=BAR_WIDTH)
         emoji = _speedup_emoji(speedup)
         lines.append(
-            f"{label:<32s} {speedup:>7.1f}×  {bar:40s}  {pr_opt*1000:>9.2f}  {pr_base*1000:>9.2f}  {emoji}"
+            f"{label:<40s} {speedup:>7.1f}×  "
+            f"{bar:40s}  {pr_ms:>9.2f}  {up_ms:>13.2f}  {emoji}"
         )
 
     lines.append("```")
     lines.append("")
 
-    # ── Overall speedup ──────────────────────────────────────────────────
+    # ── Overall geometric-mean speedup ───────────────────────────────────
     if speedups:
         geo_mean = _geometric_mean(speedups)
+        scale_note = " (log₁₀ scale)" if use_log else ""
         lines.append(
             f"**Overall geometric-mean speedup: {geo_mean:.1f}×** "
-            f"(across {len(speedups)} paired benchmarks)"
+            f"(across {len(speedups)} benchmarks{scale_note})"
         )
-        lines.append("")
-
-    # ── Detailed chart ───────────────────────────────────────────────────
-    if speedups:
-        max_sp = max(speedups)
-        min_sp_chart = min((s for s in speedups if s > 0), default=1)
-        use_log_chart = max_sp / max(min_sp_chart, 1e-9) > 100
-        scale_label = "log₁₀ scale" if use_log_chart else "linear"
-        lines.append("### Detailed Speedup Chart")
-        lines.append("")
-        lines.append("```")
-        lines.append(
-            f"{'Benchmark':<32s}  |  Speedup bar (max = {max_sp:.0f}×, {scale_label})"
-        )
-        lines.append("─" * 80)
-
-        idx = 0
-        for opt_key, base_key, label in PAIRS:
-            pr_opt = pr.get(opt_key)
-            pr_base = pr.get(base_key)
-            if pr_opt is None or pr_base is None:
-                lines.append(f"{label:<32s}  | (skipped)")
-                continue
-            sp = speedups[idx]
-            idx += 1
-            if use_log_chart:
-                bar = _bar_log(sp, max_sp, width=BAR_WIDTH)
-            else:
-                bar = _bar(sp, max_sp, width=BAR_WIDTH)
-            lines.append(f"{label:<32s}  |{bar} {sp:.1f}×")
-
-        lines.append("```")
         lines.append("")
 
     # ── Section 2: Raw timings table ─────────────────────────────────────
     lines.append("### Raw Timings")
     lines.append("")
-    lines.append("| Benchmark | PR (ms) | Upstream (ms) | Δ |")
-    lines.append("|:----------|--------:|--------------:|:-:|")
+    lines.append("| Benchmark | PR (ms) | Upstream (ms) | Speedup | Δ |")
+    lines.append("|:----------|--------:|--------------:|--------:|:-:|")
 
     all_keys = sorted(set(list(pr.keys()) + list(upstream.keys())))
     for key in all_keys:
         pr_val = pr.get(key)
         up_val = upstream.get(key)
-        pr_str = f"{pr_val*1000:.2f}" if pr_val is not None else "—"
-        up_str = f"{up_val*1000:.2f}" if up_val is not None else "—"
-        if pr_val is not None and up_val is not None and up_val > 0:
-            ratio = pr_val / up_val
-            if ratio < 0.8:
+        pr_str = f"{pr_val * 1000:.2f}" if pr_val is not None else "—"
+        up_str = f"{up_val * 1000:.2f}" if up_val is not None else "—"
+        if (
+            pr_val is not None
+            and up_val is not None
+            and pr_val > 0
+            and up_val > 0
+        ):
+            sp = up_val / pr_val
+            sp_str = f"{sp:.1f}×"
+            if sp >= 1.5:
                 delta = "🟢 faster"
-            elif ratio > 1.2:
+            elif sp <= 0.67:
                 delta = "🔴 slower"
             else:
                 delta = "⚪ ~same"
         else:
+            sp_str = "—"
             delta = "—"
-        lines.append(f"| {key} | {pr_str} | {up_str} | {delta} |")
+        lines.append(
+            f"| {key} | {pr_str} | {up_str} | {sp_str} | {delta} |"
+        )
 
     lines.append("")
     lines.append(
