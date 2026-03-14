@@ -32,9 +32,25 @@ class TreeVertices:
         parent = [-1] * len(vtxs) if parent is None else parent
         level = [0] * len(vtxs) if level is None else level
 
-        self.vtxs = vtxs
+        self._vtxs_parts = [vtxs]
+        self._vtxs_cache = vtxs
+        self._vtxs_dirty = False
         self.parent = parent
         self.level = level
+
+    @property
+    def vtxs(self):
+        if self._vtxs_dirty:
+            self._vtxs_cache = np.concatenate(self._vtxs_parts)
+            self._vtxs_parts = [self._vtxs_cache]
+            self._vtxs_dirty = False
+        return self._vtxs_cache
+
+    @vtxs.setter
+    def vtxs(self, value):
+        self._vtxs_parts = [value]
+        self._vtxs_cache = value
+        self._vtxs_dirty = False
 
     def get_idxs(self):
         return list(np.arange(len(self.vtxs)))
@@ -44,7 +60,11 @@ class TreeVertices:
         return edges[edges[:, 1] != -1]
 
     def append(self, v, p, l=None):
-        self.vtxs = np.append(self.vtxs, v, axis=0)
+        v_arr = np.asarray(v)
+        if v_arr.ndim == 1:
+            v_arr = v_arr.reshape(1, -1)
+        self._vtxs_parts.append(v_arr)
+        self._vtxs_dirty = True
         self.parent += p
 
         if l is None:
@@ -107,6 +127,15 @@ def parse_tree_attributes(vtx):
     # This makes sure each point will have no more than one child.
     new_p_id = n  # p for parent. start from the last of the array
 
+    # Accumulate new values in lists (O(1) amortized per append) instead of
+    # np.append which copies the entire array each time (O(n) per append).
+    acc_parents = []
+    acc_depth = []
+    acc_rev_depth = []
+    acc_n_leaves = []
+    acc_child_idx = []
+    acc_vtx_pos = []
+
     for idx in range(n):
         children = np.array([v for v in edge_ref[idx] if v != parents[idx]])
         if len(children) >= 2:
@@ -127,13 +156,13 @@ def parse_tree_attributes(vtx):
                 new_p_child_idx = child_idx_to_deal
                 new_p_level = levels[idx]
 
-                # apply modifications
-                parents = np.append(parents, new_p_parent)
-                depth = np.append(depth, new_p_depth)
-                rev_depth = np.append(rev_depth, new_p_rev_depth)
-                n_leaves = np.append(n_leaves, new_p_n_leaves)
-                child_idx = np.append(child_idx, new_p_child_idx)
-                vtx_pos = np.append(vtx_pos, new_p_pos.reshape(1, 3), axis=0)
+                # Accumulate in lists (O(1) amortized)
+                acc_parents.append(new_p_parent)
+                acc_depth.append(new_p_depth)
+                acc_rev_depth.append(new_p_rev_depth)
+                acc_n_leaves.append(new_p_n_leaves)
+                acc_child_idx.append(new_p_child_idx)
+                acc_vtx_pos.append(new_p_pos)
 
                 # new connection
                 # note we don't connect the new node with its parent
@@ -150,6 +179,17 @@ def parse_tree_attributes(vtx):
                 vtx.parent[child_idx_to_deal] = new_p_id
 
                 new_p_id += 1
+
+    # Concatenate once (O(n) total instead of O(n²) for repeated np.append)
+    if acc_parents:
+        parents = np.concatenate([parents, np.array(acc_parents, dtype=int)])
+        depth = np.concatenate([depth, np.array(acc_depth, dtype=int)])
+        rev_depth = np.concatenate([rev_depth, np.array(acc_rev_depth, dtype=int)])
+        n_leaves = np.concatenate([n_leaves, np.array(acc_n_leaves, dtype=int)])
+        child_idx = np.concatenate([child_idx, np.array(acc_child_idx, dtype=int)])
+        vtx_pos = np.concatenate(
+            [vtx_pos, np.array(acc_vtx_pos).reshape(-1, 3)]
+        )
 
     n = len(parents)
 
@@ -171,12 +211,9 @@ def parse_tree_attributes(vtx):
         curr_idxs = np.setdiff1d(curr_idxs, to_remove)
         curr_stem_id += 1
 
-    parent_loc = np.zeros((n, 3), dtype=float)
-    self_loc = np.zeros((n, 3), dtype=float)
-
-    for vertex_idx, parent_idx in enumerate(parents):
-        parent_loc[vertex_idx] = vtx_pos[parent_idx]
-        self_loc[vertex_idx] = vtx_pos[vertex_idx]
+    # Vectorized location lookup (replaces per-vertex Python loop)
+    parent_loc = vtx_pos[parents]
+    self_loc = vtx_pos[:n].copy()
 
     parent_loc[0] = np.array(
         [0, 0, -1], dtype=float
