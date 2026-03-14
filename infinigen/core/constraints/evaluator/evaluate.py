@@ -4,9 +4,9 @@
 
 # Authors: Alexander Raistrick
 
-import copy
 import logging
 import operator
+from collections import ChainMap
 from dataclasses import dataclass
 
 import pandas as pd
@@ -50,8 +50,7 @@ def _compute_node_val(node: cl.Node, state: State, memo: dict):
 
             results = []
             for o in loop_over_objs:
-                memo_sub = copy.copy(memo)
-                memo_sub[var] = {o}
+                memo_sub = ChainMap({var: {o}}, memo)
                 results.append(evaluate_node(pred, state, memo=memo_sub))
 
             # slogger.debug(f"{node.__class__.__name__} had {len(results)=}")
@@ -162,8 +161,7 @@ def viol_count(node: cl.Node, state: State, memo: dict, filter: r.Domain = None)
             assert isinstance(var, str)
             viol = 0
             for o in evaluate_node(objs, state, memo):
-                memo_sub = copy.copy(memo)
-                memo_sub[var] = {o}
+                memo_sub = ChainMap({var: {o}}, memo)
                 viol += viol_count(pred, state, memo_sub, filter)
             res = viol
         case cl.BoolOperatorExpression(
