@@ -8,6 +8,7 @@ import hashlib
 import math
 import random
 import warnings
+from typing import Any
 
 import cv2
 import gin
@@ -163,7 +164,7 @@ class BBox:
         return np.stack([self.mins, self.maxs], axis=-1).T
 
 
-def md5_hash(x):
+def md5_hash(x: int | str | list | tuple) -> Any:
     if isinstance(x, (tuple, list)):
         m = hashlib.md5()
         for s in x:
@@ -177,7 +178,7 @@ def md5_hash(x):
         raise ValueError(f"util.md5_hash doesnt currently support type {type(x)}")
 
 
-def int_hash(x, max=(2**32 - 1)):
+def int_hash(x: int | str | list | tuple, max: int = (2**32 - 1)) -> int:
     md5 = int(md5_hash(x).hexdigest(), 16)
     h = abs(md5) % max
     return h

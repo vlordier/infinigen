@@ -8,6 +8,7 @@ import logging
 import os
 from contextlib import nullcontext
 from pathlib import Path
+from typing import TypedDict
 
 import numpy as np
 import pandas as pd
@@ -18,6 +19,24 @@ from infinigen.core.util.logging import Timer
 from infinigen.core.util.math import FixedSeed, int_hash
 
 logger = logging.getLogger(__name__)
+
+
+class StageResult(TypedDict):
+    name: str
+    ran: bool
+    mem_at_finish: int
+    obj_count: int
+    instance_count: int
+
+
+def _make_stage_result(name: str, ran: bool, mem_at_finish: int) -> StageResult:
+    return StageResult(
+        name=name,
+        ran=ran,
+        mem_at_finish=mem_at_finish,
+        obj_count=count_objects(),
+        instance_count=count_instance(),
+    )
 
 
 class RandomStageExecutor:
@@ -66,15 +85,7 @@ class RandomStageExecutor:
         will_run = self._should_run_stage(name, use_chance, prereq)
 
         if not will_run:
-            self.results.append(
-                {
-                    "name": name,
-                    "ran": will_run,
-                    "mem_at_finish": mem_usage,
-                    "obj_count": count_objects(),
-                    "instance_count": count_instance(),
-                }
-            )
+            self.results.append(_make_stage_result(name, will_run, mem_usage))
             return default
 
         gc_context = GarbageCollect() if gc else nullcontext()
@@ -88,13 +99,5 @@ class RandomStageExecutor:
             with Timer(name), gc_context:
                 ret = fn(*args, **kwargs)
                 mem_usage = psutil.Process(os.getpid()).memory_info().rss
-                self.results.append(
-                    {
-                        "name": name,
-                        "ran": will_run,
-                        "mem_at_finish": mem_usage,
-                        "obj_count": count_objects(),
-                        "instance_count": count_instance(),
-                    }
-                )
+                self.results.append(_make_stage_result(name, will_run, mem_usage))
                 return ret
