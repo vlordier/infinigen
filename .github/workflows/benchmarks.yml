@@ -51,7 +51,7 @@ jobs:
         id: pr_bench
         working-directory: pr-branch
         run: |
-          uv run python tests/run_benchmarks.py --output /tmp/pr_results.json
+          python tests/run_benchmarks.py --output /tmp/pr_results.json
 
       - name: Run upstream benchmarks
         id: upstream_bench
@@ -59,13 +59,13 @@ jobs:
         run: |
           # The upstream may not have our benchmark runner, use the PR's version
           cp ../pr-branch/tests/run_benchmarks.py /tmp/run_benchmarks_upstream.py
-          uv run python /tmp/run_benchmarks_upstream.py --output /tmp/upstream_results.json --upstream
+          python /tmp/run_benchmarks_upstream.py --output /tmp/upstream_results.json --upstream
 
       - name: Generate comparison report
         id: report
         working-directory: pr-branch
         run: |
-          uv run python tests/compare_benchmarks.py \
+          python tests/compare_benchmarks.py \
             --pr /tmp/pr_results.json \
             --upstream /tmp/upstream_results.json \
             --output /tmp/benchmark_report.md

@@ -35,7 +35,7 @@ jobs:
       - name: Lint with ruff (Python 3.11 stringent – rules in pyproject.toml)
         run: |
           uv pip install ruff
-          uv run ruff check --output-format=github .
+          ruff check --output-format=github .
 
       - name: Install infinigen & dependencies
         run: |
@@ -43,16 +43,16 @@ jobs:
 
       - name: Test with pytest (bpy-dependent)
         run: |
-          uv run pytest tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
+          pytest tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
 
       - name: Test non-regression suite (no bpy required)
         run: |
-          uv run pytest tests/test_nonregression.py --noconftest -v
+          pytest tests/test_nonregression.py --noconftest -v
 
       - name: Test benchmarks suite (no bpy required)
         run: |
-          uv run pytest tests/test_benchmarks.py --noconftest -v
+          pytest tests/test_benchmarks.py --noconftest -v
 
       - name: Check for copyright statements
         run: |
-          uv run ruff check --output-format=github --preview --select CPY001 .
+          ruff check --output-format=github --preview --select CPY001 .
