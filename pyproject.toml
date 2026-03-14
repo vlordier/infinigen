@@ -24,7 +24,9 @@ dependencies = [
     # NOTE: many less-than dependencies could likely be loosened
     #   we attempted to restrict to only versions that are known to be working
 
-    "bpy==4.5.0",
+    # bpy 4.5.0 has no macOS ARM64 wheel on PyPI; fall back to 4.2.0 on that platform
+    "bpy==4.5.0; sys_platform != 'darwin' or platform_machine != 'arm64'",
+    "bpy==4.2.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
     "gin_config>=0.5.0",
     "imageio<2.32.0",      # e.g. 2.31.1
     "matplotlib",
