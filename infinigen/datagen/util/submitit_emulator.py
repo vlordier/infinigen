@@ -115,12 +115,7 @@ def job_wrapper(
                 env=env,
                 bufsize=1,
             )
-            assert proc.stdout is not None, (
-                "proc.stdout should not be None when using subprocess.PIPE"
-            )
-            assert proc.stderr is not None, (
-                "proc.stderr should not be None when using subprocess.PIPE"
-            )
+            # subprocess.PIPE ensures text-mode file objects here.
 
             def drain(pipe, sinks):
                 for line in pipe:
@@ -152,6 +147,7 @@ def job_wrapper(
 
         if returncode:
             raise SystemExit(returncode)
+        return
 
 
 def launch_local(

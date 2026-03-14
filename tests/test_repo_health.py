@@ -43,8 +43,8 @@ def test_job_wrapper_passthrough_streams_files_and_console(tmp_path, monkeypatch
 
     class FakePopen:
         def __init__(self, *args, **kwargs):
-            self.stdout = iter(["hello stdout\n"])
-            self.stderr = iter(["hello stderr\n"])
+            self.stdout = iter(["hello stdout\n", "second stdout line\n"])
+            self.stderr = iter(["hello stderr\n", "second stderr line\n"])
 
         def wait(self):
             return 0
@@ -58,10 +58,10 @@ def test_job_wrapper_passthrough_streams_files_and_console(tmp_path, monkeypatch
         stdout_passthrough=True,
     )
 
-    assert stdout_file.read_text() == "hello stdout\n"
-    assert stderr_file.read_text() == "hello stderr\n"
-    assert "hello stdout" in stdout_stream.getvalue()
-    assert "hello stderr" in stderr_stream.getvalue()
+    assert stdout_file.read_text() == "hello stdout\nsecond stdout line\n"
+    assert stderr_file.read_text() == "hello stderr\nsecond stderr line\n"
+    assert stdout_stream.getvalue() == "hello stdout\nsecond stdout line\n"
+    assert stderr_stream.getvalue() == "hello stderr\nsecond stderr line\n"
 
 
 def test_job_wrapper_passthrough_propagates_exit_code(tmp_path, monkeypatch):
