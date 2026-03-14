@@ -794,7 +794,7 @@ def save_blend(path, autopack=False, verbose=False):
 
 def joined_kd(objs, include_origins=False):
     if not isinstance(objs, list):
-        objs = objs
+        objs = [objs]
     objs = [o for o in objs if o.type == "MESH"]
 
     size = sum(len(o.data.vertices) for o in objs)
