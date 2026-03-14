@@ -5,7 +5,6 @@
 # Acknowledgement: Rotational symmetry code draws inspiration from https://pubs.acs.org/doi/abs/10.1021/ja00046a033 by Zabrodsky et al.
 
 
-from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -124,7 +123,7 @@ def sort_objects_clockwise(objects, centroid):
     return sorted_objects
 
 
-def compute_total_rotation_asymmetry(a: Union[str, list[str]]) -> float:
+def compute_total_rotation_asymmetry(a: str | list[str]) -> float:
     """Compute the total asymmetry."""
     if isinstance(a, str):
         a = [a]

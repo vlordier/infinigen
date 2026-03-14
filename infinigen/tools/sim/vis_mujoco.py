@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import cv2
 import mujoco
@@ -334,7 +334,7 @@ class MujocoAssetInitializer:
                 xyaxes=[-1, 0, 0, 0, 0, 1],
             )
 
-    def save_frames(self, out_file_path: Path, frames: List[np.ndarray]) -> None:
+    def save_frames(self, out_file_path: Path, frames: list[np.ndarray]) -> None:
         """Save frames as an MP4 video file"""
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         video_writer = cv2.VideoWriter(
@@ -379,7 +379,7 @@ class MujocoAssetInitializer:
 
     def get_geom_aabb_world(
         self, model: Any, data: Any, geom_name: str
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Calculate world-space axis-aligned bounding box for a geometry"""
         # Get geom ID
         geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
@@ -398,7 +398,7 @@ class MujocoAssetInitializer:
         world_max = center_world + world_half
         return world_max, world_min
 
-    def _update_sim(self, step: int, joint_info: Dict[str, Any]) -> None:
+    def _update_sim(self, step: int, joint_info: dict[str, Any]) -> None:
         """Update simulation state for current animation step"""
         angle = (step / (self.num_frames - 1)) * 2 * np.pi
         # Use sine wave to animate joint: 0 -> 1 -> 0 -> -1 -> 0
@@ -447,8 +447,8 @@ class MujocoAssetInitializer:
                 self.model.geom_rgba[i, 3] = self.original_geom_rgba[i, 3]
 
     def _render_single_joint_animation(
-        self, joint_name: str, joint_info: Dict[str, Any], all_camera_names: List[str]
-    ) -> Dict[str, List[np.ndarray]]:
+        self, joint_name: str, joint_info: dict[str, Any], all_camera_names: list[str]
+    ) -> dict[str, list[np.ndarray]]:
         """Render animation frames for a single joint from all camera views"""
         frames = {cam_name: [] for cam_name in all_camera_names}
         self.model = self.spec.compile()

@@ -18,7 +18,7 @@ from infinigen.core.util.random import clip_gaussian, weighted_sample
 
 class RugFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(RugFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.width = clip_gaussian(3, 1, 2, 6)
             self.length = self.width * uniform(1, 1.5)

@@ -541,7 +541,7 @@ def bamboo_tree(init_pos=np.array([[0, 0, 0]])):
             bpy.ops.mesh.primitive_cube_add, n=50, scaling=[0.5, 0.5, 4]
         )
         # rotate the points
-        rot_axis = (nodes[-1] - nodes[-2]) / np.linalg.norm((nodes[-1] - nodes[-2]))
+        rot_axis = (nodes[-1] - nodes[-2]) / np.linalg.norm(nodes[-1] - nodes[-2])
         rot_axis = (rot_axis + np.array([0, 0, 1])) / 2.0
 
         branch_pts = np.array(

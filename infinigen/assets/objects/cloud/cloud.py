@@ -27,7 +27,7 @@ def set_curves(curve, points):
         curve.points.new(*point)
 
 
-class Cumulus(object):
+class Cumulus:
     DENSITY_RANGE = [1.0, 1.0]
     ANISOTROPY_RANGE = [-0.5, 0.5]
     NOISE_SCALE_RANGE = [8.0, 16.0]
@@ -478,9 +478,9 @@ def link_object(obj):
     bpy.context.scene.collection.objects.link(obj)
 
 
-class LinkObject(object):
+class LinkObject:
     def __init__(self, obj):
-        super(LinkObject, self).__init__()
+        super().__init__()
         self.obj = obj
 
     def __enter__(self):

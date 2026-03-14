@@ -5,7 +5,7 @@
 # - Karhan Kayan
 
 import os
-from typing import Callable, Dict, Optional
+from collections.abc import Callable
 
 import bpy
 
@@ -14,7 +14,7 @@ from infinigen.core.placement.factory import AssetFactory
 
 
 class StaticAssetFactory(AssetFactory):
-    import_map: Dict[str, Callable] = {
+    import_map: dict[str, Callable] = {
         "dae": bpy.ops.wm.collada_import,
         "abc": bpy.ops.wm.alembic_import,
         "usd": bpy.ops.wm.usd_import,
@@ -48,7 +48,7 @@ class StaticAssetFactory(AssetFactory):
 
         bpy.ops.wm.append(filepath=filepath, filename=filename, directory=directory)
 
-    def import_file(self, file_path: str) -> Optional[bpy.types.Object]:
+    def import_file(self, file_path: str) -> bpy.types.Object | None:
         extension = file_path.split(".")[-1].lower()
         if extension in self.import_map:
             func = self.import_map.get(extension)

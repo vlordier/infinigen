@@ -13,7 +13,6 @@ import importlib
 import json
 import logging
 import pickle
-import typing
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,14 +40,14 @@ class RelationState:
     target_name: str
     child_plane_idx: int = None
     parent_plane_idx: int = None
-    value: typing.Optional[shapely.MultiLineString] = None
+    value: shapely.MultiLineString | None = None
 
 
 @dataclass
 class ObjectState:
     obj: bpy.types.Object = None
     polygon: shapely.Polygon = None
-    generator: typing.Optional[AssetFactory] = None
+    generator: AssetFactory | None = None
     tags: set = field(default_factory=set)
     relations: list[RelationState] = field(default_factory=list)
 

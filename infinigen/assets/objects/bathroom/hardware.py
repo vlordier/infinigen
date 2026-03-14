@@ -17,7 +17,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class HardwareFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(HardwareFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.attachment_radius = uniform(0.02, 0.03)
             self.attachment_depth = uniform(0.01, 0.015)

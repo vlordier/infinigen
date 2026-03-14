@@ -24,7 +24,7 @@ def get_code(current_type, variables):
     return code
 
 
-with open(args.file_path, "r") as f:
+with open(args.file_path) as f:
     lines = f.readlines()
     i = 0
     while i < len(lines):

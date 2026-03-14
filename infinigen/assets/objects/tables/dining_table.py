@@ -192,7 +192,7 @@ def geometry_assemble_table(nw: NodeWrangler, **kwargs):
 
 class TableDiningFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, dimensions=None):
-        super(TableDiningFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.dimensions = dimensions
 

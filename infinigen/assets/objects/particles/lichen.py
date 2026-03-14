@@ -24,7 +24,7 @@ from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
 
 class LichenFactory(AssetFactory):
     def __init__(self, factory_seed):
-        super(LichenFactory, self).__init__(factory_seed)
+        super().__init__(factory_seed)
         self.max_polygon = 1e4
         self.base_hue = uniform(0.15, 0.3)
 

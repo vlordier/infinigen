@@ -35,7 +35,7 @@ class ElkhornBaseCoralFactory(BaseCoralFactory):
     noise_strength = 0.005
 
     def __init__(self, factory_seed, coarse=False):
-        super(ElkhornBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.points_fn = make_radius_points_fn(0.05, 0.6)
 
     @staticmethod

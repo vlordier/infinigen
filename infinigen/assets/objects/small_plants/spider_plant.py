@@ -377,7 +377,7 @@ def geometry_spider_plant_nodes(nw: NodeWrangler, **kwargs):
 
 class SpiderPlantFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(SpiderPlantFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def get_params(self):
         params = {}

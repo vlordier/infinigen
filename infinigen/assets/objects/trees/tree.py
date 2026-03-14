@@ -496,7 +496,7 @@ class FineTreeVertices(TreeVertices):
     def __init__(
         self, vtxs=None, parent=None, level=None, radius_fn=None, resolution=1
     ):
-        super(FineTreeVertices, self).__init__(vtxs, parent, level)
+        super().__init__(vtxs, parent, level)
         self.resolution = resolution
         if radius_fn is None:
 
@@ -509,7 +509,7 @@ class FineTreeVertices(TreeVertices):
         self.detailed_parents = [-1]
 
     def append(self, v, p, l=None):
-        super(FineTreeVertices, self).append(v, p, l)
+        super().append(v, p, l)
         f = interp1d(
             np.arange(len(v) + 1),
             np.concatenate([self.vtxs[p[0] : p[0] + 1], v]),

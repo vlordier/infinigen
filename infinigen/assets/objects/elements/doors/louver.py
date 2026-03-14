@@ -15,7 +15,7 @@ from infinigen.core.util.random import log_uniform
 
 class LouverDoorFactory(PanelDoorFactory):
     def __init__(self, factory_seed, coarse=False, constants=None):
-        super(LouverDoorFactory, self).__init__(factory_seed, coarse, constants)
+        super().__init__(factory_seed, coarse, constants)
         with FixedSeed(self.factory_seed):
             self.x_subdivisions = 1
             self.y_subdivisions = np.clip(np.random.binomial(5, 0.4), 1, None)
@@ -95,7 +95,7 @@ class LouverDoorFactory(PanelDoorFactory):
         return [cutter, louver]
 
     def make_panels(self):
-        panels = super(LouverDoorFactory, self).make_panels()
+        panels = super().make_panels()
         if len(panels) == 1:
             panels[0]["func"] = self.louver
         elif len(panels) == 2:

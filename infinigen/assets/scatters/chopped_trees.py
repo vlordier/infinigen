@@ -83,7 +83,7 @@ def chop_object(obj, n, cutter_size, max_tilt=15, thickness=0.03):
             # vertical chopper to break things up
             cut.location += mathutils.Vector(normal(0, 0.5, 3))
             cut.rotation_euler = np.deg2rad(
-                (uniform([-max_tilt, 50, 0], [max_tilt, 80, 360]))
+                uniform([-max_tilt, 50, 0], [max_tilt, 80, 360])
             )
 
         return cut

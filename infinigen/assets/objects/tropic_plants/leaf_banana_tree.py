@@ -822,7 +822,7 @@ def geometry_plant_nodes(nw: NodeWrangler, **kwargs):
 
 class LeafBananaTreeFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(LeafBananaTreeFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def get_leaf_contour(self, mode):
         if mode == "oval":
@@ -966,7 +966,7 @@ class LeafBananaTreeFactory(AssetFactory):
 
 class PlantBananaTreeFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(PlantBananaTreeFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.leaf_tropical_factory = LeafBananaTreeFactory(factory_seed)
 
     def update_params(self, **params):

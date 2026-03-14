@@ -10,7 +10,6 @@ from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set, Union
 
 import bpy
 import numpy as np
@@ -38,7 +37,7 @@ class PathItem:
 class RigidAsset:
     """Represents an assets in the rigid body skeleton."""
 
-    def __init__(self, attribs: List[PathItem] = []):
+    def __init__(self, attribs: list[PathItem] = []):
         self.attribs = attribs.copy()
 
 
@@ -84,7 +83,7 @@ class SimBuilder:
 
         self.blend_obj = None  # set when building asset
 
-    def build(self, blend_obj: bpy.types.Object, metadata: Dict):
+    def build(self, blend_obj: bpy.types.Object, metadata: dict):
         self.blend_obj = blend_obj
         self.metadata = metadata
 
@@ -92,7 +91,7 @@ class SimBuilder:
         triangulate_mesh(self.blend_obj)
 
     def _construct_rigid_body_skeleton(
-        self, node: KinematicNode, path: List[PathItem] = []
+        self, node: KinematicNode, path: list[PathItem] = []
     ):
         """
         Given the blender object and the kinematic root, construct a rigid
@@ -197,7 +196,7 @@ class SimBuilder:
     def _handle_asset_node(self, node, path):
         return RigidAsset(attribs=path), None
 
-    def _wrap_in_body(self, element: Union[RigidAsset, RigidBody]):
+    def _wrap_in_body(self, element: RigidAsset | RigidBody):
         """If elements is a singular assets, wrap it in its own rigid body."""
         body = element
         if isinstance(element, RigidAsset):
@@ -230,11 +229,11 @@ class SimBuilder:
         for child_body in to_delete:
             del root.children[child_body]
 
-    def _get_labels(self, geometry: bpy.types.Object) -> Set[str]:
+    def _get_labels(self, geometry: bpy.types.Object) -> set[str]:
         """Gets the labels associated with a geometry."""
         geom_labels = set()
         for label in self.metadata["part_labels"]:
-            if label not in set([n.name for n in geometry.data.attributes]):
+            if label not in {n.name for n in geometry.data.attributes}:
                 logging.warning(
                     f" Label {label} not found, skipping for now. It is likely this is an empty geometry."
                 )
@@ -245,7 +244,7 @@ class SimBuilder:
                 geom_labels.add(label)
         return geom_labels
 
-    def _get_subsets(self, path: List[PathItem]) -> int:
+    def _get_subsets(self, path: list[PathItem]) -> int:
         mask = None
         for item in path:
             path_attr_name, path_attr_value = item.node.idn, item.value
@@ -258,7 +257,7 @@ class SimBuilder:
                 mask = np.logical_and(mask, path_attr_mask)
         return mask
 
-    def _get_unique_values(self, attr: str, path: List[PathItem]) -> int:
+    def _get_unique_values(self, attr: str, path: list[PathItem]) -> int:
         """Gets unique values for a particular attribute."""
         if attr not in self.blend_obj.data.attributes:
             logging.warning(
@@ -270,7 +269,7 @@ class SimBuilder:
         data = data[mask]
         return len(np.unique(data))
 
-    def _get_switch_values(self, attr: str, path: List[PathItem]) -> int:
+    def _get_switch_values(self, attr: str, path: list[PathItem]) -> int:
         """Gets the actual value of a switch attribute."""
         data = surface.read_attr_data(self.blend_obj, attr)
         mask = self._get_subsets(path)

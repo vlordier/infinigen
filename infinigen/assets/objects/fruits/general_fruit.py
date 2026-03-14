@@ -156,7 +156,7 @@ def general_fruit_geometry_nodes(
 
 class FruitFactoryGeneralFruit(AssetFactory):
     def __init__(self, factory_seed, scale=1.0, coarse=False):
-        super(FruitFactoryGeneralFruit, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.scale = scale
 

@@ -133,7 +133,7 @@ def shader_caustic_lamp(nw: NodeWrangler, params: dict):
 
 class CausticsLampFactory(AssetFactory):
     def __init__(self, factory_seed):
-        super(CausticsLampFactory, self).__init__(factory_seed)
+        super().__init__(factory_seed)
         with FixedSeed(factory_seed):
             self.params = {
                 "Prewarp": U(0.1, 0.5),

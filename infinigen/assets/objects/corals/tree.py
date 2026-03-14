@@ -26,7 +26,7 @@ class TreeBaseCoralFactory(BaseCoralFactory):
     noise_strength = 0.01
 
     def __init__(self, factory_seed, coarse=False, method=None):
-        super(TreeBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.tip = 0.4
         self.configs = {
             "twig": {"radius": 0.08, "branch_config": self.twig_config},

@@ -18,7 +18,7 @@ require_blender_addon("extra_mesh_objects", fail="warn")
 
 class BlenderRockFactory(AssetFactory):
     def __init__(self, factory_seed, detail=1):
-        super(BlenderRockFactory, self).__init__(factory_seed)
+        super().__init__(factory_seed)
         self.detail = detail
 
     __repr__ = AssetFactory.__repr__

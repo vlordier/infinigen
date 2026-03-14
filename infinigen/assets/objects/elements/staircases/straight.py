@@ -66,7 +66,7 @@ class StraightStaircaseFactory(AssetFactory):
     )
 
     def __init__(self, factory_seed, coarse=False, constants=None):
-        super(StraightStaircaseFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             if constants is None:
                 constants = RoomConstants()

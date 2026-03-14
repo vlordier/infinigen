@@ -20,7 +20,7 @@ from infinigen.core.util.blender import deep_clone_obj
 
 class PalletFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(PalletFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.depth = uniform(1.2, 1.4)
         self.width = uniform(1.2, 1.4)
         self.thickness = uniform(0.01, 0.015)

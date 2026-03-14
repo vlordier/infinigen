@@ -46,7 +46,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class TVFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TVFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.aspect_ratio = np.random.choice([9 / 16, 3 / 4])
             self.width = uniform(0.6, 2.1)
@@ -258,7 +258,7 @@ class TVFactory(AssetFactory):
 
 class MonitorFactory(TVFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(MonitorFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.width = log_uniform(0.4, 0.8)
             self.leg_type = "single-legged"

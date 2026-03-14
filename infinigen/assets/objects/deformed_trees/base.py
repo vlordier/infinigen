@@ -23,7 +23,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class BaseDeformedTreeFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BaseDeformedTreeFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             (tree_params, _, _), _ = random_species()
             tree_params.skinning.update({"Scaling": 0.2})

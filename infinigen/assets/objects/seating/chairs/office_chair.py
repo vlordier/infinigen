@@ -69,7 +69,7 @@ def geometry_assemble_chair(nw: NodeWrangler, **kwargs):
 @gin.configurable
 class OfficeChairFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, dimensions=None):
-        super(OfficeChairFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.dimensions = dimensions
 

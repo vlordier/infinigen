@@ -4,10 +4,9 @@
 
 # Authors:
 # - Abhishek Joshi: primary author
-from typing import Dict
 
 
-def get_joint_properties(joint_name: str, joint_params: Dict) -> Dict:
+def get_joint_properties(joint_name: str, joint_params: dict) -> dict:
     if joint_name not in joint_params:
         return {"stiffness": 0, "damping": 0, "friction": 0}
     res = {

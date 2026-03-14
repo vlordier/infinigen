@@ -10,7 +10,6 @@ Factory method for spawn sim ready assets. Current sim ready file formats includ
 """
 
 from pathlib import Path
-from typing import Dict, Tuple
 
 from infinigen.assets.sim_objects.mapping import OBJECT_CLASS_MAP
 from infinigen.core.sim import kinematic_compiler
@@ -26,7 +25,7 @@ def spawn_simready(
     seed: int = 0,
     export: bool = True,
     **kwargs,
-) -> Tuple[Path, Dict]:
+) -> tuple[Path, dict]:
     """
     Spawns a sim ready asset in the given format.
     """

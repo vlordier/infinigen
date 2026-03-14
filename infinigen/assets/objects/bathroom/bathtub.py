@@ -36,7 +36,7 @@ from infinigen.core.util.random import weighted_sample
 
 class BathtubFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BathtubFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.width = uniform(1.5, 2)
             self.size = uniform(0.8, 1)

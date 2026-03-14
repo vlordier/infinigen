@@ -18,7 +18,7 @@ class BaseCactusFactory(AssetFactory):
     density = 5e4
 
     def __init__(self, factory_seed, coarse=False):
-        super(BaseCactusFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.points_fn = make_default_selections(
             self.spike_distance, self.cap_percentage, self.density
         )

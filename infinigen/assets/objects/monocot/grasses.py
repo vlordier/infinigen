@@ -33,7 +33,7 @@ from infinigen.core.util.random import log_uniform
 
 class GrassesMonocotFactory(MonocotGrowthFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(GrassesMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(1.5, 2.0)
             self.angle = uniform(np.pi / 6, np.pi / 3)
@@ -75,7 +75,7 @@ class GrassesMonocotFactory(MonocotGrowthFactory):
 
 class WheatEarMonocotFactory(MonocotGrowthFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(WheatEarMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(0.4, 0.5)
             self.angle = uniform(np.pi / 6, np.pi / 4)
@@ -107,7 +107,7 @@ class WheatEarMonocotFactory(MonocotGrowthFactory):
 
 class WheatMonocotFactory(GrassesMonocotFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(WheatMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.ear_factory = WheatEarMonocotFactory(factory_seed, coarse)
             self.scale_curve = [(0, 1.0), (1, 0.6)]
@@ -135,7 +135,7 @@ class WheatMonocotFactory(GrassesMonocotFactory):
 
 class MaizeMonocotFactory(GrassesMonocotFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(MaizeMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(2.0, 2.5)
             self.scale_curve = [(0, 1.0), (1, 0.6)]
@@ -173,7 +173,7 @@ class MaizeMonocotFactory(GrassesMonocotFactory):
 
 class ReedEarMonocotFactory(MonocotGrowthFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ReedEarMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(0.3, 0.4)
             self.min_y_angle = uniform(np.pi / 4, np.pi / 3)
@@ -188,7 +188,7 @@ class ReedEarMonocotFactory(MonocotGrowthFactory):
         return obj
 
     def create_raw(self, **params):
-        obj = super(ReedEarMonocotFactory, self).create_raw(**params)
+        obj = super().create_raw(**params)
         write_attribute(obj, 1, "ear", "FACE")
         tag_object(obj, "reed_ear")
         return obj
@@ -198,7 +198,7 @@ class ReedBranchMonocotFactory(MonocotGrowthFactory):
     max_branches = 6
 
     def __init__(self, factory_seed, coarse=False):
-        super(ReedBranchMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(0.6, 0.8)
             self.ear_factory = ReedEarMonocotFactory(self.factory_seed)
@@ -216,7 +216,7 @@ class ReedBranchMonocotFactory(MonocotGrowthFactory):
 
 class ReedMonocotFactory(GrassesMonocotFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ReedMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(3.0, 4.0)
             self.scale_curve = [(0, 1.2), (1, 0.8)]

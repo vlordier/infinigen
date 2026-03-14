@@ -36,7 +36,7 @@ class NatureShelfTrinketsFactory(AssetFactory):
     probs = np.array([1, 1, 1, 1, 3, 2, 3, 2, 2, 2, 2, 5, 5])
 
     def __init__(self, factory_seed, coarse=False):
-        super(NatureShelfTrinketsFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             base_factory_fn = np.random.choice(
                 self.factories, p=self.probs / self.probs.sum()

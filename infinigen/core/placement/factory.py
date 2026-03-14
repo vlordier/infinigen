@@ -8,7 +8,6 @@
 
 
 import logging
-import typing
 
 import bpy
 import numpy as np
@@ -45,7 +44,7 @@ class AssetFactory:
         # Optionally, override this function to decide what will be used as a placeholder for your asset
         return butil.spawn_cube(size=2)
 
-    def finalize_placeholders(self, placeholders: typing.List[bpy.types.Object]):
+    def finalize_placeholders(self, placeholders: list[bpy.types.Object]):
         # Optionally, override this function to perform any operations on all the placeholders at once
         # eg joint space colonization, placing vines between trees
         pass

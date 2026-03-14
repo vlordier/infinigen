@@ -107,7 +107,7 @@ def geometry_cabinet_nodes(nw: NodeWrangler, **kwargs):
 
 class SingleCabinetBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(SingleCabinetBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.shelf_params = {}
         self.door_params = {}
         self.mat_params = {}

@@ -96,7 +96,7 @@ class LobsterLegFactory(CrabLegFactory):
         y_length = uniform(0.01, 0.015)
         z_length = y_length * log_uniform(1, 1.2)
         return {
-            **super(LobsterLegFactory, self).sample_params(),
+            **super().sample_params(),
             "y_length": y_length,
             "z_length": z_length,
         }

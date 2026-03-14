@@ -819,7 +819,7 @@ def geo_flowerplant(nw: NodeWrangler, **kwargs):
 
 class FlowerPlantFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(FlowerPlantFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.leaves_version_num = 4
         self.flowers_version_num = 1
 

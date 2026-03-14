@@ -934,7 +934,7 @@ def geometry_palm_tree_leaf_nodes(nw: NodeWrangler, **kwargs):
 
 class LeafPalmTreeFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(LeafPalmTreeFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def update_params(self, params):
         if params.get("leaf_x_curvature", None) is None:

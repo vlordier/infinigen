@@ -745,7 +745,7 @@ def geometry_nodes(nw: NodeWrangler, **kwargs):
 
 class LargeShelfBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(LargeShelfBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = {}
 
     def sample_params(self):

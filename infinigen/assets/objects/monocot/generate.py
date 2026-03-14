@@ -46,7 +46,7 @@ class MonocotFactory(AssetFactory):
             return m
 
     def __init__(self, factory_seed, coarse=False, factory_method=None, grass=None):
-        super(MonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             grass_factory = [
                 TussockMonocotFactory,

@@ -7,7 +7,6 @@
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import bpy
 import mathutils
@@ -42,7 +41,7 @@ def string_to_array(string: str):
     )
 
 
-def parse_sim_blueprint(sim_blueprint: Dict) -> Tuple[str, KinematicNode]:
+def parse_sim_blueprint(sim_blueprint: dict) -> tuple[str, KinematicNode]:
     """
     Parses the given sim blueprint to be used to generate the required file.
     """
@@ -73,7 +72,7 @@ def parse_sim_blueprint(sim_blueprint: Dict) -> Tuple[str, KinematicNode]:
     return name, kinematic_root, metadata
 
 
-def get_aabb_center(geometries: List[bpy.types.Object]):
+def get_aabb_center(geometries: list[bpy.types.Object]):
     """
     Returns the bounding box center of a list of blender objects.
     """
@@ -91,9 +90,9 @@ def get_aabb_center(geometries: List[bpy.types.Object]):
 
 def get_geometry_given_attribs(
     obj: bpy.types.Object,
-    attribs: List[Tuple],
+    attribs: list[tuple],
     center_at_origin: bool = False,
-    extra_attribs: List[Tuple] = [],
+    extra_attribs: list[tuple] = [],
 ) -> bpy.types.Object:
     """
     Gets the geometry corresponding to the attributes query.
@@ -128,7 +127,7 @@ def get_geometry_given_attribs(
     return mesh_obj
 
 
-def attribs_to_tuples(attribs: List[PathItem]):
+def attribs_to_tuples(attribs: list[PathItem]):
     """
     Converts a list of attributes to a list of tuples.
     """
@@ -138,7 +137,7 @@ def attribs_to_tuples(attribs: List[PathItem]):
     return res
 
 
-def combine_geometries(geometries: List[bpy.types.Object]) -> trimesh.Trimesh:
+def combine_geometries(geometries: list[bpy.types.Object]) -> trimesh.Trimesh:
     """
     Combines a list of blender objects into one geometry.
     """
@@ -236,7 +235,7 @@ def get_joint_properties(obj: bpy.types.Object, prefix: str):
 
 
 def post_process_collisions(
-    post_process_info: Dict, assets_dir: Path, exclude_links: set
+    post_process_info: dict, assets_dir: Path, exclude_links: set
 ):
     """
     Post processes collision meshes so that collision meshes do not intersect

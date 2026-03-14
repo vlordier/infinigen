@@ -444,7 +444,7 @@ def geometry_dragonfly(nw: NodeWrangler, **kwargs):
 @gin.configurable
 class DragonflyFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, bvh=None, **_):
-        super(DragonflyFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.bvh = bvh
         with FixedSeed(factory_seed):
             self.genome = self.sample_geo_genome()

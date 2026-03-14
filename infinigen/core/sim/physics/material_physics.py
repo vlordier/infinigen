@@ -4,14 +4,13 @@
 
 # Authors:
 # - Abhishek Joshi: primary author
-from typing import Dict
 
 import bpy
 
 from infinigen.core.sim.physics.material_definitions import MATERIALS, BaseMaterial
 
 
-def sample_mat_physics(mat_name: str) -> Dict[str, float] | None:
+def sample_mat_physics(mat_name: str) -> dict[str, float] | None:
     """Sample physics parameters for a material by name"""
     mat_name_lower = mat_name.lower()
 
@@ -31,7 +30,7 @@ def sample_mat_physics(mat_name: str) -> Dict[str, float] | None:
     return material_instance.sample_parameters()
 
 
-def get_material_properties(obj: bpy.types.Object) -> Dict:
+def get_material_properties(obj: bpy.types.Object) -> dict:
     default_mat_physics = {"friction": 0.0, "density": 1000}
     if len(obj.data.materials) == 0:
         return default_mat_physics

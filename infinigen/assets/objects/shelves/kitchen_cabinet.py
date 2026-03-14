@@ -103,7 +103,7 @@ def geometry_nodes(nw: NodeWrangler, **kwargs):
 
 class KitchenCabinetBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(KitchenCabinetBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.frame_params = {}
         self.material_params = {}
         self.cabinet_widths = []

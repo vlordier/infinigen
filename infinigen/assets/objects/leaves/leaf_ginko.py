@@ -707,7 +707,7 @@ class LeafFactoryGinko(AssetFactory):
     scale = 0.3
 
     def __init__(self, factory_seed, season="autumn", coarse=False):
-        super(LeafFactoryGinko, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         with FixedSeed(factory_seed):
             self.genome = self.sample_geo_genome()

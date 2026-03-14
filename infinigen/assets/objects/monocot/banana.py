@@ -22,7 +22,7 @@ from infinigen.core.util.random import log_uniform
 
 class BananaMonocotFactory(MonocotGrowthFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BananaMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(0.6, 1.0)
             self.angle = uniform(np.pi / 4, np.pi / 3)
@@ -122,7 +122,7 @@ class BananaMonocotFactory(MonocotGrowthFactory):
 
 class TaroMonocotFactory(BananaMonocotFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TaroMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(0.05, 0.1)
             self.radius = uniform(0.02, 0.04)

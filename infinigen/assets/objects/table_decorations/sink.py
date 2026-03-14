@@ -28,7 +28,7 @@ class SinkFactory(AssetFactory):
     def __init__(
         self, factory_seed, coarse=False, dimensions=[1.0, 1.0, 1.0], upper_height=None
     ):
-        super(SinkFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.dimensions = dimensions
         self.factory_seed = factory_seed

@@ -28,7 +28,7 @@ class BalloonFactory(AssetFactory):
         material_gen=None,
         coarse=False,
     ):
-        super(BalloonFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.thickness = uniform(0.06, 0.1)
 

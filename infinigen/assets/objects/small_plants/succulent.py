@@ -578,7 +578,7 @@ def geometry_succulent_nodes(nw: NodeWrangler, **kwargs):
 
 class SucculentFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(SucculentFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.mode = np.random.choice(["thin_petal", "thick_petal"], p=[0.65, 0.35])
 
     def get_params(self, mode):

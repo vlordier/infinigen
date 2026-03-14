@@ -19,7 +19,7 @@ class LeafFactory(AssetFactory):
     scale = 0.3
 
     def __init__(self, factory_seed, genome: dict = None, coarse=False):
-        super(LeafFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.genome = dict(
             leaf_width=0.5,
             alpha=0.3,

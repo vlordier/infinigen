@@ -27,7 +27,7 @@ from infinigen.core.util.math import FixedSeed, clip_gaussian
 
 class CeilingLightFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, dimensions=[1.0, 1.0, 1.0]):
-        super(CeilingLightFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.dimensions = dimensions
         self.ceiling_light_default_params = [

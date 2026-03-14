@@ -30,7 +30,7 @@ from .pricky_pear import PrickyPearBaseCactusFactory
 
 class CactusFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, factory_method=None):
-        super(CactusFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.factory_methods = [
                 GlobularBaseCactusFactory,
@@ -113,27 +113,27 @@ class CactusFactory(AssetFactory):
 
 class GlobularCactusFactory(CactusFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(GlobularCactusFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, GlobularBaseCactusFactory
         )
 
 
 class ColumnarCactusFactory(CactusFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ColumnarCactusFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, ColumnarBaseCactusFactory
         )
 
 
 class PrickyPearCactusFactory(CactusFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(PrickyPearCactusFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, PrickyPearBaseCactusFactory
         )
 
 
 class KalidiumCactusFactory(CactusFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(KalidiumCactusFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, KalidiumBaseCactusFactory
         )

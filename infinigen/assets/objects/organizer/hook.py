@@ -384,7 +384,7 @@ def spatula_geometry_nodes(nw: NodeWrangler, **kwargs):
 
 class HookBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(HookBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
     def sample_params(self):
@@ -489,7 +489,7 @@ class HookBaseFactory(AssetFactory):
 
 class SpatulaBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(SpatulaBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
     def sample_params(self):
@@ -555,7 +555,7 @@ class SpatulaBaseFactory(AssetFactory):
 
 class SpatulaOnHookBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(SpatulaOnHookBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
         self.hook_fac = HookBaseFactory(factory_seed, params=params)

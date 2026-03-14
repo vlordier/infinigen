@@ -5,7 +5,6 @@
 # Authors: Alexander Raistrick
 
 import logging
-import typing
 from dataclasses import dataclass
 
 from infinigen.core.constraints.example_solver import state_def
@@ -15,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Move:
-    names: typing.List[str]
+    names: list[str]
 
     def __post_init__(self):
         assert isinstance(self.names, list)

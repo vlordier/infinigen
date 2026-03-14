@@ -16,7 +16,7 @@ from infinigen.core.util.math import FixedSeed
 
 class DeformedTreeFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(DeformedTreeFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker_factories = [
             FallenTreeFactory,
             RottenTreeFactory,

@@ -903,7 +903,7 @@ def clean_and_capitalize(input_string):
 
 
 def add_asset_to_file(file_path, asset_name, class_name, import_path):
-    with open(file_path, "r") as file:
+    with open(file_path) as file:
         lines = file.readlines()
 
     mapping = runpy.run_path(file_path)

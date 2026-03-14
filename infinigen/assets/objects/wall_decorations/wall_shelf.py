@@ -68,7 +68,7 @@ class WallShelfFactory(AssetFactory):
     )
 
     def __init__(self, factory_seed, coarse=False):
-        super(WallShelfFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.support_side = rg(self.support_sides_)
         self.support_margin = rg(self.support_margins)
         if self.support_margin == 0:

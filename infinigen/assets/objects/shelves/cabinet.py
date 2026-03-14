@@ -1626,7 +1626,7 @@ def geometry_cabinet_nodes(nw: NodeWrangler, **kwargs):
 
 class CabinetDoorBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(CabinetDoorBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
     def get_asset_params(self, i=0):
@@ -1715,7 +1715,7 @@ class CabinetDoorBaseFactory(AssetFactory):
 
 class CabinetDoorIkeaFactory(CabinetDoorBaseFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(CabinetDoorIkeaFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = {
             "edge_thickness_1": 0.012,
             "edge_thickness_2": 0.008,
@@ -1747,7 +1747,7 @@ class CabinetDoorIkeaFactory(CabinetDoorBaseFactory):
 
 class CabinetBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(CabinetBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.shelf_params = {}
         self.door_params = {}
         self.mat_params = {}

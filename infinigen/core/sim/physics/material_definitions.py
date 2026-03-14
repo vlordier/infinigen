@@ -6,7 +6,6 @@
 # - Max Gonzalez Saez-Diez: primary author
 
 from dataclasses import dataclass
-from typing import Dict, Type
 
 import numpy as np
 
@@ -20,7 +19,7 @@ class BaseMaterial:
     min_density: float = 500  # kg/m³
     max_density: float = 1200  # kg/m³
 
-    def sample_parameters(self) -> Dict[str, float]:
+    def sample_parameters(self) -> dict[str, float]:
         """Sample random parameters within the material's ranges"""
         return {
             "friction": np.random.uniform(self.min_friction, self.max_friction),
@@ -117,7 +116,7 @@ class Rubber(BaseMaterial):
 
 
 # ===================== MATERIAL REGISTRY =====================
-MATERIALS: Dict[str, Type[BaseMaterial]] = {
+MATERIALS: dict[str, type[BaseMaterial]] = {
     "base": BaseMaterial,
     "metal": Metal,
     "wood": Wood,

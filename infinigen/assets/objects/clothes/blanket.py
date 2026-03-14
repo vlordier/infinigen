@@ -19,7 +19,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class BlanketFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BlanketFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.width = log_uniform(0.9, 1.2)
         self.size = self.width * log_uniform(0.4, 0.7)
         self.thickness = log_uniform(0.004, 0.008)
@@ -67,7 +67,7 @@ class ComforterFactory(BlanketFactory):
 
 class BoxComforterFactory(ComforterFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BoxComforterFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.margin = uniform(0.3, 0.4)
 
     def create_asset(self, **params) -> bpy.types.Object:

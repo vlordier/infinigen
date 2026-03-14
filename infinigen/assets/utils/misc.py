@@ -52,11 +52,11 @@ def make_normalized_factory(cls):
     @wraps(cls, updated=())
     class CLS(cls):
         def __init__(self, *args, **kwargs):
-            super(CLS, self).__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)
             update_wrapper(self, *args, **kwargs)
 
         def create_asset(self, **params):
-            obj = super(CLS, self).create_asset(**params)
+            obj = super().create_asset(**params)
             obj.rotation_euler = uniform(-np.pi, np.pi, 3)
             butil.apply_transform(obj)
             origin2lowest(obj)

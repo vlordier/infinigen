@@ -39,7 +39,7 @@ class AquariumTankFactory(AssetFactory):
     ]
 
     def __init__(self, factory_seed, coarse=False):
-        super(AquariumTankFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.is_wet = uniform() < 0.5
             base_factory_fn = np.random.choice(

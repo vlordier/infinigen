@@ -32,7 +32,7 @@ from infinigen.core.util.random import log_uniform
 
 class VeratrumMonocotFactory(MonocotGrowthFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(VeratrumMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(1.0, 1.5)
             self.angle = uniform(np.pi / 4, np.pi / 3)
@@ -116,7 +116,7 @@ class VeratrumBranchMonocotFactory(AssetFactory):
     max_branches = 6
 
     def __init__(self, factory_seed, coarse=False):
-        super(VeratrumBranchMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.branch_factories = [
             VeratrumEarMonocotFactory(self.factory_seed * self.max_branches + i, coarse)
             for i in range(np.random.randint(3, self.max_branches) + 1)
@@ -145,7 +145,7 @@ class VeratrumBranchMonocotFactory(AssetFactory):
 
 class VeratrumEarMonocotFactory(MonocotGrowthFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(VeratrumEarMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.angle = uniform(np.pi / 4, np.pi / 3)
         self.min_y_angle = uniform(np.pi * 0.25, np.pi * 0.3)
         self.max_y_angle = uniform(np.pi * 0.3, np.pi * 0.35)

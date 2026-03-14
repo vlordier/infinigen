@@ -40,7 +40,7 @@ class PillowFactory(AssetFactory):
     )
 
     def __init__(self, factory_seed, coarse=False):
-        super(PillowFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.shape = rg(self.shapes)
         self.width = uniform(0.4, 0.7)
         match self.shape:

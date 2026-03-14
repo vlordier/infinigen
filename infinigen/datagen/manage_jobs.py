@@ -945,7 +945,7 @@ if __name__ == "__main__":
         args.output_folder = Path(f"outputs/{date_str}_{hostname}")
     elif os.environ.get("SLURM_ARRAY_TASK_ID") is not None:
         args.output_folder = Path(
-            (str(args.output_folder) + "_" + str(os.environ["SLURM_ARRAY_TASK_ID"]))
+            str(args.output_folder) + "_" + str(os.environ["SLURM_ARRAY_TASK_ID"])
         )
 
     overwrite_ok = args.use_existing or args.overwrite

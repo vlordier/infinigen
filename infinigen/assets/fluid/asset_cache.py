@@ -56,7 +56,7 @@ class FireCachingSystem:
             config_file = os.path.join(factory_dir, sim_folder, "config.json")
             if not os.path.isfile(config_file):
                 continue
-            with open(config_file, "r") as f:
+            with open(config_file) as f:
                 config = json.load(f)
                 s = config["species"]
                 species.append(s)
@@ -144,7 +144,7 @@ class FireCachingSystem:
                 not os.path.isfile(os.path.join(full_sim_folder, "simulation.blend"))
             ) or (not os.path.isfile(config_file)):
                 continue
-            with open(config_file, "r") as f:
+            with open(config_file) as f:
                 config = json.load(f)
                 s = config["species"]
                 i = config["i"]
@@ -154,7 +154,7 @@ class FireCachingSystem:
 
     def read_config(self, full_sim_folder):
         config_file = os.path.join(full_sim_folder, "config.json")
-        with open(config_file, "r") as f:
+        with open(config_file) as f:
             config = json.load(f)
             return config
 

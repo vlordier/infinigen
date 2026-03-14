@@ -67,7 +67,7 @@ class WindowFactory(AssetFactory):
         curtain=None,
         shutter=None,
     ):
-        super(WindowFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         with FixedSeed(factory_seed):
             self.params = self.sample_parameters()

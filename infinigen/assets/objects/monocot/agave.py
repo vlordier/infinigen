@@ -23,7 +23,7 @@ class AgaveMonocotFactory(MonocotGrowthFactory):
     use_distance = True
 
     def __init__(self, factory_seed, coarse=False):
-        super(AgaveMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(0.0, 0.5)
             self.angle = uniform(np.pi / 9, np.pi / 6)

@@ -124,7 +124,7 @@ class MattressFactory(AssetFactory):
         butil.modify_mesh(obj, "BEVEL", width=self.wrap_distance / 3, segments=2)
         vg = obj.vertex_groups.new(name="pin")
         vg.add(
-            np.nonzero((read_co(obj)[:, -1] < 1e-1 - self.thickness / 2))[0].tolist(),
+            np.nonzero(read_co(obj)[:, -1] < 1e-1 - self.thickness / 2)[0].tolist(),
             1,
             "REPLACE",
         )

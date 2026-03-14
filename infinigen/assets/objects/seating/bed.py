@@ -30,7 +30,7 @@ class BedFactory(bedframe.BedFrameFactory):
     )
 
     def __init__(self, factory_seed, coarse=False):
-        super(BedFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.sheet_type = rg(self.sheet_types)
         self.sheet_folded = uniform() < 0.5
         self.has_cover = uniform() < 0.5

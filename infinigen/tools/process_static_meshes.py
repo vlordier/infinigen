@@ -21,7 +21,7 @@ if __name__ == "__main__":
         / f"frame_{args.point_trajectory_src_frame:04d}"
         / "static_mesh"
     )
-    with open(static_mesh_folder / "saved_mesh.json", "r") as f:
+    with open(static_mesh_folder / "saved_mesh.json") as f:
         static_json = json.load(f)
     for item in static_json:
         if "filename" in item:
@@ -31,7 +31,7 @@ if __name__ == "__main__":
         if not frame_folder.startswith("frame_"):
             continue
         with open(
-            args.target_frames_dir / frame_folder / "mesh/saved_mesh.json", "r"
+            args.target_frames_dir / frame_folder / "mesh/saved_mesh.json"
         ) as f:
             current_json = json.load(f)
         current_json = [*current_json, *static_json]

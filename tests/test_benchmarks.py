@@ -21,14 +21,11 @@ import platform
 import time
 from collections import ChainMap
 from copy import copy
-from ctypes import CDLL, RTLD_LOCAL
 from datetime import timedelta
-from itertools import product
 from pathlib import Path
 
 import numpy as np
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers shared across tests

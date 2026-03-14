@@ -1417,7 +1417,7 @@ def geometry_nodes(nw: NodeWrangler, **kwargs):
 
 class CellShelfBaseFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(CellShelfBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         with FixedSeed(factory_seed):
             self.params = self.sample_params()
             self.params = self.get_asset_params(self.params)

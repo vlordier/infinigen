@@ -302,7 +302,7 @@ def geometry_generate_table_top_wrapper(nw: NodeWrangler, **kwargs):
 
 class TableTopFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TableTopFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         with FixedSeed(factory_seed):
             self.params = self.sample_parameters()

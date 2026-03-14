@@ -178,7 +178,7 @@ class CubeSphericalMesher:
                 np.zeros((6 * (test_L + 1) ** 2 * (test_R + 1), 3), dtype=np.float64)
             )
             self.init_and_get_emptytest_queries(
-                ASDOUBLE(AC((self.cam_pose.reshape(-1).astype(np.float64)))),
+                ASDOUBLE(AC(self.cam_pose.reshape(-1).astype(np.float64))),
                 self.r_min,
                 self.r_max,
                 self.L,

@@ -25,7 +25,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class ShirtFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ShirtFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.width = log_uniform(0.45, 0.55)
         self.size = self.width + uniform(0.25, 0.3)
         self.size_neck = uniform(0.1, 0.15) * self.size

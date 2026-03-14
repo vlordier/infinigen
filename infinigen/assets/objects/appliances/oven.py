@@ -31,7 +31,7 @@ from infinigen.core.util.random import weighted_sample
 @gin.configurable
 class OvenFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, dimensions=[1.0, 1.0, 1.0]):
-        super(OvenFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.dimensions = dimensions
         with FixedSeed(factory_seed):
