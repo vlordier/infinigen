@@ -31,7 +31,7 @@ fruit_names = {
 
 class FruitFactoryCompositional(FruitFactoryGeneralFruit):
     def __init__(self, factory_seed, scale=1.0, coarse=False):
-        super(FruitFactoryCompositional, self).__init__(
+        super().__init__(
             factory_seed, scale=scale, coarse=coarse
         )
 

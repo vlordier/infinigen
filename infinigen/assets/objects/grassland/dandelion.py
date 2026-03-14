@@ -902,7 +902,7 @@ def geometry_dandelion_seed_nodes(nw: NodeWrangler, **kwargs):
 
 class DandelionFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(DandelionFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.flower_mode = [
             "full_flower",
             "no_flower",
@@ -988,7 +988,7 @@ class DandelionFactory(AssetFactory):
 
 class DandelionSeedFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(DandelionSeedFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def create_asset(self, **params):
         bpy.ops.mesh.primitive_plane_add(

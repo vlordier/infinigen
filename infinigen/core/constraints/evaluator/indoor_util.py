@@ -5,7 +5,6 @@
 
 import math
 import random
-from typing import Union
 
 import bpy
 import numpy as np
@@ -97,7 +96,7 @@ def get_transformed_axis(scene, obj_name):
     return rot_mat @ np.array(axis)
 
 
-def set_axis(scene, objs: Union[str, list[str]], canonical_axis):
+def set_axis(scene, objs: str | list[str], canonical_axis):
     if isinstance(objs, str):
         objs = [objs]
     obj_meshes = meshes_from_names(scene, objs)

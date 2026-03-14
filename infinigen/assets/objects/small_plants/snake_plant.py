@@ -369,7 +369,7 @@ def geometry_snake_plant_nodes(nw: NodeWrangler, **kwargs):
 
 class SnakePlantFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(SnakePlantFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def create_asset(self, **params):
         bpy.ops.mesh.primitive_plane_add(

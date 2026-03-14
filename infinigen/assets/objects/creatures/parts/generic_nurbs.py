@@ -84,7 +84,7 @@ class NurbsPart(PartFactory):
         self.temperature = temperature
         self.var = var
         self.exps = exps
-        super(NurbsPart, self).__init__(params)
+        super().__init__(params)
 
     def sample_params(self, select=None):
         if self.prefix is None:

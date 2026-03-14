@@ -22,7 +22,7 @@ from infinigen.core.util.random import weighted_sample
 
 class VaseFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, dimensions=None):
-        super(VaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         if dimensions is None:
             z = uniform(0.17, 0.5)

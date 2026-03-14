@@ -194,7 +194,7 @@ def geometry_node_to_bbox(nw: NodeWrangler):
 
 class KitchenSpaceFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, dimensions=None, island=False):
-        super(KitchenSpaceFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         with FixedSeed(factory_seed):
             if dimensions is None:
@@ -316,7 +316,7 @@ class KitchenSpaceFactory(AssetFactory):
 
 class KitchenIslandFactory(KitchenSpaceFactory):
     def __init__(self, factory_seed):
-        super(KitchenIslandFactory, self).__init__(
+        super().__init__(
             factory_seed=factory_seed,
             island=True,
         )

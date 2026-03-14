@@ -10,8 +10,8 @@ import re
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
 from xml.dom.minidom import parseString
 
 import bmesh
@@ -95,7 +95,7 @@ class MJCFBuilder(SimBuilder):
         blend_obj: bpy.types.Object,
         kinematic_root: KinematicNode,
         sample_joint_params_fn: Callable,
-        metadata: Dict,
+        metadata: dict,
         visual_only: bool = False,
         image_res: int = 512,
     ):
@@ -120,7 +120,7 @@ class MJCFBuilder(SimBuilder):
     def _populate_mjcf(
         self,
         root: RigidBody,
-        joint_nodes: List[KinematicNode] = [],
+        joint_nodes: list[KinematicNode] = [],
         pos_offset: np.array = np.zeros(3),
         visual_only: bool = False,
         image_res: int = 512,
@@ -213,7 +213,7 @@ class MJCFBuilder(SimBuilder):
 
     def _add_mesh(
         self,
-        attribs: List[PathItem],
+        attribs: list[PathItem],
         body: ET.Element,
         visual_only: bool,
         image_res: int,
@@ -429,15 +429,15 @@ class MJCFBuilder(SimBuilder):
 
 def export(
     blend_obj: bpy.types.Object,
-    sim_blueprint: Dict,
+    sim_blueprint: dict,
     seed: int,
     sample_joint_params_fn: Callable,
     export_dir: Path = Path("./sim_exports/mjcf"),
     image_res: int = 512,
     visual_only: bool = True,
     get_raw_output: bool = False,
-    options: Optional[Dict] = None,
-    extra_exclude: Optional[set] = None,
+    options: dict | None = None,
+    extra_exclude: set | None = None,
     **kwargs,
 ):
     """Export function for the MJCF file format."""
@@ -495,7 +495,7 @@ def export(
     return mjcf_path, metadata_path
 
 
-def save(fname: str, export_dir: Path, contents: ET.Element, metadata: Dict) -> None:
+def save(fname: str, export_dir: Path, contents: ET.Element, metadata: dict) -> None:
     """Save the MJCF contents."""
     mjcf_path = export_dir / f"{fname}.xml"
     with open(mjcf_path, "w") as f:

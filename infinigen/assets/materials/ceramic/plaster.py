@@ -3,7 +3,7 @@
 
 # Authors: Lingjie Mei
 
-from typing import Iterable
+from collections.abc import Iterable
 
 from numpy.random import uniform
 

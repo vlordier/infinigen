@@ -11,7 +11,6 @@ import subprocess
 import warnings
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import bpy
 import gin
@@ -962,13 +961,13 @@ def export_sim_ready(
     obj: bpy.types.Object,
     output_folder: Path,
     image_res: int = 1024,
-    translation: Tuple = (0, 0, 0),
-    name: Optional[str] = None,
+    translation: tuple = (0, 0, 0),
+    name: str | None = None,
     visual_only: bool = False,
     collision_only: bool = False,
     separate_asset_dirs: bool = True,
     zaxis: np.array = np.array([0, 0, 1]),
-) -> Dict[str, List[Path]]:
+) -> dict[str, list[Path]]:
     """
     Exports both the visual and collision assets for a geometry.
     """

@@ -372,7 +372,7 @@ def plate_geometry_nodes(nw: NodeWrangler, **kwargs):
 
 class PlateRackBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(PlateRackBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
     def sample_params(self):
@@ -438,7 +438,7 @@ class PlateRackBaseFactory(AssetFactory):
 
 class PlateBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(PlateBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
     def sample_params(self):
@@ -478,7 +478,7 @@ class PlateBaseFactory(AssetFactory):
 
 class PlateOnRackBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(PlateOnRackBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
         self.rack_fac = PlateRackBaseFactory(factory_seed, params=params)

@@ -17,7 +17,7 @@ from infinigen.core.util.math import FixedSeed
 
 class PanelDoorFactory(BaseDoorFactory):
     def __init__(self, factory_seed, coarse=False, constants=None):
-        super(PanelDoorFactory, self).__init__(factory_seed, coarse, constants)
+        super().__init__(factory_seed, coarse, constants)
         with FixedSeed(self.factory_seed):
             self.x_subdivisions = 1 if uniform() < 0.5 else 2
             self.y_subdivisions = np.clip(np.random.binomial(5, 0.45), 1, None)
@@ -82,7 +82,7 @@ class PanelDoorFactory(BaseDoorFactory):
 
 class GlassPanelDoorFactory(PanelDoorFactory):
     def __init__(self, factory_seed, coarse=False, constants=None):
-        super(GlassPanelDoorFactory, self).__init__(factory_seed, coarse, constants)
+        super().__init__(factory_seed, coarse, constants)
         with FixedSeed(self.factory_seed):
             self.x_subdivisions = 2
             self.y_subdivisions = np.clip(np.random.binomial(5, 0.5), 2, None)
@@ -90,7 +90,7 @@ class GlassPanelDoorFactory(PanelDoorFactory):
             self.has_glass = True
 
     def make_panels(self):
-        panels = super(GlassPanelDoorFactory, self).make_panels()
+        panels = super().make_panels()
         if self.merge_glass:
             first_dimension = panels[-self.x_subdivisions]["dimension"]
             last_dimension = panels[-1]["dimension"]

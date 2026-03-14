@@ -18,7 +18,7 @@ class BaseMolluskFactory(AssetFactory):
     distortion = 1
 
     def __init__(self, factory_seed, coarse=False):
-        super(BaseMolluskFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
 
     def create_asset(self, **params) -> bpy.types.Object:
         raise NotImplementedError

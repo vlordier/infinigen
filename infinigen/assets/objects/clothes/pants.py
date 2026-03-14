@@ -25,7 +25,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class PantsFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(PantsFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.width = log_uniform(0.45, 0.55)
         self.size = self.width / 2 + uniform(0, 0.05)
         self.type = np.random.choice(["underwear", "shorts", "pants"])

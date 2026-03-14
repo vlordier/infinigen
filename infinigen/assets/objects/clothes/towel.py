@@ -30,7 +30,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class TowelFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TowelFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.width = log_uniform(0.3, 0.6)
         self.length = self.width * log_uniform(1, 1.5)
         self.thickness = log_uniform(0.003, 0.01)
@@ -126,7 +126,7 @@ class TowelFactory(AssetFactory):
         r = (self.thickness + self.extra_thickness) / (2 * np.pi) * t + np.where(
             z > self.thickness / 2, -self.thickness / 2, self.thickness / 2
         )
-        write_co(obj, np.stack([r * np.cos(t), y, r * np.sin((t))], -1))
+        write_co(obj, np.stack([r * np.cos(t), y, r * np.sin(t)], -1))
 
     def create_asset(self, **params) -> bpy.types.Object:
         obj = new_plane()

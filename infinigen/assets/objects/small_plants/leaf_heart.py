@@ -17,7 +17,7 @@ class LeafHeartFactory(AssetFactory):
     scale = 0.2
 
     def __init__(self, factory_seed, genome: dict = None, coarse=False):
-        super(LeafHeartFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.genome = dict(leaf_width=1.0, use_wave=True, z_scaling=0, width_rand=0.1)
         if genome:
             for k, g in genome.items():

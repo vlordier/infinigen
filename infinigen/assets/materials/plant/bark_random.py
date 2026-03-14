@@ -5,7 +5,6 @@
 
 
 # Code generated using version 2.1.0 of the node_transpiler
-from typing import Tuple
 
 import numpy as np
 
@@ -654,7 +653,7 @@ def nodegroup_apply_geo_matv2(nw):
     )
 
 
-def shader_random_bark_mat(nw, base_color_hsv: Tuple, geo_params, selection=None):
+def shader_random_bark_mat(nw, base_color_hsv: tuple, geo_params, selection=None):
     multiply = nw.new_node(
         Nodes.Math,
         input_kwargs={0: geo_params["Noise Texture Scale"], 1: 4.0},

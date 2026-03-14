@@ -37,7 +37,7 @@ class CloudFactory(AssetFactory):
         steps=128,
         cloudy=("bool", 0.01),
     ):
-        super(CloudFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.max_distance = max_distance
 
@@ -222,7 +222,7 @@ class CumulonimbusFactory(CloudFactory):
         steps=128,
     ):
         self.cloud_types = [Cumulonimbus]
-        super(CumulonimbusFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, max_distance, steps
         )
         self.cloud_types = [Cumulonimbus]
@@ -237,7 +237,7 @@ class CumulusFactory(CloudFactory):
         steps=128,
     ):
         self.cloud_types = [Cumulus]
-        super(CumulusFactory, self).__init__(factory_seed, coarse, max_distance, steps)
+        super().__init__(factory_seed, coarse, max_distance, steps)
         self.cloud_types = [Cumulus]
 
 
@@ -250,7 +250,7 @@ class StratocumulusFactory(CloudFactory):
         steps=128,
     ):
         self.cloud_types = [Stratocumulus]
-        super(StratocumulusFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, max_distance, steps
         )
         self.cloud_types = [Stratocumulus]
@@ -265,7 +265,7 @@ class AltocumulusFactory(CloudFactory):
         steps=128,
     ):
         self.cloud_types = [Altocumulus]
-        super(AltocumulusFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, max_distance, steps
         )
         self.cloud_types = [Altocumulus]

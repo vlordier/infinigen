@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 from enum import Enum
-from typing import List, Optional
 
 
 class KinematicType(Enum):
@@ -42,8 +41,8 @@ class KinematicNode:
     def __init__(
         self,
         kinematic_type: KinematicType,
-        joint_type: Optional[JointType] = None,
-        idn: Optional[str] = None,
+        joint_type: JointType | None = None,
+        idn: str | None = None,
     ) -> None:
         """
         Initializes a KinematicNode instance given the type.
@@ -83,14 +82,14 @@ class KinematicNode:
         """
         self.idn = idn
 
-    def add_child(self, attr_value: int, node: "KinematicNode") -> None:
+    def add_child(self, attr_value: int, node: KinematicNode) -> None:
         """
         Adds a child to the node. The key is equal to the value of the named
         attribute on the path from the current node to the child node.
         """
         self.children[attr_value] = node
 
-    def get_all_children(self) -> List["KinematicNode"]:
+    def get_all_children(self) -> list[KinematicNode]:
         """
         Retruns a list of all the node's chidren.
         """
@@ -126,7 +125,7 @@ class KinematicNode:
 def kinematic_node_factory(
     kinematic_type: KinematicType,
     joint_type: JointType = JointType.NONE,
-    idn: Optional[str] = None,
+    idn: str | None = None,
 ) -> KinematicNode:
     """
     Creates a node with the given kinematic type and optional joint type.

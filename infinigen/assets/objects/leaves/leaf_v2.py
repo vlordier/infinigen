@@ -1575,7 +1575,7 @@ class LeafFactoryV2(AssetFactory):
     scale = 0.5
 
     def __init__(self, factory_seed, coarse=False):
-        super(LeafFactoryV2, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         with FixedSeed(factory_seed):
             self.genome = self.sample_geo_genome()

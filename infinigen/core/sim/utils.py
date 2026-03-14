@@ -9,7 +9,7 @@
 import inspect
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import bpy
 
@@ -90,8 +90,8 @@ def is_switch(node: bpy.types.Node) -> bool:
 def inject_store_named_attr(
     link: bpy.types.NodeLink,
     data_type: str = "INT",
-    default_name: Optional[str] = None,
-    default_value: Optional[Any] = None,
+    default_name: str | None = None,
+    default_value: Any | None = None,
 ):
     """
     Injects a store named attribute node of type integer between

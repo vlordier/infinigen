@@ -44,7 +44,7 @@ from .tube import TubeBaseCoralFactory
 
 class CoralFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, factory_method=None):
-        super(CoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.factory_methods = [
                 DiffGrowthBaseCoralFactory,
@@ -183,74 +183,74 @@ class CoralFactory(AssetFactory):
 
 class LeatherCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(LeatherCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, LeatherBaseCoralFactory
         )
 
 
 class TableCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TableCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, TableBaseCoralFactory
         )
 
 
 class CauliflowerCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(CauliflowerCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, CauliflowerBaseCoralFactory
         )
 
 
 class BrainCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BrainCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, BrainBaseCoralFactory
         )
 
 
 class HoneycombCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(HoneycombCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, HoneycombBaseCoralFactory
         )
 
 
 class BushCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BushCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, BushBaseCoralFactory
         )
 
 
 class TwigCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TwigCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, TwigBaseCoralFactory
         )
 
 
 class TubeCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TubeCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, TubeBaseCoralFactory
         )
 
 
 class FanCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(FanCoralFactory, self).__init__(factory_seed, coarse, FanBaseCoralFactory)
+        super().__init__(factory_seed, coarse, FanBaseCoralFactory)
 
 
 class ElkhornCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ElkhornCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, ElkhornBaseCoralFactory
         )
 
 
 class StarCoralFactory(CoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(StarCoralFactory, self).__init__(
+        super().__init__(
             factory_seed, coarse, StarBaseCoralFactory
         )

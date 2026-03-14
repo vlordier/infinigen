@@ -9,8 +9,8 @@ import itertools
 import json
 import logging
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
 
 import bpy
 import coacd
@@ -72,10 +72,10 @@ class USDBuilder(SimBuilder):
         blend_obj: bpy.types.Object,
         kinematic_root: KinematicNode,
         sample_joint_params_fn: Callable,
-        metadata: Dict,
+        metadata: dict,
         visual_only: bool = False,
         image_res: int = 512,
-        extra_exclude: Optional[set] = None,
+        extra_exclude: set | None = None,
     ):
         super().build(blend_obj, metadata)
 
@@ -146,9 +146,9 @@ class USDBuilder(SimBuilder):
     def _add_joints(
         self,
         root: RigidBody,
-        body_info: Dict,
+        body_info: dict,
         sample_joint_params_fn: Callable,
-        extra_exclude: Optional[set] = None,
+        extra_exclude: set | None = None,
     ):
         """Populates the USD with its joints."""
 
@@ -303,7 +303,7 @@ class USDBuilder(SimBuilder):
         return xform
 
     def _add_mesh(
-        self, attribs: List[PathItem], usd_path: str, visual_only: bool, image_res: int
+        self, attribs: list[PathItem], usd_path: str, visual_only: bool, image_res: int
     ):
         """Adds an asset along with its materials to the USD and returns the asset."""
         mesh_vert, mesh_face, mesh_facenum, labels, asset = self._get_geometry_info(
@@ -593,7 +593,7 @@ class USDBuilder(SimBuilder):
 
 def export(
     blend_obj: bpy.types.Object,
-    sim_blueprint: Dict,
+    sim_blueprint: dict,
     seed: int,
     sample_joint_params_fn: Callable,
     export_dir: Path = Path("./sim_exports/usd"),
@@ -601,7 +601,7 @@ def export(
     visual_only: bool = True,
     file_extension: str = "usda",
     get_raw_output: bool = False,
-    extra_exclude: Optional[set] = None,
+    extra_exclude: set | None = None,
     **kwargs,
 ):
     """Export function for the USD file format."""

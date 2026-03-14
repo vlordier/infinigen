@@ -27,7 +27,7 @@ class DiffGrowthBaseCoralFactory(BaseCoralFactory):
     default_scale = [1] * 3
 
     def __init__(self, factory_seed, coarse=False):
-        super(DiffGrowthBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.makers = [self.leather_make, self.flat_make]
         self.weights = [0.7, 0.3]
         with FixedSeed(self.factory_seed):
@@ -133,11 +133,11 @@ class DiffGrowthBaseCoralFactory(BaseCoralFactory):
 
 class LeatherBaseCoralFactory(DiffGrowthBaseCoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(LeatherBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.leather_make
 
 
 class TableBaseCoralFactory(DiffGrowthBaseCoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TableBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.flat_make

@@ -35,7 +35,7 @@ class StarBaseCoralFactory(BaseCoralFactory):
         return points
 
     def __init__(self, factory_seed, coarse=False):
-        super(StarBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.points_fn = StarBaseCoralFactory.points_fn
 
     @staticmethod

@@ -568,7 +568,7 @@ class LeafFactoryPine(AssetFactory):
     scale = 0.7
 
     def __init__(self, factory_seed, season="autumn", coarse=False):
-        super(LeafFactoryPine, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.needle = make_needle("Needle")
         self.needle.hide_viewport = True
         self.needle.hide_render = True

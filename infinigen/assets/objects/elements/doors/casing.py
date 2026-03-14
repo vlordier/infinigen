@@ -22,7 +22,7 @@ from infinigen.core.util.math import FixedSeed
 
 class DoorCasingFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, constants=None):
-        super(DoorCasingFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             if constants is None:
                 constants = RoomConstants()

@@ -132,13 +132,13 @@ def assets_to_data(
         preset_name == LandTile.MultiMountains
         and (folder / f"{AssetFile.Params}.txt").exists()
     ):
-        with open(folder / f"{AssetFile.Params}.txt", "r") as file:
+        with open(folder / f"{AssetFile.Params}.txt") as file:
             params = json.load(file)
             assert params == multi_mountains_params(
                 raw=1
             ), "asset should not be reused if you changed settings"
     if preset_name == LandTile.Coast and (folder / f"{AssetFile.Params}.txt").exists():
-        with open(folder / f"{AssetFile.Params}.txt", "r") as file:
+        with open(folder / f"{AssetFile.Params}.txt") as file:
             params = json.load(file)
             assert params == {
                 "multi_mountains_params": multi_mountains_params(raw=1),

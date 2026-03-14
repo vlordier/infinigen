@@ -219,7 +219,7 @@ def geo_face_colors(nw: NodeWrangler, **kwargs):
 
 class NumLeafGrassFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(NumLeafGrassFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.leaf_num = [2, 3, 4]
         self.leaf_model = [LeafFactory, LeafHeartFactory]
 

@@ -26,7 +26,7 @@ class ReactionDiffusionBaseCoralFactory(BaseCoralFactory):
     noise_strength = 0.01
 
     def __init__(self, factory_seed, coarse=False):
-        super(ReactionDiffusionBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.makers = [self.brain_make, self.honeycomb_make]
         self.weights = [0.5, 0.5]
         with FixedSeed(self.factory_seed):
@@ -86,11 +86,11 @@ class ReactionDiffusionBaseCoralFactory(BaseCoralFactory):
 
 class BrainBaseCoralFactory(ReactionDiffusionBaseCoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BrainBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.brain_make
 
 
 class HoneycombBaseCoralFactory(ReactionDiffusionBaseCoralFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(HoneycombBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.honeycomb_make

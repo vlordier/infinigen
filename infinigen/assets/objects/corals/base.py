@@ -18,7 +18,7 @@ class BaseCoralFactory(AssetFactory):
     density = 500
 
     def __init__(self, factory_seed, coarse=False):
-        super(BaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.points_fn = lambda nw, points: points
 
     def create_asset(self, **params) -> bpy.types.Object:

@@ -7,7 +7,6 @@
 
 import logging
 from collections import defaultdict
-from typing import Dict, List
 
 import bpy
 
@@ -77,8 +76,8 @@ def set_duplicate_id(duplicate_idn: str, duplicate_node: bpy.types.Node) -> None
 
 
 def get_geometry_graph(
-    mods: List[bpy.types.NodesModifier],
-) -> Dict[bpy.types.Node, List]:
+    mods: list[bpy.types.NodesModifier],
+) -> dict[bpy.types.Node, list]:
     """
     Constructs a mapping between nodes and their children connected
     through exclusively GEOMETRY sockets
@@ -158,7 +157,7 @@ def add_kinematic_node_as_child(node, child, idx):
         node.add_child(idx, child)
 
 
-def compile(obj: bpy.types.Object) -> Dict:
+def compile(obj: bpy.types.Object) -> dict:
     """
     Compiles the Blender geometry nodes graph for the given object
     """

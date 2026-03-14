@@ -680,7 +680,7 @@ if __name__ == "__main__":
         bird = Bird()
         bird.apply(objs)
         fn_blend = os.path.join(os.path.abspath(os.curdir), "dev_scene_eagle.blend")
-        fn = os.path.join(os.path.abspath(os.curdir), "test_bird%d.jpg" % (i))
+        fn = os.path.join(os.path.abspath(os.curdir), f"test_bird{i:d}.jpg")
         bpy.ops.wm.save_as_mainfile(filepath=fn_blend)
         bpy.context.scene.render.filepath = fn
         bpy.context.scene.render.image_settings.file_format = "JPEG"

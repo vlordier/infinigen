@@ -901,7 +901,7 @@ def geo_flower(nw, petal_material, center_material):
 
 class TreeFlowerFactory(AssetFactory):
     def __init__(self, factory_seed, rad=uniform(0.15, 0.25), diversity_fac=0.25):
-        super(TreeFlowerFactory, self).__init__(factory_seed=factory_seed)
+        super().__init__(factory_seed=factory_seed)
 
         self.rad = rad
         self.diversity_fac = diversity_fac

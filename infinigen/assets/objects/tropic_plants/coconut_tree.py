@@ -1852,7 +1852,7 @@ def geometry_coconut_tree_nodes(nw: NodeWrangler, **kwargs):
 
 class CoconutTreeFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(CoconutTreeFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def create_asset(self, params={}, **kwargs):
         bpy.ops.mesh.primitive_plane_add(

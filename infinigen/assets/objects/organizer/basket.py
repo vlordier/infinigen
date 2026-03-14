@@ -446,7 +446,7 @@ def geometry_nodes(nw: NodeWrangler, **kwargs):
 
 class BasketBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(BasketBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = params
 
     def sample_params(self):

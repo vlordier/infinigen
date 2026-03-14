@@ -51,7 +51,7 @@ def merge_images(
         font = ImageFont.truetype(
             "/System/Library/Fonts/Supplemental/Arial Black.ttf", font_size
         )
-    except IOError:
+    except OSError:
         # If the specific font file is not found, load the default font
         print("Font not found, using default font.")
         font = ImageFont.load_default()
@@ -109,7 +109,7 @@ def merge_images2(
         font = ImageFont.truetype(
             "/System/Library/Fonts/Supplemental/Arial.ttf", font_size
         )
-    except IOError:
+    except OSError:
         # If the specific font file is not found, load the default font
         print("Font not found, using default font.")
         font = ImageFont.load_default()

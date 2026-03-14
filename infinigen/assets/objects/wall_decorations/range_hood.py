@@ -21,7 +21,7 @@ from infinigen.core.util.random import weighted_sample
 
 class RangeHoodFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, dimensions=None):
-        super(RangeHoodFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.dimensions = dimensions
 

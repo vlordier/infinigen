@@ -47,7 +47,7 @@ def generate_string(max_len=10000):
     for steps in range(1000):
         symbols = list(chain(*map(expand, symbols)))
         assert all([isinstance(e, str) for e in symbols])
-        if not any((s in PCFG for s in symbols)) and len(symbols) < max_len:
+        if not any(s in PCFG for s in symbols) and len(symbols) < max_len:
             symbols = [STARTING_SYMBOL]
 
         if len(symbols) >= max_len:

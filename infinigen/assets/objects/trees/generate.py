@@ -68,7 +68,7 @@ class GenericTreeFactory(AssetFactory):
         min_dist=None,
         coarse=False,
     ):
-        super(GenericTreeFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.genome = genome
         self.child_col = child_col
@@ -449,7 +449,7 @@ class TreeFactory(GenericTreeFactory):
             else:
                 fruit_type = None
 
-        super(TreeFactory, self).__init__(
+        super().__init__(
             seed,
             tree_params,
             child_col=None,
@@ -515,7 +515,7 @@ class BushFactory(GenericTreeFactory):
                 shrub_shape=shrub_shape
             )
 
-        super(BushFactory, self).__init__(
+        super().__init__(
             seed,
             tree_params,
             child_col=None,

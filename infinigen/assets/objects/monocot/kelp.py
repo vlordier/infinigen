@@ -27,7 +27,7 @@ class KelpMonocotFactory(MonocotGrowthFactory):
     align_angle = uniform(np.pi / 24, np.pi / 12)
 
     def __init__(self, factory_seed, coarse=False):
-        super(KelpMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = 10.0
             self.angle = uniform(np.pi / 6, np.pi / 4)

@@ -7,7 +7,6 @@
 
 import json
 import logging
-from typing import Union
 
 import bpy
 import numpy as np
@@ -43,7 +42,7 @@ class AutoTag:
             json.dump(self.tag_dict, f)
 
     def load_tag(self, path="./MaskTag.json"):
-        with open(path, "r") as f:
+        with open(path) as f:
             self.tag_dict = json.load(f)
 
     def _extract_incoming_tagmasks(self, obj):
@@ -346,7 +345,7 @@ def union_object_tags(obj):
     return {try_convert(x) for x in res}
 
 
-def tagged_face_mask(obj: bpy.types.Object, tags: Union[t.Subpart]) -> np.ndarray:
+def tagged_face_mask(obj: bpy.types.Object, tags: t.Subpart) -> np.ndarray:
     # ASSUMES: object is triangulated, no quads/polygons
 
     tags = t.to_tag_set(tags)

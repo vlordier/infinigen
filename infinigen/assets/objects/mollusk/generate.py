@@ -39,7 +39,7 @@ from .snail import (
 
 class MolluskFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False, factory_method=None):
-        super(MolluskFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.factory_methods = [SnailBaseFactory, ShellBaseFactory]
             weights = np.array([1] * len(self.factory_methods))
@@ -146,34 +146,34 @@ class MolluskFactory(AssetFactory):
 
 class ScallopFactory(MolluskFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ScallopFactory, self).__init__(factory_seed, coarse, ScallopBaseFactory)
+        super().__init__(factory_seed, coarse, ScallopBaseFactory)
 
 
 class ClamFactory(MolluskFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ClamFactory, self).__init__(factory_seed, coarse, ClamBaseFactory)
+        super().__init__(factory_seed, coarse, ClamBaseFactory)
 
 
 class MusselFactory(MolluskFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(MusselFactory, self).__init__(factory_seed, coarse, MusselBaseFactory)
+        super().__init__(factory_seed, coarse, MusselBaseFactory)
 
 
 class ConchFactory(MolluskFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ConchFactory, self).__init__(factory_seed, coarse, ConchBaseFactory)
+        super().__init__(factory_seed, coarse, ConchBaseFactory)
 
 
 class AugerFactory(MolluskFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(AugerFactory, self).__init__(factory_seed, coarse, AugerBaseFactory)
+        super().__init__(factory_seed, coarse, AugerBaseFactory)
 
 
 class VoluteFactory(MolluskFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(VoluteFactory, self).__init__(factory_seed, coarse, VoluteBaseFactory)
+        super().__init__(factory_seed, coarse, VoluteBaseFactory)
 
 
 class NautilusFactory(MolluskFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(NautilusFactory, self).__init__(factory_seed, coarse, NautilusBaseFactory)
+        super().__init__(factory_seed, coarse, NautilusBaseFactory)

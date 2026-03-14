@@ -26,7 +26,7 @@ from infinigen.core.util.random import log_uniform
 
 class BookFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BookFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.rel_scale = log_uniform(1, 1.5)
         self.skewness = log_uniform(1.3, 1.8)
         self.unit = 0.0127
@@ -147,7 +147,7 @@ class BookFactory(AssetFactory):
 
 class BookColumnFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BookColumnFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.base_factories = [
                 BookFactory(np.random.randint(1e5))
@@ -217,7 +217,7 @@ def rotate(theta, x, y):
 
 class BookStackFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BookStackFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.base_factories = [
                 BookFactory(np.random.randint(1e5))

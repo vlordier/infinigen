@@ -5,7 +5,7 @@
 # Authors: Lingjie Mei
 
 
-from typing import Iterable
+from collections.abc import Iterable
 
 import bpy
 import numpy as np

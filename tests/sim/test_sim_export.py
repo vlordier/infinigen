@@ -77,7 +77,7 @@ def pytest_generate_tests(metafunc):
 class TestSimExports:
     def test_sim_export(self, tmp_path, asset_name, seed, exporter, cached_assets):
         filepath = Path(__file__).parent.resolve() / "skipped_tests.json"
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             skipped_tests = json.load(f)
 
         obj = butil.deep_clone_obj(

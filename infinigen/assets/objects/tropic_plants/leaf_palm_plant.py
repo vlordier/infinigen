@@ -798,7 +798,7 @@ def geometry_plant_nodes(nw: NodeWrangler, **kwargs):
 
 class LeafPalmPlantFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(LeafPalmPlantFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def get_h_wave_contour(self, mode):
         if mode == "flat":

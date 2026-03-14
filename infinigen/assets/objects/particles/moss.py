@@ -20,7 +20,7 @@ from infinigen.core.util.color import hsv2rgba
 
 class MossFactory(AssetFactory):
     def __init__(self, factory_seed):
-        super(MossFactory, self).__init__(factory_seed)
+        super().__init__(factory_seed)
         self.max_polygon = 1e4
         self.base_hue = U(0.2, 0.24)
 

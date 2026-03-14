@@ -21,7 +21,7 @@ from infinigen.core.util import blender as butil
 class FluidFactory(AssetFactory):
     # should fix the fluid type problem shouldnt specify here
     def __init__(self, factory_seed, terrain=None, fluid_type=None):
-        super(FluidFactory, self).__init__(factory_seed)
+        super().__init__(factory_seed)
         if factory_seed % 2:
             self.fluid_type = "water"
         else:
@@ -157,7 +157,7 @@ class FluidFactory(AssetFactory):
 class FlipFluidFactory(AssetFactory):
     # should fix the fluid type problem shouldnt specify here
     def __init__(self, factory_seed, terrain=None):
-        super(FlipFluidFactory, self).__init__(factory_seed)
+        super().__init__(factory_seed)
         self.factory_seed = factory_seed
 
         self.terrain = terrain

@@ -15,7 +15,7 @@ from infinigen.core.util.random import log_uniform
 
 class TussockMonocotFactory(MonocotGrowthFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(TussockMonocotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.stem_offset = uniform(0.0, 0.2)
             self.angle = uniform(np.pi / 20, np.pi / 18)

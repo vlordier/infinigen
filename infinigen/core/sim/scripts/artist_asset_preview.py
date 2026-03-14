@@ -5,7 +5,7 @@
 # Authors:
 # - Abhishek Joshi: primary author
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import bpy
 import mathutils
@@ -168,8 +168,8 @@ def deep_clone_obj(obj, keep_modifiers=False, keep_materials=False):
 def inject_store_named_attr(
     link: bpy.types.NodeLink,
     data_type: str = "INT",
-    default_name: Optional[str] = None,
-    default_value: Optional[Any] = None,
+    default_name: str | None = None,
+    default_value: Any | None = None,
 ):
     """
     Injects a store named attribute node of type integer between
@@ -268,7 +268,7 @@ def extract_vertex_mask(
     return res
 
 
-def get_mesh_geometry(obj: bpy.types.Object, attrs: Dict) -> bpy.types.Object:
+def get_mesh_geometry(obj: bpy.types.Object, attrs: dict) -> bpy.types.Object:
     """
     Returns the mesh geometry corresponding to the given attributes.
     """

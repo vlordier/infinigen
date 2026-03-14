@@ -1169,7 +1169,7 @@ def geometry_door_nodes(nw: NodeWrangler, **kwargs):
 
 class CabinetDoorBaseFactory(AssetFactory):
     def __init__(self, factory_seed, params={}, coarse=False):
-        super(CabinetDoorBaseFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.params = {}
 
     def get_asset_params(self, i=0):

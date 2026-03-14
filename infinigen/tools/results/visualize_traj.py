@@ -77,7 +77,7 @@ class ColorMap2d:
         return output
 
 
-class Summ_writer(object):
+class Summ_writer:
     def __init__(
         self,
         writer=None,

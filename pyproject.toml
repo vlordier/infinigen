@@ -70,6 +70,7 @@ dev = [
     "pytest-xdist",
     "pytest-timeout",
     "ruff<0.9.0",
+    "pyupgrade",
     "ty",
     "isort",
     "tabulate",
@@ -172,6 +173,7 @@ select = [
     "E",
     "I",
     "F",
+    "UP",   # pyupgrade: enforce Python 3.11+ syntax
     "S102", # no exec(),
     "TID252", # relative imports only allowed for siblings
 

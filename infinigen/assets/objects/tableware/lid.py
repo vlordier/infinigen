@@ -19,7 +19,7 @@ from infinigen.core.util.random import weighted_sample
 
 class LidFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(LidFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.x_length = uniform(0.08, 0.15)
             self.z_height = self.x_length * uniform(0, 0.5)

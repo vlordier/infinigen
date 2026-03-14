@@ -16,7 +16,7 @@ from .straight import StraightStaircaseFactory
 
 class LShapedStaircaseFactory(StraightStaircaseFactory):
     def __init__(self, factory_seed, coarse=False, constants=None):
-        super(LShapedStaircaseFactory, self).__init__(factory_seed, coarse, constants)
+        super().__init__(factory_seed, coarse, constants)
         with FixedSeed(self.factory_seed):
             self.m = int(self.n * uniform(0.4, 0.6))
             self.is_rail_circular = True
@@ -93,7 +93,7 @@ class LShapedStaircaseFactory(StraightStaircaseFactory):
         return np.concatenate([cos[indices], np.stack(mid_cos), cos[indices_]], 0)
 
     def make_steps(self):
-        objs = super(LShapedStaircaseFactory, self).make_steps()
+        objs = super().make_steps()
         for obj in objs[self.m :]:
             obj.rotation_euler[-1] = np.pi / 2
             obj.location = self.m * self.step_length, self.m * self.step_length, 0
@@ -112,7 +112,7 @@ class LShapedStaircaseFactory(StraightStaircaseFactory):
         return objs + [platform]
 
     def make_treads(self):
-        objs = super(LShapedStaircaseFactory, self).make_treads()
+        objs = super().make_treads()
         for obj in objs[self.m :]:
             obj.rotation_euler[-1] = np.pi / 2
             obj.location = self.m * self.step_length, self.m * self.step_length, 0
@@ -126,7 +126,7 @@ class LShapedStaircaseFactory(StraightStaircaseFactory):
         return objs + [platform]
 
     def make_inner_sides(self):
-        objs = super(LShapedStaircaseFactory, self).make_inner_sides()
+        objs = super().make_inner_sides()
         for obj in objs[self.m :]:
             obj.rotation_euler[-1] = np.pi / 2
             obj.location = self.m * self.step_length, self.m * self.step_length, 0

@@ -30,7 +30,7 @@ class CurvedStaircaseFactory(StraightStaircaseFactory):
 
     def __init__(self, factory_seed, coarse=False, constants=None):
         self.full_angle, self.radius, self.theta = 0, 0, 0
-        super(CurvedStaircaseFactory, self).__init__(factory_seed, coarse, constants)
+        super().__init__(factory_seed, coarse, constants)
         with FixedSeed(self.factory_seed):
             self.has_spiral = True
 

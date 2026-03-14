@@ -30,7 +30,7 @@ class LampFactory(AssetFactory):
         dimensions=[1.0, 1.0, 1.0],
         lamp_type="FloorLamp",
     ):
-        super(LampFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
         self.bulb_fac = PointLampFactory(factory_seed)
         self.bulb_fac.params["Temperature"] = max(

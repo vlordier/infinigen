@@ -9,8 +9,8 @@ import json
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
 from xml.dom.minidom import parseString
 
 import bmesh
@@ -83,7 +83,7 @@ class URDFBuilder(SimBuilder):
         blend_obj: bpy.types.Object,
         kinematic_root: KinematicNode,
         sample_joint_params_fn: Callable,
-        metadata: Dict,
+        metadata: dict,
         visual_only: bool = False,
         image_res: int = 512,
     ):
@@ -105,9 +105,9 @@ class URDFBuilder(SimBuilder):
     def _populate_links(
         self,
         root: RigidBody,
-        joint_params: Dict,
+        joint_params: dict,
         parent_link: str = "world",
-        joint_nodes: List[KinematicNode] = [],
+        joint_nodes: list[KinematicNode] = [],
         pos_offset: np.array = np.zeros(3),
         parent_abs_pos: np.array = np.zeros(3),
         visual_only: bool = False,
@@ -295,9 +295,9 @@ class URDFBuilder(SimBuilder):
         child_link: str,
         damping: float = 0.0,
         friction: float = 0.0,
-        min_range: Optional[float] = -np.pi,
-        max_range: Optional[float] = np.pi,
-        axis: Optional[np.ndarray] = None,
+        min_range: float | None = -np.pi,
+        max_range: float | None = np.pi,
+        axis: np.ndarray | None = None,
     ):
         if joint_type == JointType.HINGE:
             jt = "revolute"
@@ -336,7 +336,7 @@ class URDFBuilder(SimBuilder):
         self.urdf.append(joint)
         return joint
 
-    def _get_mesh(self, attribs: List[PathItem], visual_only: bool, image_res: int):
+    def _get_mesh(self, attribs: list[PathItem], visual_only: bool, image_res: int):
         attribs = exputils.attribs_to_tuples(attribs)
         extra_attribs = [("axis_group", 0)]
         mesh = exputils.get_geometry_given_attribs(
@@ -375,7 +375,7 @@ class URDFBuilder(SimBuilder):
 
 def export(
     blend_obj: bpy.types.Object,
-    sim_blueprint: Dict,
+    sim_blueprint: dict,
     seed: int,
     sample_joint_params_fn: Callable,
     export_dir: Path = Path("./sim_exports/urdf"),
@@ -425,7 +425,7 @@ def export(
     return urdf_path, metadata_path
 
 
-def save(fname: str, export_dir: Path, contents: ET.Element, metadata: Dict) -> None:
+def save(fname: str, export_dir: Path, contents: ET.Element, metadata: dict) -> None:
     """Save the URDF contents."""
     urdf_path = export_dir / f"{fname}.urdf"
     with open(urdf_path, "w") as f:

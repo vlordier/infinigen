@@ -17,7 +17,7 @@ from infinigen.core.util import blender as butil
 
 class GrassTuftFactory(AssetFactory):
     def __init__(self, seed):
-        super(GrassTuftFactory, self).__init__(seed)
+        super().__init__(seed)
 
         self.n_seg = 4
         self.length_mean = uniform(0.05, 0.15)

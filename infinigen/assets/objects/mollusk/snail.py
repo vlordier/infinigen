@@ -23,7 +23,7 @@ class SnailBaseFactory(BaseMolluskFactory):
     freq = 256
 
     def __init__(self, factory_seed, coarse=False):
-        super(SnailBaseFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.makers = [
                 self.volute_make,
@@ -215,23 +215,23 @@ class SnailBaseFactory(BaseMolluskFactory):
 
 class VoluteBaseFactory(SnailBaseFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(VoluteBaseFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.volute_make
 
 
 class NautilusBaseFactory(SnailBaseFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(NautilusBaseFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.nautilus_make
 
 
 class ConchBaseFactory(SnailBaseFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(ConchBaseFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.conch_make
 
 
 class AugerBaseFactory(SnailBaseFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(AugerBaseFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.maker = self.auger_make

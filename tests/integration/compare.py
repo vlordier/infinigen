@@ -170,7 +170,7 @@ def format_stats(d):
 
 def parse_run_df(run_path: Path):
     runs = {
-        "_".join((x.name.split("_")[2:])): x for x in run_path.iterdir() if x.is_dir()
+        "_".join(x.name.split("_")[2:]): x for x in run_path.iterdir() if x.is_dir()
     }
     for k, v in runs.items():
         print(k, v)

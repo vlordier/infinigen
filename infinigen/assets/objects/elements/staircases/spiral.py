@@ -23,7 +23,7 @@ class SpiralStaircaseFactory(CurvedStaircaseFactory):
     support_types = "column"
 
     def __init__(self, factory_seed, coarse=False, constants=None):
-        super(SpiralStaircaseFactory, self).__init__(factory_seed, coarse, constants)
+        super().__init__(factory_seed, coarse, constants)
         with FixedSeed(self.factory_seed):
             self.column_radius = self.radius - self.step_width + uniform(0.05, 0.08)
             self.has_column = True

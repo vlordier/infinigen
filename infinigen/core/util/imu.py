@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 def solve_cubic(c0, c1, c2, c3):
-    ZERO = float(-1.0e-10)
-    ONE = float(1.000001)
+    ZERO = -1.0e-10
+    ONE = 1.000001
 
     roots = np.roots([c3, c2, c1, c0])
     return [
@@ -168,7 +168,7 @@ def data_from_keyframes(keyframe_points, frame_start, frame_end, for_acceleratio
                 roots = bezier_zeros(i_to_f(j), cx[0], cx[1], cx[2], cx[3])
                 if len(roots) == 0:
                     raise Exception(
-                        "Bezier interpolation failed at frame {}".format(i_to_f(j))
+                        f"Bezier interpolation failed at frame {i_to_f(j)}"
                     )
                 data[j] = (
                     a_of_bezier(roots[0], cx, cy)
@@ -179,9 +179,7 @@ def data_from_keyframes(keyframe_points, frame_start, frame_end, for_acceleratio
 
         else:
             raise Exception(
-                "Keyframe interpolation mode {} not a supported mode: constant, linear, bezier".format(
-                    keyframe_points[i].interpolation
-                )
+                f"Keyframe interpolation mode {keyframe_points[i].interpolation} not a supported mode: constant, linear, bezier"
             )
 
     return data, locs
@@ -237,9 +235,9 @@ def get_imu_tum_data(object, start, end):
                 rvz, rz = data_from_keyframes(curve.keyframe_points, start, end, False)
 
         else:
-            raise Exception("Unsupported action fcurve: {}".format(curve.data_path))
+            raise Exception(f"Unsupported action fcurve: {curve.data_path}")
 
-    SMALL = float(1e-4)
+    SMALL = 1e-4
 
     # check data accuracy
     for i in range(length):
@@ -247,44 +245,32 @@ def get_imu_tum_data(object, start, end):
         if x is not None:
             if abs(x[i] - object.location[0]) > SMALL:
                 raise Exception(
-                    "Bezier interpolation innacurate at frame {} for x translation {} vs {}".format(
-                        i, x[i], object.location[0]
-                    )
+                    f"Bezier interpolation innacurate at frame {i} for x translation {x[i]} vs {object.location[0]}"
                 )
         if y is not None:
             if abs(y[i] - object.location[1]) > SMALL:
                 raise Exception(
-                    "Bezier interpolation innacurate at frame {} for y translation {} vs {}".format(
-                        i, y[i], object.location[1]
-                    )
+                    f"Bezier interpolation innacurate at frame {i} for y translation {y[i]} vs {object.location[1]}"
                 )
         if z is not None:
             if abs(z[i] - object.location[2]) > SMALL:
                 raise Exception(
-                    "Bezier interpolation innacurate at frame {} for z translation {} vs {}".format(
-                        i, z[i], object.location[2]
-                    )
+                    f"Bezier interpolation innacurate at frame {i} for z translation {z[i]} vs {object.location[2]}"
                 )
         if rx is not None:
             if abs(rx[i] - object.rotation_euler[0]) > SMALL:
                 raise Exception(
-                    "Bezier interpolation innacurate at frame {} for x Euler rotation {} vs {}".format(
-                        i, rx[i], object.rotation_euler[0]
-                    )
+                    f"Bezier interpolation innacurate at frame {i} for x Euler rotation {rx[i]} vs {object.rotation_euler[0]}"
                 )
         if ry is not None:
             if abs(ry[i] - object.rotation_euler[1]) > SMALL:
                 raise Exception(
-                    "Bezier interpolation innacurate at frame {} for y Euler rotation {} vs {}".format(
-                        i, ry[i], object.rotation_euler[1]
-                    )
+                    f"Bezier interpolation innacurate at frame {i} for y Euler rotation {ry[i]} vs {object.rotation_euler[1]}"
                 )
         if rz is not None:
             if abs(rz[i] - object.rotation_euler[2]) > SMALL:
                 raise Exception(
-                    "Bezier interpolation innacurate at frame {} for z Euler rotation {} vs {}".format(
-                        i, rz[i], object.rotation_euler[2]
-                    )
+                    f"Bezier interpolation innacurate at frame {i} for z Euler rotation {rz[i]} vs {object.rotation_euler[2]}"
                 )
 
     imu_text = []

@@ -33,7 +33,7 @@ class MonocotGrowthFactory(AssetFactory):
     use_distance = False
 
     def __init__(self, factory_seed, coarse=False):
-        super(MonocotGrowthFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.count = 128
             self.perturb = 0.05

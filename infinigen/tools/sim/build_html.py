@@ -8,16 +8,15 @@
 import argparse
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
 
 
 def generate_html(
     asset_name: str,
     base_dir: str = "./tmp",
-    output_file: Optional[str] = None,
-    seeds_to_show: Optional[List[int]] = [],
-    failure_seeds: Optional[List[int]] = [],
-) -> Optional[Path]:
+    output_file: str | None = None,
+    seeds_to_show: list[int] | None = [],
+    failure_seeds: list[int] | None = [],
+) -> Path | None:
     """Generate HTML visualization for joint animations"""
     base_dir = Path(base_dir).absolute()
     base_path = base_dir / "renders" / "mjcf" / asset_name
@@ -27,7 +26,7 @@ def generate_html(
         return None
 
     # Collect video data organized by seed and joint
-    seeds_data: Dict[str, Dict[str, Dict[str, str]]] = {}
+    seeds_data: dict[str, dict[str, dict[str, str]]] = {}
 
     for seed_dir in base_path.iterdir():
         if len(seeds_to_show) == 0:
@@ -40,7 +39,7 @@ def generate_html(
             continue
 
         seed_name = seed_dir.name
-        joints: Dict[str, Dict[str, str]] = {}
+        joints: dict[str, dict[str, str]] = {}
 
         # Find and categorize videos
         for video_file in seed_dir.glob("*.mp4"):

@@ -9,7 +9,6 @@
 import logging
 import math
 from copy import copy
-from typing import Union
 
 import bpy
 
@@ -88,7 +87,7 @@ def as_particle_collection(subject, prefix="particleassets"):
 
 def particle_system(
     emitter: bpy.types.Object,
-    subject: Union[bpy.types.Object, bpy.types.Collection],
+    subject: bpy.types.Object | bpy.types.Collection,
     settings: dict,
     collision_collection=None,
 ):

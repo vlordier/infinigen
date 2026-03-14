@@ -223,7 +223,7 @@ class AntSwarmFactory(BoidSwarmFactory):
                 BeetleFactory(factory_seed=randint(1e7), animation_mode="walk_cycle"),
                 n=1,
             )
-        super(AntSwarmFactory, self).__init__(
+        super().__init__(
             factory_seed,
             child_col=col,
             collider_col=bpy.data.collections.get("colliders"),

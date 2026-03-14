@@ -3,7 +3,6 @@
 
 # Authors:
 # - Lingjie Mei
-from typing import List
 
 import networkx as nx
 from matplotlib import pyplot as plt
@@ -13,7 +12,7 @@ from infinigen.core.util.math import int_hash
 
 
 class RoomGraph:
-    def __init__(self, children: List[List[int]], names, entrance=None):
+    def __init__(self, children: list[list[int]], names, entrance=None):
         self.ns = [[] for _ in children]
         for i, cs in enumerate(children):
             for c in cs:
@@ -70,16 +69,16 @@ class RoomGraph:
     @property
     def neighbours(self):
         return {
-            self.names[i]: set(self.names[n_] for n_ in n)
+            self.names[i]: {self.names[n_] for n_ in n}
             for i, n in enumerate(self.ns)
         }
 
     @property
     def valid_neighbours(self):
         return {
-            self.names[i]: set(
+            self.names[i]: {
                 self.names[n_] for n_ in n if n_ not in self.invalid_indices
-            )
+            }
             for i, n in enumerate(self.ns)
             if i not in self.invalid_indices
         }
@@ -87,7 +86,7 @@ class RoomGraph:
     @property
     def valid_ns(self):
         return {
-            i: set(n_ for n_ in n if n_ not in self.invalid_indices)
+            i: {n_ for n_ in n if n_ not in self.invalid_indices}
             for i, n in enumerate(self.ns)
             if i not in self.invalid_indices
         }

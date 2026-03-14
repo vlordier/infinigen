@@ -1363,7 +1363,7 @@ def geo_fern(nw: NodeWrangler, **kwargs):
 @gin.register
 class FernFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(FernFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.leaf_material = simple_greenery.SimpleGreenery()
 
     def create_asset(self, **params):

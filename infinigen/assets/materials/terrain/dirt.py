@@ -352,7 +352,7 @@ if __name__ == "__main__":
         bpy.ops.wm.open_mainfile(filepath="landscape_surface_dev.blend")
         Dirt.apply(bpy.data.objects["Plane.002"])
         bpy.context.scene.render.filepath = os.path.join(
-            "outputs", mat, "%s_%d.jpg" % (mat, i)
+            "outputs", mat, f"{mat}_{i:d}.jpg"
         )
         bpy.context.scene.render.image_settings.file_format = "JPEG"
         bpy.ops.render.render(write_still=True)

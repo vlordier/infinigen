@@ -58,7 +58,7 @@ class FruitCover:
 
 class FruitContainerFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(FruitContainerFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             base_factory_fns = [BowlFactory, PotFactory]
             probs = np.array([1, 1])

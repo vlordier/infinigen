@@ -21,7 +21,7 @@ class TubeBaseCoralFactory(BaseCoralFactory):
     default_scale = [0.7] * 3
 
     def __init__(self, factory_seed, coarse=False):
-        super(TubeBaseCoralFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.points_fn = make_radius_points_fn(0.05, 0.4)
 
     def create_asset(self, face_size=0.01, **params) -> bpy.types.Object:

@@ -37,7 +37,7 @@ class RobotController(BaseController):
         return ArticulationAction(joint_velocities=[2, 2])
 
 
-class InfinigenIsaacScene(object):
+class InfinigenIsaacScene:
     def __init__(self, cfg):
         self.cfg = cfg
         self.world = World(

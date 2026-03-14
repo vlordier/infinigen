@@ -26,7 +26,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class BathroomSinkFactory(BathtubFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(BathroomSinkFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.width = uniform(0.6, 0.9)
             self.size = self.width * log_uniform(0.55, 0.8)
@@ -168,7 +168,7 @@ class BathroomSinkFactory(BathtubFactory):
 
 class StandingSinkFactory(BathroomSinkFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(StandingSinkFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.bathtub_type = "freestanding"
         self.has_extrude = True
         self.has_stand = True

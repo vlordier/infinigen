@@ -37,7 +37,7 @@ from infinigen.core.util.random import weighted_sample
 
 class RackFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(RackFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(factory_seed):
             self.depth = uniform(1, 1.2)
             self.width = uniform(4.0, 5.0)

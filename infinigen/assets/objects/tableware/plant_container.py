@@ -33,7 +33,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class PlantPotFactory(PotFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(PlantPotFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.has_handle = self.has_bar = self.has_guard = False
             self.depth = log_uniform(0.5, 1.0)
@@ -55,7 +55,7 @@ class PlantContainerFactory(AssetFactory):
     ]
 
     def __init__(self, factory_seed, coarse=False):
-        super(PlantContainerFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.base_factory = PlantPotFactory(self.factory_seed, coarse)
 
@@ -129,7 +129,7 @@ class LargePlantContainerFactory(PlantContainerFactory):
     plant_factories = [MonocotFactory]
 
     def __init__(self, factory_seed, coarse=False):
-        super(LargePlantContainerFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.base_factory.depth = log_uniform(1.0, 1.5)
             self.base_factory.scale = log_uniform(0.15, 0.25)

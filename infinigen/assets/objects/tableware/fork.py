@@ -113,7 +113,7 @@ class ForkFactory(TablewareFactory):
 
 class SpatulaFactory(ForkFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(SpatulaFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         self.has_cut = False
         self.z_depth = uniform(0, 0.05)
         self.y_length = log_uniform(0.08, 0.12)

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Union
 
 import bpy
 import gin
@@ -139,8 +138,8 @@ class ContactResult:
 
 def any_touching(
     scene: Scene,
-    a: Union[str, list[str]],
-    b: Union[str, list[str]] = None,
+    a: str | list[str],
+    b: str | list[str] = None,
     a_tags=None,
     b_tags=None,
     bvh_cache=None,
@@ -265,7 +264,7 @@ def contains(scene: Scene, a: str, b: str, tol=1e-6) -> bool:
 
 
 def contains_all(
-    scene: trimesh.Scene, a: Union[str, list[str]], b: Union[str, list[str]]
+    scene: trimesh.Scene, a: str | list[str], b: str | list[str]
 ) -> bool:
     """
     Check if all objects in list 'a' contain all objects in list 'b' within the given scene.
@@ -292,7 +291,7 @@ def contains_all(
 
 
 def contains_any(
-    scene: trimesh.Scene, a: Union[str, list[str]], b: Union[str, list[str]]
+    scene: trimesh.Scene, a: str | list[str], b: str | list[str]
 ) -> bool:
     """
     Check if any object in list 'a' contains any object in list 'b' within the given scene.
@@ -320,8 +319,8 @@ def contains_any(
 
 def has_line_of_sight(
     scene: trimesh.Scene,
-    a: Union[str, list[str]],
-    b: Union[str, list[str]],
+    a: str | list[str],
+    b: str | list[str],
     num_samples: int = 100,
 ) -> bool:
     """
@@ -384,7 +383,7 @@ def has_line_of_sight(
 
 
 def freespace_2d(
-    scene: trimesh.Scene, a: Union[str, list[str]], b: Union[str, list[str]]
+    scene: trimesh.Scene, a: str | list[str], b: str | list[str]
 ) -> float:
     if isinstance(a, str):
         a = [a]
@@ -406,8 +405,8 @@ def freespace_2d(
 
 def rasterize_space_with_obstacles(
     scene,
-    a: Union[str, list[str]],
-    b: Union[str, list[str]],
+    a: str | list[str],
+    b: str | list[str],
     start_location,
     end_location,
     cell_size=1.0,
@@ -548,8 +547,8 @@ def rasterize_space_with_obstacles(
 
 def angle_alignment_cost_tagged(
     state: state_def.State,
-    a: Union[str, list[str]],
-    b: Union[str, list[str]],
+    a: str | list[str],
+    b: str | list[str],
     b_tags=None,
     visualize=False,
 ):
@@ -580,8 +579,8 @@ def angle_alignment_cost_tagged(
 
 def angle_alignment_cost_base(
     state: state_def.State,
-    a: Union[str, list[str]],
-    b: Union[str, list[str]],
+    a: str | list[str],
+    b: str | list[str],
     visualize=False,
 ):
     """
@@ -729,8 +728,8 @@ def angle_alignment_cost_base(
 
 def angle_alignment_cost(
     state: state_def.State,
-    a: Union[str, list[str]],
-    b: Union[str, list[str]],
+    a: str | list[str],
+    b: str | list[str],
     b_tags=None,
     visualize=False,
 ):
@@ -741,7 +740,7 @@ def angle_alignment_cost(
 
 @gin.configurable
 def focus_score(
-    state: state_def.State, a: Union[str, list[str]], b: str, visualize=False
+    state: state_def.State, a: str | list[str], b: str, visualize=False
 ):
     """
     The how much objects in a focus on b
@@ -841,7 +840,7 @@ def edge(scene, surface_name: str):
     return outline_3d
 
 
-def min_dist_2d(scene, a: Union[str, list[str]], b, visualize=False):
+def min_dist_2d(scene, a: str | list[str], b, visualize=False):
     """
     projects onto b and finds the min distance between a and b
     """
@@ -880,7 +879,7 @@ def min_dist_2d(scene, a: Union[str, list[str]], b, visualize=False):
     return min_dist
 
 
-def min_dist_boundary(scene: Scene, a: Union[str, list[str]], boundary):
+def min_dist_boundary(scene: Scene, a: str | list[str], boundary):
     if isinstance(a, str):
         a = [a]
     if isinstance(boundary, trimesh.path.path.Path3D):
@@ -990,8 +989,8 @@ _accessibility_vis_seen_objs = set()  # used to make vis=True below less spammy
 
 def accessibility_cost_cuboid_penetration(
     scene: trimesh.Scene,
-    a: Union[str, list[str]],
-    b: Union[str, list[str]],
+    a: str | list[str],
+    b: str | list[str],
     normal_dir: np.ndarray,
     dist: float,
     bvh_cache: dict = None,
@@ -1208,7 +1207,7 @@ def center_stable_surface(scene, a, state):
 
 
 def reflectional_asymmetry_score(
-    scene, a: Union[str, list[str]], b: str, use_long_plane=True
+    scene, a: str | list[str], b: str, use_long_plane=True
 ):
     """
     Computes the reflectional asymmetry score between a and b
@@ -1298,7 +1297,7 @@ def coplanarity_cost_pair(scene, a: str, b: str):
     return sum(total_costs[:-2])
 
 
-def coplanarity_cost(scene, a: Union[str, list[str]]):
+def coplanarity_cost(scene, a: str | list[str]):
     """
     Computes the coplanarity cost between a and b
     """

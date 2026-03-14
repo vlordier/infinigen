@@ -44,7 +44,7 @@ class DarkArt(Art):
         self.darken_ratio = uniform(0.5, 1)
 
     def make_shader_func(self, bbox):
-        art_shader_func = super(DarkArt, self).make_shader_func(bbox)
+        art_shader_func = super().make_shader_func(bbox)
 
         def shader_dark_art(nw: NodeWrangler):
             art_shader_func(nw)
@@ -69,7 +69,7 @@ class ArtComposite(DarkArt):
         raise NotImplementedError
 
     def make_shader_func(self, bbox):
-        art_shader_func = super(ArtComposite, self).make_shader_func(bbox)
+        art_shader_func = super().make_shader_func(bbox)
 
         def shader_art_composite(nw: NodeWrangler, **kwargs):
             self.base_shader(nw, **kwargs)

@@ -20,7 +20,7 @@ from infinigen.core.util.random import log_uniform, weighted_sample
 
 class WallArtFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(WallArtFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
         with FixedSeed(self.factory_seed):
             self.width = log_uniform(0.4, 2)
             self.height = log_uniform(0.4, 2)
@@ -97,7 +97,7 @@ class WallArtFactory(AssetFactory):
 
 class MirrorFactory(WallArtFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(MirrorFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
 
     def assign_materials(self):
         surface_gen_class = weighted_sample(material_assignments.mirrors)

@@ -618,7 +618,7 @@ def test_gt(dir):
                     obj_seg_data[obj].append(obj_seg_dict[objects[obj]["object_index"]])
                     concise_obj = obj.split("(")[0].split(":")[-1].split(".")[0]
                     all_data[scene]["[Obj Seg. Percent] " + concise_obj] = (
-                        float((obj_seg_dict[objects[obj]["object_index"]]))
+                        float(obj_seg_dict[objects[obj]["object_index"]])
                         / float(obj_seg.shape[0] * obj_seg.shape[1])
                         * 100
                     )

@@ -42,7 +42,7 @@ class BoulderFactory(AssetFactory):
         coarse=False,
         do_voronoi=True,
     ):
-        super(BoulderFactory, self).__init__(factory_seed, coarse)
+        super().__init__(factory_seed, coarse)
 
         self.cameras = meshing_cameras
         self.cam_meshing_max_dist = cam_meshing_max_dist

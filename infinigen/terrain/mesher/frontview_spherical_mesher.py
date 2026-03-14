@@ -173,7 +173,7 @@ class FrontviewSphericalMesher:
                 )
             )
             self.init_and_get_emptytest_queries(
-                ASDOUBLE(AC((self.cam_pose.reshape(-1).astype(np.float64)))),
+                ASDOUBLE(AC(self.cam_pose.reshape(-1).astype(np.float64))),
                 self.H_fov,
                 self.W_fov,
                 self.r_min,

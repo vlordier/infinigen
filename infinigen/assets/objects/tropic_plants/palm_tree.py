@@ -1395,7 +1395,7 @@ def geometry_palm_tree_nodes(nw: NodeWrangler, truncatedstem_chance=0.4, **kwarg
 
 class PalmTreeFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):
-        super(PalmTreeFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
 
     def create_asset(self, params={}, **kwargs):
         bpy.ops.mesh.primitive_plane_add(
