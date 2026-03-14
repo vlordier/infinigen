@@ -592,11 +592,11 @@ def set_geomod_inputs(mod, inputs: dict):
 
         try:
             mod[soc.identifier] = v
-        except TypeError as e:
+        except TypeError:
             logger.error(
                 f"Error incurred while assigning {v} with {type(v)=} to {soc.identifier=} of {mod.name=}"
             )
-            raise e
+            raise
 
 
 def modify_mesh(
@@ -768,7 +768,7 @@ def apply_modifiers(obj, mod=None, quiet=True):
                     bpy.ops.object.modifier_remove(modifier=m.name)
                     clear_mesh(obj)
                 else:
-                    raise e
+                    raise
 
     # geometry nodes occasionally introduces empty material slots in 3.6, we consider this an error and remove them
     purge_empty_materials(obj)
