@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from multiprocessing import Process
 from pathlib import Path
@@ -78,7 +79,7 @@ class FileTee:
 
     def close(self):
         self.inner.close()
-        self.stream.close()
+        self.stream.flush()
 
     def fileno(self):
         return self.inner.fileno()
@@ -97,16 +98,28 @@ def job_wrapper(
     stdout_passthrough: bool = False,
 ):
     with stdout_file.open("w") as stdout, stderr_file.open("w") as stderr:
-        if stdout_passthrough:
-            # TODO: send output to BOTH the file and the console
-            stdout = None
-            stderr = None
-
         if cuda_devices is not None:
             env = os.environ.copy()
             env[CUDA_VARNAME] = ",".join([str(i) for i in cuda_devices])
         else:
             env = None
+
+        if stdout_passthrough:
+            completed = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                shell=False,
+                check=False,  # dont throw CalledProcessError
+                env=env,
+            )
+            stdout.write(completed.stdout)
+            stderr.write(completed.stderr)
+            sys.stdout.write(completed.stdout)
+            sys.stderr.write(completed.stderr)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            return
 
         subprocess.run(
             command,
