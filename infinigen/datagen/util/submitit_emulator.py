@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from multiprocessing import Process
 from pathlib import Path
@@ -105,30 +106,48 @@ def job_wrapper(
             env = None
 
         if stdout_passthrough:
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                shell=False,
+                env=env,
+                bufsize=1,
+            )
+            assert proc.stdout is not None
+            assert proc.stderr is not None
+
+            def drain(pipe, sinks):
+                for line in pipe:
+                    for sink in sinks:
+                        sink.write(line)
+                        sink.flush()
+
+            stdout_thread = threading.Thread(
+                target=drain, args=(proc.stdout, [stdout, sys.stdout])
+            )
+            stderr_thread = threading.Thread(
+                target=drain, args=(proc.stderr, [stderr, sys.stderr])
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            stdout_thread.join()
+            stderr_thread.join()
+            returncode = proc.wait()
+        else:
             completed = subprocess.run(
                 command,
-                capture_output=True,
-                text=True,
+                stdout=stdout,
+                stderr=stderr,
                 shell=False,
                 check=False,  # dont throw CalledProcessError
                 env=env,
             )
-            stdout.write(completed.stdout)
-            stderr.write(completed.stderr)
-            sys.stdout.write(completed.stdout)
-            sys.stderr.write(completed.stderr)
-            sys.stdout.flush()
-            sys.stderr.flush()
-            return
+            returncode = completed.returncode
 
-        subprocess.run(
-            command,
-            stdout=stdout,
-            stderr=stderr,
-            shell=False,
-            check=False,  # dont throw CalledProcessError
-            env=env,
-        )
+        if returncode:
+            raise SystemExit(returncode)
 
 
 def launch_local(

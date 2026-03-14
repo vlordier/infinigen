@@ -6,6 +6,8 @@ import io
 import os
 import sys
 
+import pytest
+
 from infinigen.core import tags as t
 from infinigen.datagen.util import submitit_emulator as submitit
 
@@ -31,21 +33,31 @@ def test_filetee_writes_both_streams_without_closing_outer_stream(tmp_path):
     assert outer_stream.getvalue().endswith("still-open")
 
 
-def test_job_wrapper_passthrough_writes_files_and_console(tmp_path, monkeypatch):
+def test_job_wrapper_passthrough_streams_files_and_console(tmp_path, monkeypatch):
     stdout_file = tmp_path / "stdout.log"
     stderr_file = tmp_path / "stderr.log"
     stdout_stream = io.StringIO()
     stderr_stream = io.StringIO()
-    command = [
-        sys.executable,
-        "-c",
-        "import sys; print('hello stdout'); print('hello stderr', file=sys.stderr)",
-    ]
     monkeypatch.setattr(sys, "stdout", stdout_stream)
     monkeypatch.setattr(sys, "stderr", stderr_stream)
+    monkeypatch.setattr(
+        submitit.subprocess,
+        "run",
+        lambda *args, **kwargs: pytest.fail("stdout_passthrough should stream with Popen"),
+    )
+
+    class FakePopen:
+        def __init__(self, *args, **kwargs):
+            self.stdout = iter(["hello stdout\n"])
+            self.stderr = iter(["hello stderr\n"])
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(submitit.subprocess, "Popen", FakePopen)
 
     submitit.job_wrapper(
-        command=command,
+        command=["ignored"],
         stdout_file=stdout_file,
         stderr_file=stderr_file,
         stdout_passthrough=True,
@@ -55,6 +67,47 @@ def test_job_wrapper_passthrough_writes_files_and_console(tmp_path, monkeypatch)
     assert stderr_file.read_text() == "hello stderr\n"
     assert "hello stdout" in stdout_stream.getvalue()
     assert "hello stderr" in stderr_stream.getvalue()
+
+
+def test_job_wrapper_passthrough_propagates_exit_code(tmp_path, monkeypatch):
+    stdout_file = tmp_path / "stdout.log"
+    stderr_file = tmp_path / "stderr.log"
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+    class FakePopen:
+        def __init__(self, *args, **kwargs):
+            self.stdout = iter(["partial stdout\n"])
+            self.stderr = iter(["partial stderr\n"])
+
+        def wait(self):
+            return 7
+
+    monkeypatch.setattr(submitit.subprocess, "Popen", FakePopen)
+
+    with pytest.raises(SystemExit, match="7"):
+        submitit.job_wrapper(
+            command=["ignored"],
+            stdout_file=stdout_file,
+            stderr_file=stderr_file,
+            stdout_passthrough=True,
+        )
+
+    assert stdout_file.read_text() == "partial stdout\n"
+    assert stderr_file.read_text() == "partial stderr\n"
+
+
+def test_job_wrapper_propagates_non_passthrough_exit_code(tmp_path):
+    stdout_file = tmp_path / "stdout.log"
+    stderr_file = tmp_path / "stderr.log"
+    command = [sys.executable, "-c", "import sys; sys.exit(5)"]
+
+    with pytest.raises(SystemExit, match="5"):
+        submitit.job_wrapper(
+            command=command,
+            stdout_file=stdout_file,
+            stderr_file=stderr_file,
+        )
 
 
 def test_job_wrapper_sets_cuda_visible_devices(tmp_path):
