@@ -89,7 +89,7 @@ class FloorPlanSolver:
                     if width is not None and height is not None:
                         break
                 else:
-                    raise Exception("Invalid graph")
+                    raise RuntimeError("Invalid graph")
             self.graphs.append(graph)
             while len(self.contours) <= i:
                 for j in range(self.n_trials):
