@@ -46,6 +46,9 @@ CYCLES_VOLUME_BOUNCES = 4
 # Cached device enumeration result to avoid repeated Blender API calls
 _cached_devices: list | None = None
 
+# Upper bound for randomly chosen scene seeds
+MAX_RANDOM_SEED = int(1e7)
+
 
 def parse_args_blender(parser):
     if "--" in sys.argv:
@@ -64,7 +67,7 @@ def parse_seed(seed, task=None):
                 "Running tasks on an already generated scene, you need to specify --seed or results will"
                 " not be view-consistent"
             )
-        return randint(1e7), "chosen at random"
+        return randint(MAX_RANDOM_SEED), "chosen at random"
 
     # WARNING: Do not add support for decimal numbers here, it will cause ambiguity, as some hex numbers are valid decimals
 
