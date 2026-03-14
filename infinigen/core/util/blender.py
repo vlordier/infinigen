@@ -432,6 +432,11 @@ def spawn_line(name, pts):
 def spawn_plane(**kwargs):
     name = kwargs.pop("name", None)
     bpy.ops.mesh.primitive_plane_add(enter_editmode=False, align="WORLD", **kwargs)
+    return _get_and_name_active_object(name)
+
+
+def _get_and_name_active_object(name):
+    """Return the active object, optionally renaming it."""
     obj = bpy.context.active_object
     if name is not None:
         obj.name = name
@@ -446,10 +451,7 @@ def spawn_cube(size=1, location=(0, 0, 0), scale=(1, 1, 1), name=None):
         location=location,
         scale=scale,
     )
-    obj = bpy.context.active_object
-    if name is not None:
-        obj.name = name
-    return obj
+    return _get_and_name_active_object(name)
 
 
 def spawn_cylinder(
@@ -463,10 +465,7 @@ def spawn_cylinder(
         location=location,
         scale=scale,
     )
-    obj = bpy.context.active_object
-    if name is not None:
-        obj.name = name
-    return obj
+    return _get_and_name_active_object(name)
 
 
 def spawn_sphere(radius=1, location=(0, 0, 0), scale=(1, 1, 1), name=None):
@@ -477,10 +476,7 @@ def spawn_sphere(radius=1, location=(0, 0, 0), scale=(1, 1, 1), name=None):
         location=location,
         scale=scale,
     )
-    obj = bpy.context.active_object
-    if name is not None:
-        obj.name = name
-    return obj
+    return _get_and_name_active_object(name)
 
 
 def spawn_icosphere(radius=1, location=(0, 0, 0), scale=(1, 1, 1), name=None):
@@ -491,10 +487,7 @@ def spawn_icosphere(radius=1, location=(0, 0, 0), scale=(1, 1, 1), name=None):
         location=location,
         scale=scale,
     )
-    obj = bpy.context.active_object
-    if name is not None:
-        obj.name = name
-    return obj
+    return _get_and_name_active_object(name)
 
 
 def clear_scene(keep=[], targets=None, materials=True):

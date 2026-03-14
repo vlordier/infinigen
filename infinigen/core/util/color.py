@@ -13,6 +13,14 @@ import numpy as np
 
 from infinigen.core.util.math import int_hash
 
+# Bitmasks and shifts for extracting individual channels from a packed 24-bit hex colour.
+_HEX_CHANNEL_MAX = 0xFF
+_HEX_RED_MASK = 0xFF0000
+_HEX_GREEN_MASK = 0x00FF00
+_HEX_BLUE_MASK = 0x0000FF
+_RED_SHIFT = 16
+_GREEN_SHIFT = 8
+
 
 def hsv2rgba(hsv, *args):
     # hsv is a len-3 tuple or array
@@ -43,10 +51,10 @@ def srgb_to_linearrgb(c):
 
 
 def hex2rgba(h, alpha=1):
-    r = (h & 0xFF0000) >> 16
-    g = (h & 0x00FF00) >> 8
-    b = h & 0x0000FF
-    return tuple([srgb_to_linearrgb(c / 0xFF) for c in (r, g, b)] + [alpha])
+    r = (h & _HEX_RED_MASK) >> _RED_SHIFT
+    g = (h & _HEX_GREEN_MASK) >> _GREEN_SHIFT
+    b = h & _HEX_BLUE_MASK
+    return tuple([srgb_to_linearrgb(c / _HEX_CHANNEL_MAX) for c in (r, g, b)] + [alpha])
 
 
 def hex2rgb(h, alpha=1):

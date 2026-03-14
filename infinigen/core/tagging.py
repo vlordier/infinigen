@@ -404,28 +404,55 @@ def extract_tagged_faces(
     return extract_mask(obj, face_mask, nonempty=nonempty)
 
 
-def extract_mask(
-    obj: bpy.types.Object, face_mask: np.array, nonempty=False
+def _extract_by_mask(
+    obj: bpy.types.Object,
+    mask: np.ndarray,
+    select_type: str,
+    nonempty: bool = False,
 ) -> bpy.types.Object:
-    if not face_mask.any():
+    """Shared implementation for extract_mask and extract_vertex_mask.
+
+    Selects mesh elements (faces or vertices) according to *mask*, duplicates
+    them, separates the result into a new object, and returns it.
+
+    Parameters
+    ----------
+    obj:
+        The source Blender object.
+    mask:
+        Boolean array with one entry per element (polygon or vertex).
+    select_type:
+        ``"FACE"`` to operate on polygons, ``"VERT"`` to operate on vertices.
+    nonempty:
+        When ``True``, raise ``ValueError`` if no elements are selected or the
+        resulting object is empty.
+    """
+    is_face = select_type == "FACE"
+    elements_attr = "polygons" if is_face else "vertices"
+    element_label = "polygons" if is_face else "vertices"
+    func_name = "extract_mask" if is_face else "extract_vertex_mask"
+
+    if not mask.any():
         if nonempty:
-            raise ValueError(f"extract_mask({obj.name=}) got empty mask")
+            raise ValueError(f"{func_name}({obj.name=}) got empty mask")
         return butil.spawn_vert()
 
     orig_hide_viewport = obj.hide_viewport
     obj.hide_viewport = False
 
-    # Switch to Edit mode, duplicate the selection, and separate it
     with butil.SelectObjects(obj, active=0):
         with butil.ViewportMode(obj, "EDIT"):
-            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type="FACE")
+            bpy.ops.mesh.select_mode(
+                use_extend=False, use_expand=False, type=select_type
+            )
             bpy.ops.mesh.select_all(action="DESELECT")
 
-        for poly in obj.data.polygons:
-            poly.select = face_mask[poly.index]
-        if nonempty and len([p for p in obj.data.polygons if p.select]) == 0:
+        elements = getattr(obj.data, elements_attr)
+        for elem in elements:
+            elem.select = mask[elem.index]
+        if nonempty and len([e for e in elements if e.select]) == 0:
             raise ValueError(
-                f"extract_mask({obj.name=}, {nonempty=}) failed to select polygons"
+                f"{func_name}({obj.name=}, {nonempty=}) failed to select {element_label}"
             )
 
         with butil.ViewportMode(obj, "EDIT"):
@@ -439,17 +466,66 @@ def extract_mask(
     if nonempty:
         if res is None:
             raise ValueError(
-                f"extract_mask({obj.name=}) got {res=} for {face_mask.mean()=}"
+                f"{func_name}({obj.name=}) got {res=} for {mask.mean()=}"
             )
-        if len(res.data.polygons) == 0:
+        result_elements = getattr(res.data, elements_attr)
+        if len(result_elements) == 0:
             raise ValueError(
-                f"extract_mask({obj.name=}) got {res=} with {len(res.data.polygons)=}"
+                f"{func_name}({obj.name=}) got {res=} with {len(result_elements)=}"
             )
     elif res is None:
-        logger.warning(f"extract_mask({obj.name=}) failed to extract any faces")
+        logger.warning(f"{func_name}({obj.name=}) failed to extract any {element_label}")
         return butil.spawn_vert()
 
     return res
+
+
+def extract_mask(
+    obj: bpy.types.Object, face_mask: np.ndarray, nonempty: bool = False
+) -> bpy.types.Object:
+    """Extract faces selected by *face_mask* into a new object.
+
+    Parameters
+    ----------
+    obj:
+        Source object whose faces are to be extracted.
+    face_mask:
+        Boolean array with one entry per polygon; ``True`` selects that face.
+    nonempty:
+        When ``True``, raise ``ValueError`` if the mask is empty or the
+        resulting object has no polygons.
+
+    Returns
+    -------
+    bpy.types.Object
+        A new object containing the extracted faces, or a placeholder vertex
+        object when the mask is empty and *nonempty* is ``False``.
+    """
+    return _extract_by_mask(obj, face_mask, "FACE", nonempty)
+
+
+def extract_vertex_mask(
+    obj: bpy.types.Object, vertex_mask: np.ndarray, nonempty: bool = False
+) -> bpy.types.Object:
+    """Extract vertices selected by *vertex_mask* into a new object.
+
+    Parameters
+    ----------
+    obj:
+        Source object whose vertices are to be extracted.
+    vertex_mask:
+        Boolean array with one entry per vertex; ``True`` selects that vertex.
+    nonempty:
+        When ``True``, raise ``ValueError`` if the mask is empty or the
+        resulting object has no vertices.
+
+    Returns
+    -------
+    bpy.types.Object
+        A new object containing the extracted vertices, or a placeholder vertex
+        object when the mask is empty and *nonempty* is ``False``.
+    """
+    return _extract_by_mask(obj, vertex_mask, "VERT", nonempty)
 
 
 def tag_support_surfaces(obj, angle_threshold=0.1):
@@ -492,52 +568,5 @@ def tag_support_surfaces(obj, angle_threshold=0.1):
     process_object(obj)
 
 
-def extract_vertex_mask(
-    obj: bpy.types.Object, vertex_mask: np.array, nonempty=False
-) -> bpy.types.Object:
-    if not vertex_mask.any():
-        if nonempty:
-            raise ValueError(f"extract_vertex_mask({obj.name=}) got empty mask")
-        return butil.spawn_vert()
 
-    orig_hide_viewport = obj.hide_viewport
-    obj.hide_viewport = False
 
-    # Switch to Edit mode, duplicate the selection, and separate it
-    with butil.SelectObjects(obj, active=0):
-        with butil.ViewportMode(obj, "EDIT"):
-            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type="VERT")
-            bpy.ops.mesh.select_all(action="DESELECT")
-
-        # select vertices based on the mask
-        for vert in obj.data.vertices:
-            vert.select = vertex_mask[vert.index]
-        if nonempty and len([v for v in obj.data.vertices if v.select]) == 0:
-            raise ValueError(
-                f"extract_vertex_mask({obj.name=}, {nonempty=}) failed to select vertices"
-            )
-
-        with butil.ViewportMode(obj, "EDIT"):
-            bpy.ops.mesh.duplicate_move()
-            bpy.ops.mesh.separate(type="SELECTED")
-
-        res = next((o for o in bpy.context.selected_objects if o != obj), None)
-
-    obj.hide_viewport = orig_hide_viewport
-
-    if nonempty:
-        if res is None:
-            raise ValueError(
-                f"extract_vertex_mask({obj.name=} got {res=} for {vertex_mask.mean()=})"
-            )
-        if len(res.data.vertices) == 0:
-            raise ValueError(
-                f"extract_vertex_mask({obj.name=}) got {res=} with {len(res.data.vertices)=}"
-            )
-    elif res is None:
-        logger.warning(
-            f"extract_vertex_mask({obj.name=}) failed to extract any vertices"
-        )
-        return butil.spawn_vert()
-
-    return res
