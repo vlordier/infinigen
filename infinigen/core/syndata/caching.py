@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import pickle
 import re
 import tempfile
@@ -151,7 +152,7 @@ class StageCache:
                 dir=self._cache_dir, suffix=".tmp", prefix=".cache_"
             )
             try:
-                with open(fd, "wb") as f:
+                with os.fdopen(fd, "wb") as f:
                     pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
                 Path(tmp).replace(path)
             except BaseException:

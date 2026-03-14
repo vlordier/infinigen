@@ -186,8 +186,18 @@ class SceneBudget:
         ValueError
             If any amount is negative.
         """
-        if any(x < 0 for x in (polygons, vertices, objects, memory_mb)):
-            raise ValueError("Cannot release negative amounts")
+        negatives = {
+            k: v
+            for k, v in [
+                ("polygons", polygons),
+                ("vertices", vertices),
+                ("objects", objects),
+                ("memory_mb", memory_mb),
+            ]
+            if v < 0
+        }
+        if negatives:
+            raise ValueError(f"Cannot release negative amounts: {negatives}")
         for name, releasing, used in [
             ("polygons", polygons, self._used_polygons),
             ("vertices", vertices, self._used_vertices),
