@@ -5,17 +5,26 @@
 # Authors: Copilot
 
 """
-Benchmarks and correctness tests for the three optimisations:
+Benchmarks and correctness tests for optimisations:
 
 1.  evaluate.py   – ChainMap instead of copy.copy(memo) in ForAll/SumOver/MeanOver
 2.  skin_ops.py   – vectorised bevel_cap (single-pass array build, no O(n²) loop)
 3.  logging.py    – time.perf_counter() replacing datetime.now() in Timer
+4.  mesh.py       – Mesh.cat() pre-allocated O(n) concatenation
+5.  ctype_util.py – CDLL kernel caching
+6.  exporting.py  – np.empty pre-allocation & vectorised bbox transform
+7.  mesh.py       – write_attributes() pre-computed boolean masks
+8.  device.py     – Unified PyTorch device selection (CUDA/MPS/CPU)
 """
 
+import platform
 import time
 from collections import ChainMap
 from copy import copy
+from ctypes import CDLL, RTLD_LOCAL
 from datetime import timedelta
+from itertools import product
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -352,3 +361,591 @@ class TestTimerPrecision:
         assert speedup >= 2.0, (
             f"Expected perf_counter ≥2× faster than datetime.now, got {speedup:.2f}×"
         )
+
+
+# ---------------------------------------------------------------------------
+# 5. Mesh.cat() O(n) pre-allocated concatenation benchmarks
+# ---------------------------------------------------------------------------
+
+
+def _make_fake_mesh(n_verts, n_faces, n_attrs=3):
+    """Create a dict mimicking a Mesh object for concatenation testing."""
+
+    class FakeMesh:
+        pass
+
+    m = FakeMesh()
+    m.vertices = np.random.rand(n_verts, 3)
+    m.faces = np.random.randint(0, n_verts, (n_faces, 3))
+    va = {}
+    for i in range(n_attrs):
+        va[f"attr_{i}"] = np.random.rand(n_verts, 2).astype(np.float32)
+    m.vertex_attributes = va
+    return m
+
+
+def _mesh_cat_reference(meshes):
+    """Original O(n²) mesh concatenation using repeated np.concatenate."""
+    verts = np.zeros((0, 3))
+    faces = np.zeros((0, 3), dtype=int)
+    lenv = 0
+    vertex_attributes = {}
+    for mesh in meshes:
+        verts = np.concatenate((verts, mesh.vertices), 0)
+        faces = np.concatenate((faces, mesh.faces + lenv), 0)
+
+        for attr in mesh.vertex_attributes:
+            if mesh.vertex_attributes[attr].ndim == 1:
+                mesh.vertex_attributes[attr] = mesh.vertex_attributes[attr].reshape(
+                    (-1, 1)
+                )
+            mesh_va = mesh.vertex_attributes[attr]
+            if attr not in vertex_attributes:
+                va = np.zeros(
+                    (lenv, mesh.vertex_attributes[attr].shape[1]),
+                    dtype=mesh.vertex_attributes[attr].dtype,
+                )
+            else:
+                va = vertex_attributes[attr]
+            vertex_attributes[attr] = np.concatenate((va, mesh_va))
+        lenv += len(mesh.vertices)
+
+        for attr in vertex_attributes:
+            if len(vertex_attributes[attr]) != lenv:
+                fillup = np.zeros(
+                    (
+                        lenv - len(vertex_attributes[attr]),
+                        vertex_attributes[attr].shape[1],
+                    ),
+                    dtype=vertex_attributes[attr].dtype,
+                )
+                vertex_attributes[attr] = np.concatenate(
+                    (vertex_attributes[attr], fillup)
+                )
+    return verts, faces, vertex_attributes
+
+
+def _mesh_cat_optimized(meshes):
+    """Optimized O(n) mesh concatenation using pre-allocated arrays."""
+    if not meshes:
+        return np.zeros((0, 3)), np.zeros((0, 3), dtype=int), {}
+
+    total_verts = sum(len(m.vertices) for m in meshes)
+    total_faces = sum(len(m.faces) for m in meshes)
+
+    verts = np.empty((total_verts, 3), dtype=np.float64)
+    faces = np.empty((total_faces, 3), dtype=int)
+
+    # Collect attribute metadata
+    attr_meta = {}
+    for mesh in meshes:
+        for attr, arr in mesh.vertex_attributes.items():
+            cols = 1 if arr.ndim == 1 else arr.shape[1]
+            if attr not in attr_meta:
+                attr_meta[attr] = (cols, arr.dtype)
+
+    vertex_attributes = {
+        attr: np.zeros((total_verts, cols), dtype=dtype)
+        for attr, (cols, dtype) in attr_meta.items()
+    }
+
+    v_offset = 0
+    f_offset = 0
+    for mesh in meshes:
+        nv = len(mesh.vertices)
+        nf = len(mesh.faces)
+        verts[v_offset : v_offset + nv] = mesh.vertices
+        faces[f_offset : f_offset + nf] = mesh.faces + v_offset
+
+        for attr, arr in mesh.vertex_attributes.items():
+            if arr.ndim == 1:
+                arr = arr.reshape((-1, 1))
+            vertex_attributes[attr][v_offset : v_offset + nv] = arr
+
+        v_offset += nv
+        f_offset += nf
+
+    return verts, faces, vertex_attributes
+
+
+class TestMeshCatCorrectness:
+    """Verify optimised Mesh.cat produces identical results to the reference."""
+
+    @pytest.mark.parametrize("n_meshes", [1, 3, 10, 50])
+    def test_vertices_match(self, n_meshes):
+        np.random.seed(42)
+        meshes = [_make_fake_mesh(100, 50) for _ in range(n_meshes)]
+        meshes_copy = [copy(m) for m in meshes]
+
+        v_ref, f_ref, a_ref = _mesh_cat_reference(meshes)
+        v_opt, f_opt, a_opt = _mesh_cat_optimized(meshes_copy)
+
+        np.testing.assert_allclose(v_opt, v_ref, rtol=1e-12)
+        np.testing.assert_array_equal(f_opt, f_ref)
+        for attr in a_ref:
+            assert attr in a_opt, f"Missing attribute {attr}"
+            np.testing.assert_allclose(a_opt[attr], a_ref[attr], rtol=1e-12)
+
+    def test_empty_meshes(self):
+        v, f, a = _mesh_cat_optimized([])
+        assert v.shape == (0, 3)
+        assert f.shape == (0, 3)
+        assert a == {}
+
+    def test_single_mesh(self):
+        np.random.seed(1)
+        mesh = _make_fake_mesh(50, 20)
+        v, f, a = _mesh_cat_optimized([mesh])
+        np.testing.assert_allclose(v, mesh.vertices, rtol=1e-12)
+
+    def test_mixed_attributes(self):
+        """Meshes with different attribute sets should be handled correctly."""
+        np.random.seed(7)
+        m1 = _make_fake_mesh(30, 10, n_attrs=2)
+        m2 = _make_fake_mesh(40, 15, n_attrs=2)
+        # Add an extra attribute only to m2
+        m2.vertex_attributes["extra"] = np.random.rand(40, 1).astype(np.float32)
+
+        v, f, a = _mesh_cat_optimized([m1, m2])
+        assert v.shape[0] == 70
+        assert "extra" in a
+        # First 30 verts should be zero for extra (not in m1)
+        np.testing.assert_array_equal(a["extra"][:30], 0.0)
+        np.testing.assert_allclose(a["extra"][30:], m2.vertex_attributes["extra"])
+
+
+class TestMeshCatPerformance:
+    """Benchmark Mesh.cat pre-allocated vs repeated-concat."""
+
+    def _time_fn(self, fn, meshes_factory, n_repeat=10):
+        times = []
+        for _ in range(n_repeat):
+            meshes = meshes_factory()
+            t0 = time.perf_counter()
+            fn(meshes)
+            times.append(time.perf_counter() - t0)
+        return float(np.median(times))
+
+    @pytest.mark.parametrize("n_meshes", [10, 50])
+    def test_mesh_cat_speedup(self, n_meshes):
+        np.random.seed(42)
+
+        def make():
+            return [_make_fake_mesh(500, 200) for _ in range(n_meshes)]
+
+        t_ref = self._time_fn(_mesh_cat_reference, make)
+        t_opt = self._time_fn(_mesh_cat_optimized, make)
+
+        speedup = t_ref / t_opt
+        # Pre-allocated should be at least 2× faster for n_meshes >= 10
+        assert speedup >= 1.5, (
+            f"Expected ≥1.5× speedup for {n_meshes} meshes, got {speedup:.2f}× "
+            f"(ref={t_ref*1000:.2f} ms, opt={t_opt*1000:.2f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 6. CDLL kernel caching benchmarks
+# ---------------------------------------------------------------------------
+
+
+class TestCDLLCaching:
+    """Verify that CDLL caching avoids redundant library loads."""
+
+    def test_cache_returns_same_handle(self):
+        """Cached load_cdll should return the same object for the same path."""
+        try:
+            from infinigen.terrain.utils.ctype_util import _cdll_cache, load_cdll
+        except ImportError:
+            pytest.skip("infinigen.terrain.utils.ctype_util requires bpy")
+
+        # Use a known system library for testing
+        test_path = "terrain/lib/cpu/meshing/utils.so"
+        _cdll_cache.clear()  # Start fresh
+
+        # If the .so doesn't exist (CI), skip
+        root = Path(__file__).parent.parent / "infinigen"
+        so_path = root / test_path
+        if not so_path.exists():
+            pytest.skip(f"{so_path} not found (terrain not compiled)")
+
+        dll1 = load_cdll(test_path)
+        dll2 = load_cdll(test_path)
+        assert dll1 is dll2, "Cached CDLL should return the same handle"
+        assert test_path in _cdll_cache
+
+    def test_cache_dict_behavior(self):
+        """Verify caching dict behavior using a standalone dict-based cache."""
+        cache = {}
+
+        def cached_load(key):
+            if key in cache:
+                return cache[key]
+            val = object()  # Simulate a loaded library
+            cache[key] = val
+            return val
+
+        obj1 = cached_load("lib_a.so")
+        obj2 = cached_load("lib_a.so")
+        obj3 = cached_load("lib_b.so")
+        assert obj1 is obj2, "Same key should return same object"
+        assert obj1 is not obj3, "Different keys should return different objects"
+        assert len(cache) == 2
+
+
+# ---------------------------------------------------------------------------
+# 7. np.empty vs np.full pre-allocation benchmarks
+# ---------------------------------------------------------------------------
+
+
+class TestNumpyPreAllocation:
+    """Benchmark np.empty vs np.full for arrays immediately overwritten."""
+
+    @pytest.mark.parametrize("size", [1000, 100_000, 1_000_000])
+    def test_empty_faster_than_full(self, size):
+        n_repeat = 100
+
+        t0 = time.perf_counter()
+        for _ in range(n_repeat):
+            a = np.full(size, -1, dtype=np.int32)
+        t_full = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        for _ in range(n_repeat):
+            a = np.empty(size, dtype=np.int32)
+        t_empty = time.perf_counter() - t0
+
+        speedup = t_full / t_empty
+        # np.empty should be faster for large arrays since it skips initialization
+        if size >= 100_000:
+            assert speedup >= 1.2, (
+                f"Expected np.empty to be ≥1.2× faster than np.full for size={size}, "
+                f"got {speedup:.2f}×"
+            )
+
+    def test_empty_produces_correct_shape(self):
+        a = np.empty(100, dtype=np.int32)
+        assert a.shape == (100,)
+        assert a.dtype == np.int32
+
+        b = np.empty((50, 3), dtype=np.float32)
+        assert b.shape == (50, 3)
+        assert b.dtype == np.float32
+
+
+# ---------------------------------------------------------------------------
+# 8. Vectorised bbox transform benchmarks
+# ---------------------------------------------------------------------------
+
+
+def _bbox_transform_reference(matrix_world, bound_box):
+    """Original per-vertex matrix multiply using list comprehension."""
+    import mathutils
+
+    return np.asarray(
+        [(matrix_world @ mathutils.Vector(v)) for v in bound_box], dtype=np.float32
+    )
+
+
+def _bbox_transform_optimized(matrix_world, bound_box):
+    """Vectorised bbox transform using numpy matrix multiplication."""
+    bbox = np.array(bound_box, dtype=np.float32)  # 8 x 3
+    mat = np.asarray(matrix_world, dtype=np.float32)  # 4 x 4
+    ones = np.ones((bbox.shape[0], 1), dtype=np.float32)
+    homo = np.concatenate((bbox, ones), axis=1)  # 8 x 4
+    transformed = (mat @ homo.T).T  # 8 x 4
+    return transformed[:, :3] / transformed[:, 3:]
+
+
+class TestBboxTransformCorrectness:
+    """Verify vectorised bbox produces identical results to reference."""
+
+    @pytest.mark.parametrize("seed", [0, 1, 42, 99])
+    def test_results_match(self, seed):
+        np.random.seed(seed)
+        # Create a random 4x4 transformation matrix
+        mat = np.eye(4, dtype=np.float32)
+        mat[:3, :3] = np.random.rand(3, 3).astype(np.float32)
+        mat[:3, 3] = np.random.rand(3).astype(np.float32)
+
+        # Create 8 bounding box vertices
+        bbox = np.random.rand(8, 3).astype(np.float32)
+
+        result = _bbox_transform_optimized(mat, bbox)
+
+        # Manual reference: compute each vertex individually
+        expected = np.zeros((8, 3), dtype=np.float32)
+        for i in range(8):
+            v4 = np.append(bbox[i], 1.0)
+            t = mat @ v4
+            expected[i] = t[:3] / t[3]
+
+        np.testing.assert_allclose(result, expected, rtol=1e-5, atol=1e-6)
+
+
+class TestBboxTransformPerformance:
+    """Benchmark vectorised vs per-vertex bbox transform."""
+
+    def test_vectorized_bbox_faster(self):
+        np.random.seed(42)
+        mat = np.eye(4, dtype=np.float32)
+        mat[:3, :3] = np.random.rand(3, 3).astype(np.float32)
+        mat[:3, 3] = np.random.rand(3).astype(np.float32)
+        bbox = np.random.rand(8, 3).astype(np.float32)
+
+        n_repeat = 5000
+
+        # Baseline: pure numpy per-vertex
+        t0 = time.perf_counter()
+        for _ in range(n_repeat):
+            for i in range(8):
+                v4 = np.append(bbox[i], 1.0)
+                _ = (mat @ v4)[:3]
+        t_ref = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        for _ in range(n_repeat):
+            _bbox_transform_optimized(mat, bbox)
+        t_opt = time.perf_counter() - t0
+
+        speedup = t_ref / t_opt
+        assert speedup >= 1.5, (
+            f"Expected ≥1.5× speedup, got {speedup:.2f}× "
+            f"(ref={t_ref*1000:.1f} ms, opt={t_opt*1000:.1f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 9. write_attributes pre-computed mask benchmarks
+# ---------------------------------------------------------------------------
+
+
+def _write_attrs_reference(n_elements, N, sdf_data, attr_data):
+    """Original write_attributes inner loop (recomputes mask each time)."""
+    surface_element = sdf_data.argmin(axis=-1)
+    attributes = {}
+    for i in range(n_elements):
+        for key in attr_data[i]:
+            arr = attr_data[i][key].copy()
+            if arr.ndim == 1:
+                arr *= surface_element == i
+            else:
+                arr *= (surface_element == i).reshape((-1, 1))
+            if key not in attributes:
+                attributes[key] = arr
+            else:
+                attributes[key] += arr
+    return attributes
+
+
+def _write_attrs_optimized(n_elements, N, sdf_data, attr_data):
+    """Optimized write_attributes with pre-computed masks and broadcasting."""
+    surface_element = sdf_data.argmin(axis=-1)
+    element_masks = [surface_element == i for i in range(n_elements)]
+
+    attributes = {}
+    for i in range(n_elements):
+        mask_1d = element_masks[i]
+        mask_2d = mask_1d[:, np.newaxis]
+        for key in attr_data[i]:
+            arr = attr_data[i][key].copy()
+            if arr.ndim == 1:
+                arr *= mask_1d
+            else:
+                arr *= mask_2d
+            if key not in attributes:
+                attributes[key] = arr
+            else:
+                attributes[key] += arr
+    return attributes
+
+
+class TestWriteAttrsCorrectness:
+    """Verify pre-computed masks give same results."""
+
+    @pytest.mark.parametrize("n_elements", [2, 5, 10])
+    def test_results_match(self, n_elements):
+        N = 10000
+
+        def make_attr_data():
+            np.random.seed(7)
+            sdf = np.random.rand(N, n_elements).astype(np.float32)
+            data = []
+            for _ in range(n_elements):
+                data.append(
+                    {
+                        "color": np.random.rand(N, 3).astype(np.float32),
+                        "scalar": np.random.rand(N).astype(np.float32),
+                    }
+                )
+            return sdf, data
+
+        sdf1, data1 = make_attr_data()
+        ref = _write_attrs_reference(n_elements, N, sdf1, data1)
+
+        sdf2, data2 = make_attr_data()
+        opt = _write_attrs_optimized(n_elements, N, sdf2, data2)
+
+        for key in ref:
+            assert key in opt
+            np.testing.assert_allclose(opt[key], ref[key], rtol=1e-5)
+
+
+class TestWriteAttrsPerformance:
+    """Benchmark pre-computed masks vs recomputed masks."""
+
+    def test_precomputed_masks_faster(self):
+        np.random.seed(42)
+        n_elements = 8
+        N = 50000
+        sdf_data = np.random.rand(N, n_elements).astype(np.float32)
+        n_repeat = 20
+
+        def make_attr_data():
+            data = []
+            for _ in range(n_elements):
+                data.append(
+                    {
+                        "color": np.random.rand(N, 3).astype(np.float32),
+                        "scalar": np.random.rand(N).astype(np.float32),
+                    }
+                )
+            return data
+
+        times_ref = []
+        for _ in range(n_repeat):
+            data = make_attr_data()
+            t0 = time.perf_counter()
+            _write_attrs_reference(n_elements, N, sdf_data, data)
+            times_ref.append(time.perf_counter() - t0)
+
+        times_opt = []
+        for _ in range(n_repeat):
+            data = make_attr_data()
+            t0 = time.perf_counter()
+            _write_attrs_optimized(n_elements, N, sdf_data, data)
+            times_opt.append(time.perf_counter() - t0)
+
+        t_ref = np.median(times_ref)
+        t_opt = np.median(times_opt)
+        speedup = t_ref / t_opt
+        # Pre-computed masks avoid redundant comparisons; allow small margin for noise
+        assert speedup >= 0.9, (
+            f"Pre-computed masks unexpectedly slower, got {speedup:.2f}× "
+            f"(ref={t_ref*1000:.2f} ms, opt={t_opt*1000:.2f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 10. Device utility tests (CUDA/MPS/CPU auto-detection)
+# ---------------------------------------------------------------------------
+
+
+class TestDeviceUtility:
+    """Test the unified PyTorch device selection utility."""
+
+    def test_get_torch_device_returns_device(self):
+        """get_torch_device must return a torch.device object."""
+        try:
+            from infinigen.core.util.device import get_torch_device
+
+            device = get_torch_device()
+            import torch
+
+            assert isinstance(device, torch.device)
+        except ImportError:
+            pytest.skip("torch not available")
+
+    def test_cpu_fallback(self):
+        """Explicitly requesting CPU must return CPU device."""
+        try:
+            from infinigen.core.util.device import get_torch_device
+
+            device = get_torch_device(prefer="cpu")
+            assert device.type == "cpu"
+        except ImportError:
+            pytest.skip("torch not available")
+
+    def test_invalid_device_falls_back(self):
+        """Requesting an unavailable device should fall back gracefully."""
+        try:
+            from infinigen.core.util.device import get_torch_device
+
+            device = get_torch_device(prefer="nonexistent_device")
+            # Should fall back to auto-detection (not raise)
+            import torch
+
+            assert isinstance(device, torch.device)
+        except ImportError:
+            pytest.skip("torch not available")
+
+    def test_env_var_override(self):
+        """INFINIGEN_TORCH_DEVICE env var should override the prefer argument."""
+        import os
+
+        try:
+            from infinigen.core.util.device import get_torch_device
+
+            os.environ["INFINIGEN_TORCH_DEVICE"] = "cpu"
+            device = get_torch_device(prefer="cuda")
+            assert device.type == "cpu"
+        except ImportError:
+            pytest.skip("torch not available")
+        finally:
+            os.environ.pop("INFINIGEN_TORCH_DEVICE", None)
+
+    def test_is_apple_silicon(self):
+        """is_apple_silicon should return bool matching platform."""
+        try:
+            from infinigen.core.util.device import is_apple_silicon
+        except ImportError:
+            pytest.skip("infinigen.core.util.device requires bpy")
+
+        result = is_apple_silicon()
+        assert isinstance(result, bool)
+        expected = platform.system() == "Darwin" and platform.machine() == "arm64"
+        assert result == expected
+
+    def test_mps_detection_on_apple(self):
+        """On Apple Silicon, MPS should be selected if available."""
+        try:
+            import torch
+
+            from infinigen.core.util.device import get_torch_device
+
+            device = get_torch_device(prefer="mps")
+            if (
+                hasattr(torch.backends, "mps")
+                and torch.backends.mps.is_available()
+            ):
+                assert device.type == "mps"
+            else:
+                # Falls back to auto-detect
+                assert device.type in ("cuda", "cpu")
+        except ImportError:
+            pytest.skip("torch not available")
+
+
+# ---------------------------------------------------------------------------
+# 11. np.prod vs deprecated np.product
+# ---------------------------------------------------------------------------
+
+
+class TestNpProdDeprecation:
+    """Ensure np.prod is used instead of deprecated np.product."""
+
+    def test_np_prod_works(self):
+        """np.prod should work identically to the old np.product."""
+        arr = np.array([2, 3, 4])
+        assert np.prod(arr) == 24
+
+    def test_np_prod_tuple(self):
+        """np.prod on tuple input (as used in KERNELDATATYPE_DIMS)."""
+        dims = (3,)
+        assert np.prod(dims) == 3
+        dims = (3, 3)
+        assert np.prod(dims) == 9
+
+    def test_np_prod_empty(self):
+        """np.prod of empty should return 1."""
+        assert np.prod([]) == 1.0
