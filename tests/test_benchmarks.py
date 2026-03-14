@@ -1950,3 +1950,117 @@ class TestGridDistancePerformance:
             f"Expected ≥5× speedup from EDT, got {speedup:.1f}× "
             f"(ref={t_ref:.1f} ms, opt={t_opt:.1f} ms)"
         )
+
+
+# ---------------------------------------------------------------------------
+# 19. array_ops.unique_rows – centralised void-view helper
+# ---------------------------------------------------------------------------
+
+
+class TestArrayOpsUniqueRows:
+    """Test the centralised unique_rows helper in array_ops.py."""
+
+    def _import_unique_rows(self):
+        import sys
+
+        spec = importlib.util.spec_from_file_location(
+            "array_ops",
+            Path(__file__).parent.parent / "infinigen" / "core" / "util" / "array_ops.py",
+        )
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["array_ops"] = mod
+        spec.loader.exec_module(mod)
+        return mod.unique_rows
+
+    def test_basic_unique(self):
+        unique_rows = self._import_unique_rows()
+        arr = np.array([[1, 2], [3, 4], [1, 2], [5, 6]], dtype=np.int32)
+        result = unique_rows(arr)
+        assert result.shape[0] == 3
+        result_set = {tuple(r) for r in result}
+        assert result_set == {(1, 2), (3, 4), (5, 6)}
+
+    def test_return_inverse(self):
+        unique_rows = self._import_unique_rows()
+        arr = np.array([[1, 2], [3, 4], [1, 2], [5, 6]], dtype=np.int32)
+        uniq, inverse = unique_rows(arr, return_inverse=True)
+        np.testing.assert_array_equal(uniq[inverse], arr)
+
+    def test_return_index(self):
+        unique_rows = self._import_unique_rows()
+        arr = np.array([[1, 2], [3, 4], [1, 2]], dtype=np.int32)
+        uniq, idx = unique_rows(arr, return_index=True)
+        # Each index should point to a row in the original that matches
+        for i, row in enumerate(uniq):
+            np.testing.assert_array_equal(arr[idx[i]], row)
+
+    def test_return_counts(self):
+        unique_rows = self._import_unique_rows()
+        arr = np.array([[1, 2], [1, 2], [1, 2], [3, 4]], dtype=np.int32)
+        uniq, counts = unique_rows(arr, return_counts=True)
+        # Should sum to total rows
+        assert counts.sum() == len(arr)
+
+    def test_all_same_rows(self):
+        unique_rows = self._import_unique_rows()
+        arr = np.zeros((100, 3), dtype=np.int32)
+        result = unique_rows(arr)
+        assert result.shape == (1, 3)
+
+    def test_all_distinct_rows(self):
+        unique_rows = self._import_unique_rows()
+        arr = np.arange(50 * 2, dtype=np.int32).reshape(50, 2)
+        result = unique_rows(arr)
+        assert result.shape[0] == 50
+
+    def test_1d_raises(self):
+        unique_rows = self._import_unique_rows()
+        with pytest.raises(ValueError, match="2-D"):
+            unique_rows(np.array([1, 2, 3]))
+
+    def test_matches_np_unique_axis0(self):
+        """unique_rows must return the same set of rows as np.unique(..., axis=0)."""
+        unique_rows = self._import_unique_rows()
+        np.random.seed(99)
+        arr = np.random.randint(0, 10, (1000, 4), dtype=np.int32)
+        ref = np.unique(arr, axis=0)
+        fast = unique_rows(arr)
+        ref_set = {tuple(r) for r in ref}
+        fast_set = {tuple(r) for r in fast}
+        assert ref_set == fast_set
+
+    def test_float_dtype(self):
+        """Verify it works with float arrays too."""
+        unique_rows = self._import_unique_rows()
+        arr = np.array([[1.0, 2.0], [3.0, 4.0], [1.0, 2.0]], dtype=np.float64)
+        result = unique_rows(arr)
+        assert result.shape[0] == 2
+
+    def test_performance_vs_np_unique(self):
+        """Void-view unique_rows should be faster than np.unique(..., axis=0)."""
+        unique_rows = self._import_unique_rows()
+        np.random.seed(42)
+        arr = np.random.randint(0, 100, (500_000, 3), dtype=np.int32)
+
+        n_repeat = 3
+        # Reference: np.unique(..., axis=0)
+        times_ref = []
+        for _ in range(n_repeat):
+            t0 = time.perf_counter()
+            np.unique(arr, axis=0)
+            times_ref.append(time.perf_counter() - t0)
+        t_ref = float(np.median(times_ref))
+
+        # Optimised: unique_rows
+        times_opt = []
+        for _ in range(n_repeat):
+            t0 = time.perf_counter()
+            unique_rows(arr)
+            times_opt.append(time.perf_counter() - t0)
+        t_opt = float(np.median(times_opt))
+
+        speedup = t_ref / t_opt if t_opt > 0 else float("inf")
+        assert speedup >= 1.5, (
+            f"Expected ≥1.5× speedup from unique_rows, got {speedup:.2f}× "
+            f"(ref={t_ref*1000:.1f} ms, opt={t_opt*1000:.1f} ms)"
+        )

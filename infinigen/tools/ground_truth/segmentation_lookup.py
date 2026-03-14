@@ -15,6 +15,7 @@ import numpy as np
 from imageio.v3 import imread, imwrite
 from numba.types import bool_
 
+from infinigen.core.util.array_ops import unique_rows
 from infinigen.tools.compress_masks import recover
 from infinigen.tools.dataset_loader import get_frame_path
 
@@ -134,13 +135,7 @@ if __name__ == "__main__":
         [object_segmentation_mask, instance_segmentation_mask], "h w *"
     )
     combined_mask = rearrange(combined_mask, "h w d -> (h w) d")
-    # Void-view unique: reinterpret each row as an opaque byte blob so NumPy
-    # runs a fast 1-D unique instead of the slow axis=0 lexsort path.
-    combined_mask = np.ascontiguousarray(combined_mask)
-    void_row_dtype = np.dtype((np.void, combined_mask.dtype.itemsize * combined_mask.shape[1]))
-    void_view = combined_mask.view(void_row_dtype).reshape(-1)
-    unique_void_rows, indices = np.unique(void_view, return_inverse=True)
-    uniq_instances = unique_void_rows.view(combined_mask.dtype).reshape(-1, combined_mask.shape[1])
+    uniq_instances, indices = unique_rows(combined_mask, return_inverse=True)
     unique_colors = np.stack([arr2color(row) for row in uniq_instances])
 
     if args.boxes:
