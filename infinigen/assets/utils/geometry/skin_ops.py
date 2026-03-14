@@ -47,10 +47,33 @@ def bevel_cap(s: Skin, n: int, d: float, profile="SPHERE"):
     else:
         raise ValueError(f"Unrecognized {profile=}")
 
-    for t, r in zip(ts, rads):
-        s = extend_cap(s, r=r, margin=d * t)
+    res = copy(s)
 
-    return s
+    # Cumulative product of scale factors: cumprod[k] = rads[0] * ... * rads[k]
+    # Used to compute each cap profile as original_boundary * cumprod.
+    cumprod_rads = np.cumprod(rads)
+
+    # Reshape for broadcasting: (n, 1) for 2-D profiles, (n, 1, 1) for 3-D, etc.
+    extra_dims = s.profiles.ndim - 1
+    scalings = cumprod_rads.reshape(-1, *([1] * extra_dims))
+
+    # Start profiles (outermost first): boundary scaled by reversed cumprod
+    start_profiles = s.profiles[[0]] * scalings[::-1]
+    # End profiles (innermost first): boundary scaled by cumprod
+    end_profiles = s.profiles[[-1]] * scalings
+    res.profiles = np.concatenate([start_profiles, s.profiles, end_profiles])
+
+    # t values added at start: d * ts reversed (outermost first)
+    # t values added at end:   1 - d * ts (innermost first)
+    res.ts = np.concatenate([d * ts[::-1], s.ts, 1.0 - d * ts])
+
+    if s.surface_params is not None:
+        # surface_params caps are not scaled by r — just repeat boundary values
+        start_sp = np.repeat(s.surface_params[[0]], n, axis=0)
+        end_sp = np.repeat(s.surface_params[[-1]], n, axis=0)
+        res.surface_params = np.concatenate([start_sp, s.surface_params, end_sp])
+
+    return res
 
 
 def symmetrize(s: Skin, fac):

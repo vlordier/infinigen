@@ -11,8 +11,9 @@
 import logging
 import os
 import sys
+import time
 import typing
-from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 
 import bpy
@@ -40,14 +41,14 @@ class Timer:
     def __enter__(self):
         if self.disable_timer:
             return
-        self.start = datetime.now()
+        self._start = time.perf_counter()
         self.logger.info(f"{self.name}")
 
     def __exit__(self, exc_type, exc_val, traceback):
         if self.disable_timer:
             return
-        self.end = datetime.now()
-        self.duration = self.end - self.start  # timedelta
+        elapsed = time.perf_counter() - self._start
+        self.duration = timedelta(seconds=elapsed)
         if exc_type is None:
             self.logger.info(f"{self.name} finished in {str(self.duration)}")
         else:
