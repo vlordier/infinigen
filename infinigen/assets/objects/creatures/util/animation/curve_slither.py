@@ -294,7 +294,7 @@ def slither_along_path(obj, curve, speed, zoff_pct=0.7, orig_len=None):
     if curve.type != "CURVE":
         message = f"slither_along_path failed, {curve.name=} had {curve.type=} but expected CURVE"
         if curve.type == "MESH":
-            message == f". {len(curve.data.vertices)=}"
+            message += f". {len(curve.data.vertices)=}"
         logging.warning(message)
         return
 

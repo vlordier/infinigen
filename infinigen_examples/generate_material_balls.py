@@ -19,7 +19,6 @@ from tqdm import tqdm
 from infinigen.assets.materials import tile
 from infinigen.assets.materials.ceramic import shader_ceramic
 
-# ruff: noqa: E402
 # NOTE: logging config has to be before imports that use logging
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(module)s] [%(levelname)s] | %(message)s",
@@ -102,8 +101,8 @@ def build_scene_surface(factory_name, idx):
                     template.apply(asset, alternating=idx % 4 in [0, 1])
                 else:
                     template.apply(asset)
-    except ModuleNotFoundError:
-        raise Exception(f"{factory_name} not Found.")
+    except ModuleNotFoundError as e:
+        raise Exception(f"{factory_name} not Found.") from e
     return asset
 
 

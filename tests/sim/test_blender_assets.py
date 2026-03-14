@@ -175,7 +175,7 @@ class TestBlenderAssets:
             msg = (
                 f"Asset '{asset_name}' has {count} joint(s) at nonzero depth: {details}"
             )
-            assert False, msg
+            raise AssertionError(msg)
 
     def test_asset_no_scale(self, asset_name, seed, cached_assets):
         """Test description: Ensures that node graph does not scale asset after joint"""
@@ -229,7 +229,7 @@ class TestBlenderAssets:
                 f"Asset {asset_name}: Some joint labels are not unique:"
                 + " ".join(dup_info)
             )
-            assert False, message
+            raise AssertionError(message)
 
     def test_metadata_for_each_joint_input(self, asset_name, seed, cached_assets):
         """Test description: Ensure that each joint input has metadata for both parent and child bodies. This requires a metadata node RIGHT BEFORE each joint node in the node tree. EXCEPTIONS: 1) no metadata is required when connecting parent/child output of a joint node to the input of a duplicate node. 2) no metadata is required when connecting parent/child output of a joint node to the parent/child of another joint node to form a multi-jointed body (i.e. sliding + hinge joint -> screw joint)."""
@@ -272,7 +272,7 @@ class TestBlenderAssets:
             error_message = f"Asset {asset_name}: Metadata issues found. " + " / ".join(
                 errors
             )
-            assert False, error_message
+            raise AssertionError(error_message)
 
     def test_joint_parent_child_output_used_correctly(
         self, asset_name, seed, cached_assets

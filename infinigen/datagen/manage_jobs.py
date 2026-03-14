@@ -39,14 +39,11 @@ except ImportError:
     )
     submitit = None
 
-# ruff: noqa: E402
 ORIG_SYS_PATH = list(sys.path)  # Make a new instance of sys.path
 import infinigen.core.init
 
 BPY_SYS_PATH = list(sys.path)  # Make instance of `bpy`'s modified sys.path
 
-# ruff: noqa: F401
-from infinigen.datagen.job_funcs import get_cmd
 from infinigen.datagen.monitor_tasks import iterate_scene_tasks, on_scene_termination
 from infinigen.datagen.states import (
     CONCLUDED_JOBSTATES,

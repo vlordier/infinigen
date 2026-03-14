@@ -17,10 +17,10 @@ from tqdm import tqdm
 
 try:
     from einops import pack, rearrange
-except ImportError:
+except ImportError as e:
     raise ImportError(
         "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
-    )
+    ) from e
 
 from infinigen.tools.compress_masks import recover
 from infinigen.tools.dataset_loader import get_frame_path

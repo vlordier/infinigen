@@ -13,7 +13,6 @@ import numpy as np
 from mathutils import Vector
 from numpy.random import randint, uniform
 
-# ruff: noqa: E402
 # NOTE: logging config has to be before imports that use logging
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(module)s] [%(levelname)s] | %(message)s",
@@ -23,7 +22,6 @@ logging.basicConfig(
 
 
 # unused imports required for gin to find modules currently, # TODO remove
-# ruff: noqa: F401
 from infinigen.assets import fluid, lighting, weather
 from infinigen.assets.objects import (
     cactus,
@@ -60,7 +58,7 @@ from infinigen.assets.scatters import (
     urchin,
 )
 from infinigen.assets.scatters.utils.selection import scatter_lower, scatter_upward
-from infinigen.core import execute_tasks, init, surface
+from infinigen.core import execute_tasks, init
 from infinigen.core.placement import camera as cam_util
 from infinigen.core.placement import camera_trajectories as cam_traj
 from infinigen.core.placement import density, placement, split_in_view
@@ -77,7 +75,6 @@ from infinigen.terrain.core import Terrain
 logger = logging.getLogger(__name__)
 
 
-from infinigen.core.util import rrt
 
 
 @gin.configurable

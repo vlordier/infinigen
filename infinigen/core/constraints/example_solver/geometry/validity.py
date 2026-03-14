@@ -55,15 +55,10 @@ def check_pre_move_validity(scene, a, parent_dict, dx, dy):
     # plt.show()
     # scene.show()
 
-    if isinstance(a_poly, Polygon):
+    if isinstance(a_poly, (Polygon, MultiPolygon)):
         if not parent_poly.contains(new_centroid):
             # print("not contained")
             return False
-    elif isinstance(a_poly, MultiPolygon):
-        for sub_poly in a_poly.geoms:
-            if not parent_poly.contains(new_centroid):
-                # print("not contained")
-                return False
 
     return True
 

@@ -18,7 +18,6 @@ from omni.isaac.kit import SimulationApp
 from omni.kit.commands import execute as omni_exec
 from pxr import Sdf, Usd, UsdGeom, UsdLux
 
-# ruff: noqa: E402
 enable_extension("omni.isaac.examples")
 from omni.isaac.core.controllers import BaseController
 from omni.isaac.core.utils.types import ArticulationAction

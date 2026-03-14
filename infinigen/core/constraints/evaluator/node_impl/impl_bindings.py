@@ -66,7 +66,7 @@ def operator_impl(
         else:
             return functools.reduce(cons.func, operands)
     except ZeroDivisionError as e:
-        raise ZeroDivisionError(f"{e} in {cons=}, {operands=}")
+        raise ZeroDivisionError(f"{e} in {cons=}, {operands=}") from e
 
 
 @register_node_impl(cl.center_stable_surface_dist)

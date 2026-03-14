@@ -226,7 +226,7 @@ def animate_trajectories(
         )
     except ValueError as err:
         if fatal:
-            raise ValueError(err)
+            raise ValueError(err) from err
         else:
             logger.warning(err)
             return

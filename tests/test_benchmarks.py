@@ -24,6 +24,7 @@ Benchmarks and correctness tests for optimisations:
 15. tree.py                – Lazy vertex concatenation in TreeVertices
 16. mesh.py                – Pre-computed combined projection matrices via K @ inv(cam)[:3,:]
 17. mesh.py                – Cached C function argtypes/restype setup
+18. image_processing.py    – grid_distance() O(N²·B) loop → scipy distance_transform_edt O(N²)
 """
 
 import importlib
@@ -1846,4 +1847,106 @@ class TestParentLocPerformance:
         assert speedup >= 1.3, (
             f"Expected ≥1.3× speedup, got {speedup:.2f}× "
             f"(loop={t_loop:.2f} ms, vec={t_vec:.2f} ms)"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 20. grid_distance() – O(N²·B) nested loop → scipy EDT O(N²)
+# ---------------------------------------------------------------------------
+
+
+def _grid_distance_reference(source, downsample):
+    """Reference implementation: nested Python loop (O(N²·B))."""
+    import cv2
+
+    M = source.shape[0]
+    src = cv2.resize(source.astype(float), (downsample, downsample)) > 0.5
+    dist = np.zeros_like(src, dtype=np.float32) + 1e9
+    N = src.shape[0]
+    I, J = np.meshgrid(np.arange(N), np.arange(N), indexing="ij")
+    boundary = np.zeros_like(src, dtype=bool)
+    boundary[:-1, :] |= ~src[1:, :]
+    boundary[1:, :] |= ~src[:-1, :]
+    boundary[:, :-1] |= ~src[:, 1:]
+    boundary[:, 1:] |= ~src[:, :-1]
+    boundary &= src
+    for i in range(N):
+        for j in range(N):
+            if boundary[i, j]:
+                dist = np.minimum(
+                    dist, (((I - i) / N) ** 2 + ((J - j) / N) ** 2) ** 0.5
+                )
+    dist[src] = 0
+    dist = cv2.resize(dist, (M, M))
+    return dist
+
+
+def _grid_distance_optimized(source, downsample):
+    """Optimised implementation using scipy distance_transform_edt (O(N²))."""
+    import cv2
+    from scipy.ndimage import distance_transform_edt
+
+    M = source.shape[0]
+    src = cv2.resize(source.astype(float), (downsample, downsample)) > 0.5
+    N = src.shape[0]
+    boundary = np.zeros_like(src, dtype=bool)
+    boundary[:-1, :] |= ~src[1:, :]
+    boundary[1:, :] |= ~src[:-1, :]
+    boundary[:, :-1] |= ~src[:, 1:]
+    boundary[:, 1:] |= ~src[:, :-1]
+    boundary &= src
+    dist = distance_transform_edt(~boundary).astype(np.float32) / N
+    dist[src] = 0
+    dist = cv2.resize(dist, (M, M))
+    return dist
+
+
+def _make_grid_source(size=64, fill_frac=0.6):
+    """Create a binary source grid with a filled central region."""
+    src = np.zeros((size, size), dtype=np.float32)
+    pad = int(size * (1 - fill_frac) / 2)
+    src[pad : size - pad, pad : size - pad] = 1.0
+    return src
+
+
+class TestGridDistanceCorrectness:
+    """Verify optimised grid_distance produces the same results as the reference."""
+
+    @pytest.mark.parametrize("downsample", [16, 32])
+    def test_results_close(self, downsample):
+        pytest.importorskip("cv2")
+        pytest.importorskip("scipy")
+        src = _make_grid_source(size=64, fill_frac=0.6)
+        ref = _grid_distance_reference(src, downsample)
+        opt = _grid_distance_optimized(src, downsample)
+        np.testing.assert_allclose(
+            ref,
+            opt,
+            atol=2.0 / downsample,
+            err_msg=f"grid_distance mismatch at downsample={downsample}",
+        )
+
+
+class TestGridDistancePerformance:
+    """Assert scipy EDT is substantially faster than the nested loop."""
+
+    def _time_ms(self, fn, *args, n_repeat=3):
+        times = []
+        for _ in range(n_repeat):
+            t0 = time.perf_counter()
+            fn(*args)
+            times.append((time.perf_counter() - t0) * 1000)
+        return float(np.median(times))
+
+    def test_speedup(self):
+        pytest.importorskip("cv2")
+        pytest.importorskip("scipy")
+        src = _make_grid_source(size=64, fill_frac=0.5)
+        downsample = 32
+        t_ref = self._time_ms(_grid_distance_reference, src, downsample)
+        t_opt = self._time_ms(_grid_distance_optimized, src, downsample)
+        speedup = t_ref / t_opt if t_opt > 0 else float("inf")
+        assert speedup >= 5.0, (
+            f"Expected ≥5× speedup from EDT, got {speedup:.1f}× "
+            f"(ref={t_ref:.1f} ms, opt={t_opt:.1f} ms)"
         )

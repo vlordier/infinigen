@@ -32,12 +32,9 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Lint with ruff
+      - name: Lint with ruff (Python 3.11 stringent – rules in pyproject.toml)
         run: |
           uv pip install --system ruff
-          # stop the build if there are Python syntax errors or undefined names
-          ruff check --output-format=github --select=E9,F63,F7,F82 .
-          # default set of ruff rules with GitHub Annotations
           ruff check --output-format=github .
 
       - name: Install infinigen & dependencies

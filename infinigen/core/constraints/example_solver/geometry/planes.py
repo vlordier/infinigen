@@ -125,7 +125,7 @@ class Planes:
             )
             normal = butil.global_polygon_normal(obj, polygon)
             belongs_to_existing_plane = False
-            for name, polygon2_index in unique_planes:
+            for _name, polygon2_index in unique_planes:
                 polygon2 = obj.data.polygons[polygon2_index]
                 plane_vertex = butil.global_vertex_coordinates(
                     obj, obj.data.vertices[polygon2.vertices[0]]

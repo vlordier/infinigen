@@ -50,7 +50,7 @@ def path_finding(
             offset *= margin / offset.length
             check_N = 10
             angle = np.pi * 2 / check_N
-            for i in range(check_N):
+            for _i in range(check_N):
                 location, *_ = bvhtree.ray_cast(a + offset, v, v.length)
                 if location is not None:
                     return False

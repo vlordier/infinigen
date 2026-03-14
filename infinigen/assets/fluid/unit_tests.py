@@ -11,7 +11,7 @@ def test_exists_fire_in_scene():
     for obj in bpy.data.objects:
         if "Fluid" in obj.modifiers:
             return
-    assert False
+    raise AssertionError
 
 
 def test_some_density_in_frame():

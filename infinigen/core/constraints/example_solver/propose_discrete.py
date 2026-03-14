@@ -248,7 +248,7 @@ def propose_deletion(
 
     np.random.shuffle(bounds)
 
-    for i, bound in enumerate(bounds):
+    for _i, bound in enumerate(bounds):
         candidates = objkeys_in_dom(bound.domain, curr)
         np.random.shuffle(candidates)
         for cand in candidates:

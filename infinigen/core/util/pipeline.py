@@ -51,8 +51,8 @@ class RandomStageExecutor:
         if prereq is not None:
             try:
                 e = next(e for e in self.results if e["name"] == prereq)
-            except StopIteration:
-                raise ValueError(f"{self} could not find matching name for {prereq=}")
+            except StopIteration as exc:
+                raise ValueError(f"{self} could not find matching name for {prereq=}") from exc
             if not e["ran"]:
                 logger.info(f"Skipping run_stage({name}...) due to unmet {prereq=}")
                 return

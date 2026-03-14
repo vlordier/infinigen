@@ -217,7 +217,7 @@ class Solver:
                 logger.warning(msg)
 
         # re-enable everything so the blender scene populates / displays correctly etc
-        for k, v in self.state.objs.items():
+        for k, _v in self.state.objs.items():
             greedy.set_active(self.state, k, True)
 
         return self.state

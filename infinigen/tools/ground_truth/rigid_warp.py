@@ -15,10 +15,10 @@ from infinigen.tools.dataset_loader import get_frame_path
 
 try:
     from einops import einsum
-except ImportError:
+except ImportError as e:
     raise ImportError(
         "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
-    )
+    ) from e
 
 """
 Usage: python -m tools.ground_truth.rigid_warp <scene-folder> <frame-index-i> <frame-index-j>

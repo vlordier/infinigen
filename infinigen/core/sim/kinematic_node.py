@@ -94,7 +94,7 @@ class KinematicNode:
         Retruns a list of all the node's chidren.
         """
         res = []
-        for key, child in self.children.items():
+        for _key, child in self.children.items():
             res.append(child)
         return res
 

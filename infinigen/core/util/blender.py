@@ -10,11 +10,10 @@ from itertools import chain
 from math import prod
 from pathlib import Path
 
-# ruff: noqa: I001
-# must import bpy before bmesh
-import bpy
-import gin
+# bpy must be imported before bmesh; use isort:skip to preserve this order.
+import bpy  # isort:skip
 import bmesh
+import gin
 import mathutils
 import numpy as np
 import trimesh

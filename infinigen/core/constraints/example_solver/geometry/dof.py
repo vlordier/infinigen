@@ -133,8 +133,8 @@ def check_init_valid(
         try:
             a = obj_planes[ind][0]
             b = assigned_planes[ind][0]
-        except IndexError:
-            raise ValueError(f"Invalid {ind=} {obj_planes=} {assigned_planes=}")
+        except IndexError as e:
+            raise ValueError(f"Invalid {ind=} {obj_planes=} {assigned_planes=}") from e
 
         a_plane = obj_planes[ind]
         b_plane = assigned_planes[ind]
@@ -293,7 +293,7 @@ def apply_relations_surfacesample(
             f"Object {name} has more than 3 relations, not supported. {obj_state.relations=}"
         )
 
-    for i, relation_state in enumerate(obj_state.relations):
+    for _i, relation_state in enumerate(obj_state.relations):
         if isinstance(relation_state.relation, cl.AnyRelation):
             raise ValueError(
                 f"Got {relation_state.relation} for {name=} {relation_state.target_name=}"
@@ -437,7 +437,7 @@ def apply_relations_surfacesample(
 
     elif dof == 2:
         # assert len(parent_planes) == 1, (name, len(parent_planes))
-        for i, relation_state in enumerate(obj_state.relations):
+        for _i, relation_state in enumerate(obj_state.relations):
             parent_obj = state.objs[relation_state.target_name].obj
             obj_plane, parent_plane = state.planes.get_rel_state_planes(
                 state, name, relation_state

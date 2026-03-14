@@ -26,7 +26,7 @@ def to_material(name, singleton):
             if singleton and name in bpy.data.materials:
                 return bpy.data.materials[name]
             else:
-                return surface.shaderfunc_to_material(fn, *args, name=name, *kwargs)
+                return surface.shaderfunc_to_material(fn, *args, *kwargs, name=name)
 
         return init_fn
 

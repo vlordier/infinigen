@@ -67,7 +67,7 @@ def split_rooms(rooms_meshed: list[bpy.types.Object]):
         for n, tags in extract_tags.items()
     }
 
-    for k, ms in meshes.items():
+    for _k, ms in meshes.items():
         m2delete = []
         for m in ms:
             if m.name.startswith("vert"):
