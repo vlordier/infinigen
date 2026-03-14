@@ -33,7 +33,6 @@ def get_mesh_data(obj):
         len(
             verts,
         ),
-        0,
         dtype=np.int32,
     )
     if False and "MaskTag" in obj.data.attributes:

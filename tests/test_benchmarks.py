@@ -474,11 +474,16 @@ class TestMeshCatCorrectness:
     @pytest.mark.parametrize("n_meshes", [1, 3, 10, 50])
     def test_vertices_match(self, n_meshes):
         np.random.seed(42)
-        meshes = [_make_fake_mesh(100, 50) for _ in range(n_meshes)]
-        meshes_copy = [copy(m) for m in meshes]
 
-        v_ref, f_ref, a_ref = _mesh_cat_reference(meshes)
-        v_opt, f_opt, a_opt = _mesh_cat_optimized(meshes_copy)
+        def make_meshes():
+            return [_make_fake_mesh(100, 50) for _ in range(n_meshes)]
+
+        meshes_ref = make_meshes()
+        np.random.seed(42)
+        meshes_opt = make_meshes()
+
+        v_ref, f_ref, a_ref = _mesh_cat_reference(meshes_ref)
+        v_opt, f_opt, a_opt = _mesh_cat_optimized(meshes_opt)
 
         np.testing.assert_allclose(v_opt, v_ref, rtol=1e-12)
         np.testing.assert_array_equal(f_opt, f_ref)
@@ -829,9 +834,11 @@ class TestWriteAttrsPerformance:
         t_ref = np.median(times_ref)
         t_opt = np.median(times_opt)
         speedup = t_ref / t_opt
-        # Pre-computed masks avoid redundant comparisons; allow small margin for noise
+        # Pre-computed masks save redundant boolean array creation; the improvement
+        # is modest for small element counts but beneficial in real terrain workloads
+        # with many elements. Allow noise margin in CI.
         assert speedup >= 0.9, (
-            f"Pre-computed masks unexpectedly slower, got {speedup:.2f}× "
+            f"Pre-computed masks unexpectedly much slower, got {speedup:.2f}× "
             f"(ref={t_ref*1000:.2f} ms, opt={t_opt*1000:.2f} ms)"
         )
 
