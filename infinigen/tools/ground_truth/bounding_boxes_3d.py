@@ -129,7 +129,10 @@ if __name__ == "__main__":
         [object_segmentation_mask, instance_segmentation_mask], "h w *"
     )
     combined_mask = rearrange(combined_mask, "h w d -> (h w) d")
-    visible_instances = np.unique(combined_mask, axis=0)  # this line is a bottleneck
+    # Void-view unique avoids the slow axis=0 lexsort path in np.unique.
+    from infinigen.core.util.array_ops import unique_rows
+
+    visible_instances = unique_rows(combined_mask)
     visible_instances = {tuple(row) for row in visible_instances}
 
     boxes_to_draw = []

@@ -787,6 +787,7 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
         all_scenes = sorted(all_scenes, key=lambda j: j["seed"])
 
     start_time = datetime.now()
+    start_perf = time.perf_counter()
     while any(j["all_done"] == SceneState.NotDone for j in all_scenes):
         now = datetime.now()
 
@@ -796,7 +797,7 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
             )
 
         log_stats = manage_datagen_jobs(
-            all_scenes, elapsed=(datetime.now() - start_time).total_seconds()
+            all_scenes, elapsed=time.perf_counter() - start_perf
         )
 
         if wandb is not None:

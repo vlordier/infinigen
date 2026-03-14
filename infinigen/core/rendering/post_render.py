@@ -120,7 +120,9 @@ def colorize_depth(depth, scale_vmin=1.0):
 def colorize_int_array(data, color_seed=0):
     H, W, *_ = data.shape
     data = data.reshape((H * W, -1))
-    uniq, indices = np.unique(data, return_inverse=True, axis=0)
+    from infinigen.core.util.array_ops import unique_rows
+
+    uniq, indices = unique_rows(data, return_inverse=True)
     random_states = [
         np.random.RandomState(e[:2].astype(np.uint32) + color_seed) for e in uniq
     ]
