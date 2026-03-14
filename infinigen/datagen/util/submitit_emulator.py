@@ -115,7 +115,7 @@ def job_wrapper(
                 env=env,
                 bufsize=1,
             )
-            # subprocess.PIPE ensures text-mode file objects here.
+            # text=True ensures text-mode file objects here.
 
             def drain(pipe, sinks):
                 for line in pipe:
@@ -147,7 +147,6 @@ def job_wrapper(
 
         if returncode:
             raise SystemExit(returncode)
-        return
 
 
 def launch_local(
