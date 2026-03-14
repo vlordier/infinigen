@@ -770,9 +770,6 @@ def apply_modifiers(obj, mod=None, quiet=True):
     # geometry nodes occasionally introduces empty material slots in 3.6, we consider this an error and remove them
     purge_empty_materials(obj)
 
-    # geometry nodes occasionally introduces empty material slots in 3.6, we consider this an error and remove them
-    purge_empty_materials(obj)
-
 
 def recalc_normals(obj, inside=False):
     with ViewportMode(obj, mode="EDIT"):
