@@ -4,6 +4,7 @@
 # Authors: Zeyu Ma
 
 
+import logging
 from ctypes import POINTER, c_float, c_int32, c_size_t
 
 import gin
@@ -13,6 +14,8 @@ from numpy import ascontiguousarray as AC
 from infinigen.core.util.organization import Materials
 from infinigen.terrain.utils import ASFLOAT, ASINT, Vars, load_cdll, register_func
 
+logger = logging.getLogger(__name__)
+
 
 @gin.configurable
 class Element:
@@ -21,7 +24,7 @@ class Element:
     def __init__(self, lib_name, material, transparency):
         if lib_name in Element.called_time:
             lib_name_X = f"{lib_name}_{Element.called_time[lib_name]}"
-            print(f"{lib_name} already loaded, loading {lib_name_X} instead")
+            logger.info(f'{lib_name} already loaded, loading {lib_name_X} instead')
             Element.called_time[lib_name] += 1
         else:
             lib_name_X = lib_name

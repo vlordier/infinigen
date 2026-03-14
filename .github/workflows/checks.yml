@@ -1,4 +1,3 @@
-
 name: Lint & Test
 
 on:
@@ -34,8 +33,8 @@ jobs:
 
       - name: Lint with ruff (Python 3.11 stringent – rules in pyproject.toml)
         run: |
-          uv pip install ruff
-          uv run ruff check --output-format=github .
+          uv pip install "ruff<0.9.0"
+          ruff check --output-format=github .
 
       - name: Install infinigen & dependencies
         run: |
@@ -43,8 +42,8 @@ jobs:
 
       - name: Test with pytest
         run: |
-          uv run pytest tests -k 'not skip_for_ci'
+          pytest tests -k 'not skip_for_ci'
 
       - name: Check for copyright statements
         run: |
-          uv run ruff check --output-format=github --preview --select CPY001 .
+          ruff check --output-format=github --preview --select CPY001 .

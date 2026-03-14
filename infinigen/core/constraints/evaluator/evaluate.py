@@ -80,7 +80,7 @@ def _compute_node_val(node: cl.Node, state: State, memo: dict):
                 for k, v in memo.items()
                 if isinstance(k, str) and k.startswith("var_")
             ]
-            print(f"cl.debugprint {msg}: {res} {var_assignments}")
+            logger.info(f'cl.debugprint {msg}: {res} {var_assignments}')
             return res
         case _:
             raise NotImplementedError(

@@ -4,10 +4,14 @@
 
 # Authors: Alexander Raistrick
 
+import logging
+
 from infinigen.core import tags as t
 from infinigen.core.constraints import constraint_language as cl
 from infinigen.core.constraints import reasoning as r
 from infinigen.core.constraints.example_solver import greedy, state_def
+
+logger = logging.getLogger(__name__)
 
 
 def make_dummy_state(type_counts: dict[tuple[t.Tag], int]):
@@ -103,7 +107,7 @@ def test_substitutions_child_complex():
     )
 
     subs = list(greedy.substitutions(var_dom, state))
-    print(subs)
+    logger.info(subs)
     assert len(subs) == 2
     assert len([s for s in subs if t.SpecificObject("obj_0") in s.tags]) == 1
     assert len([s for s in subs if t.SpecificObject("obj_1") in s.tags]) == 1

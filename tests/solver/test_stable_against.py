@@ -4,6 +4,8 @@
 # Authors: Karhan Kayan
 
 
+import logging
+
 import bpy
 
 # import pytest
@@ -16,6 +18,8 @@ from infinigen.core.constraints import constraint_language as cl
 from infinigen.core.constraints.example_solver import state_def
 from infinigen.core.constraints.example_solver.geometry import parse_scene, validity
 from infinigen.core.util import blender as butil
+
+logger = logging.getLogger(__name__)
 
 
 def make_scene(loc2):
@@ -227,7 +231,7 @@ def test_coplanar():
     # Test case 8: Cup is inside the table, not stable against but coplanar (should be invalid)
     assert not validity.check_post_move_validity(make_scene_coplanar((-2, 0, 0)), "cup")
 
-    print("All test cases for coplanar constraint passed successfully.")
+    logger.info('All test cases for coplanar constraint passed successfully.')
 
 
 if __name__ == "__main__":

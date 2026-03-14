@@ -5,6 +5,7 @@
 
 
 import argparse
+import logging
 import os
 import re
 import subprocess
@@ -14,6 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -133,14 +136,12 @@ if __name__ == "__main__":
     fine_status_freq = Counter(
         [j.current_status for j in all_jobs if j.name.endswith("_fine")]
     )
-    print(fine_status_freq)
+    logger.info(fine_status_freq)
 
     avg_fine_elapsed = timedelta(seconds=np.mean(all_times["fine"]["elapsed"]))
-    print(f"{avg_fine_elapsed} {round(np.mean(all_times['fine']['percentage'])):02d}%")
+    logger.info(f'{avg_fine_elapsed} {round(np.mean(all_times['fine']['percentage'])):02d}%')
 
     avg_coarse_elapsed = timedelta(seconds=np.mean(all_times["coarse"]["elapsed"]))
-    print(
-        f"{avg_fine_elapsed} {round(np.mean(all_times['coarse']['percentage'])):02d}%"
-    )
+    logger.info(f'{avg_fine_elapsed} {round(np.mean(all_times['coarse']['percentage'])):02d}%')
     vg_full_elapsed = timedelta(seconds=np.mean(all_times["full"]))
-    print(vg_full_elapsed)
+    logger.info(vg_full_elapsed)

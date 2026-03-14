@@ -164,7 +164,7 @@ def random_convex_coord(names, select=None, temp=1):
     temp: float - like softmax, high temp = more even numbers, low temp = more 0s and 1s
     """
 
-    if isinstance(temp, (float, int)):
+    if isinstance(temp, float | int):
         temp = temp * np.ones(len(names))
     elif isinstance(temp, dict):
         temp = np.array([temp[n] for n in names])

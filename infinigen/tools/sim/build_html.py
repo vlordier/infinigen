@@ -6,8 +6,11 @@
 # - Max Gonzalez Saez-Diez: Primary author
 
 import argparse
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 def generate_html(
@@ -22,7 +25,7 @@ def generate_html(
     base_path = base_dir / "renders" / "mjcf" / asset_name
 
     if not base_path.exists():
-        print(f"Error: Path not found: {base_path}")
+        logger.info(f'Error: Path not found: {base_path}')
         return None
 
     # Collect video data organized by seed and joint
@@ -75,7 +78,7 @@ def generate_html(
             seeds_data[seed_name] = joints
 
     if not seeds_data:
-        print(f"No videos found for asset: {asset_name}")
+        logger.info(f'No videos found for asset: {asset_name}')
 
     # Determine output file path
     if output_file is None:
@@ -414,8 +417,8 @@ def generate_html(
     with open(output_file, "w") as f:
         f.write(html)
 
-    print(f"HTML created at: {output_file}")
-    print(f"Open: file://{output_file}")
+    logger.info(f'HTML created at: {output_file}')
+    logger.info(f'Open: file://{output_file}')
     return output_file
 
 

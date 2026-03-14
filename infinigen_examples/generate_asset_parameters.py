@@ -55,6 +55,8 @@ from infinigen.core.util.test_utils import load_txt_list
 from infinigen_examples.asset_parameters import parameters
 from infinigen_examples.generate_individual_assets import make_args, setup_camera
 
+logger = logging.getLogger(__name__)
+
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(name)s] [%(levelname)s] | %(message)s",
     datefmt="%H:%M:%S",
@@ -92,7 +94,7 @@ def build_scene_asset(args, factory_name, idx):
                     asset = factory.spawn_asset(idx)
             except Exception as e:
                 traceback.print_exc()
-                print(f"{factory}.spawn_asset({idx=}) FAILED!! {e}")
+                logger.info(f'{factory}.spawn_asset(idx={idx!r}) FAILED!! {e}')
                 raise e
         with FixedSeed(idx):
             factory.finalize_assets(asset)
@@ -263,7 +265,7 @@ def make_grid(args, path, n):
             files.append(f"{path}/images/{filename}")
     files = files[:n]
     if len(files) == 0:
-        print("No images found")
+        logger.info('No images found')
         return
     with Image.open(files[0]) as i:
         x, y = i.size
@@ -345,7 +347,7 @@ def main(args):
                 try:
                     build_scene(fac_path, idx, fac, args)
                 except Exception as e:
-                    print(e)
+                    logger.info(e)
                     continue
         if args.render == "image":
             make_grid(args, fac_path, n_images)

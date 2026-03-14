@@ -6,11 +6,14 @@
 # - Abhishek Joshi: primary author
 
 import argparse
+import logging
 from pathlib import Path
 
 import gin
 
 from infinigen.core.sim import sim_factory as sf
+
+logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -54,4 +57,4 @@ if __name__ == "__main__":
         visual_only=not args.include_collisions,
     )
 
-    print(f"Exported to {export_path.resolve()}")
+    logger.info("Exported to %s", export_path.resolve())

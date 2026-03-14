@@ -5,8 +5,11 @@
 
 
 import argparse
+import logging
 import subprocess
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("input_folder", type=Path, nargs="+")
@@ -33,7 +36,7 @@ for input_folder in args.input_folder:
         if not seed_folder.is_dir():
             continue
         if len(list(seed_folder.glob("frames*"))) == 0:
-            print(f"{seed_folder=} has no frames*")
+            logger.info(f'seed_folder={seed_folder!r} has no frames*')
             continue
         filters = []
         if args.resize is not None:
@@ -48,7 +51,7 @@ for input_folder in args.input_folder:
             + "-pix_fmt yuv420p ".split()
             + f"{output_folder}/{seed_folder.name}_{args.image_type}_{args.camera}.mp4".split()
         )
-        print(cmd)
+        logger.info(cmd)
         subprocess.run(cmd)
 
     if args.join:
@@ -64,4 +67,4 @@ for input_folder in args.input_folder:
         subprocess.run(cmd.split())
         instructions.unlink()
 
-        print(cat_output.absolute())
+        logger.info(cat_output.absolute())

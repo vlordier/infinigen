@@ -5,6 +5,8 @@
 # Authors:
 # - Abhishek Joshi: primary author
 
+import logging
+
 from infinigen.assets.sim_objects.box import BoxFactory
 from infinigen.assets.sim_objects.cabinet import CabinetFactory
 from infinigen.assets.sim_objects.dishwasher import DishwasherFactory
@@ -23,6 +25,8 @@ from infinigen.assets.sim_objects.stovetop import StovetopFactory
 from infinigen.assets.sim_objects.toaster import ToasterFactory
 from infinigen.assets.sim_objects.trash import TrashFactory
 from infinigen.assets.sim_objects.window import WindowFactory
+
+logger = logging.getLogger(__name__)
 
 # add newly transpiled assets here
 
@@ -51,9 +55,9 @@ OBJECT_CLASS_MAP = {
 
 def print_sim_objects():
     for i, obj_class in enumerate(OBJECT_CLASS_MAP.keys()):
-        print(f"{i} - {obj_class}")
+        logger.info(f'{i} - {obj_class}')
 
 
 if __name__ == "__main__":
-    print("Valid simulation assets:")
+    logger.info('Valid simulation assets:')
     print_sim_objects()

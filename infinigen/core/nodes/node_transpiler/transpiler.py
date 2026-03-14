@@ -758,7 +758,7 @@ def get_node_tree(target):
         return target.node_tree
     elif isinstance(target, bpy.types.NodesModifier):
         return target.node_group
-    elif isinstance(target, (bpy.types.Material, bpy.types.World, bpy.types.Scene)):
+    elif isinstance(target, bpy.types.Material | bpy.types.World | bpy.types.Scene):
         return target.node_tree
     else:
         raise ValueError(

@@ -109,7 +109,7 @@ def unified_asset_import(name):
     if len(matches) == 1:
         return import_item(matches[0][0]), matches[0][1]
     elif len(matches) > 1:
-        print(f"Ambiguous '{name}': {[f'{a} ({t})' for a, t in matches]}")
+        logger.info(f"Ambiguous '{name}': {[f'{a} ({t})' for a, t in matches]}")
         raise ValueError(f"Ambiguous asset name: {name}")
 
     # Show options and fail
@@ -161,7 +161,7 @@ def build_scene_asset(args, cls, idx):
             asset = fac.spawn_asset(idx)
     except Exception as e:
         traceback.print_exc()
-        print(f"{fac}.spawn_asset({idx=}) FAILED!! {e}")
+        logger.info(f'{fac}.spawn_asset(idx={idx!r}) FAILED!! {e}')
         raise e
     fac.finalize_assets(asset)
     if args.fire:
@@ -258,7 +258,7 @@ def build_and_save_asset(payload: dict):
     output_folder = args.output_folder / f"{factory_name}_{idx:03d}"
 
     if output_folder.exists() and args.skip_existing:
-        print(f"Skipping {output_folder}")
+        logger.info(f'Skipping {output_folder}')
         return
 
     output_folder.mkdir(exist_ok=True)
@@ -529,7 +529,7 @@ def mapfunc(
         )
         jobs = executor.map_array(f, its)
         for j in jobs:
-            print(f"Job finished {j.wait()}")
+            logger.info(f'Job finished {j.wait()}')
 
 
 def main(args):

@@ -160,15 +160,11 @@ def preproc_bounds(
     print_bounds=False,
 ):
     if print_bounds:
-        print(
-            f"{preproc_bounds.__name__} for {filter.get_objs_named()} (total {len(bounds)}):"
-        )
+        logger.info(f'{preproc_bounds.__name__} for {filter.get_objs_named()} (total {len(bounds)}):')
         for b in bounds:
             res = active_for_stage(b.domain, filter)
             if res:
-                print(
-                    "BOUND", res, b.domain.intersection(filter).repr(abbrv=True), "\n"
-                )
+                logger.info("%s %s %s %s", 'BOUND', res, b.domain.intersection(filter).repr(abbrv=True), '\n')
 
     for b in bounds:
         if not r.domain_finalized(b.domain, check_anyrel=False, check_variable=True):

@@ -6,6 +6,7 @@
 
 import argparse
 import colorsys
+import logging
 import os
 from pathlib import Path
 
@@ -14,6 +15,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from google_images_search import GoogleImagesSearch
 from sklearn.mixture import GaussianMixture
+
+logger = logging.getLogger(__name__)
 
 
 def make_palette(keyword, num_images, num_colors, overwrite=False):
@@ -31,7 +34,7 @@ def make_palette(keyword, num_images, num_colors, overwrite=False):
     # this will search and download:
     folder = f"{os.path.split(os.path.abspath(__file__))[0]}/images/{keyword}"
     if os.path.exists(folder) and not overwrite:
-        print("folder existing, skip")
+        logger.info('folder existing, skip')
     else:
         # set your environment variables: GCS_DEVELOPER_KEY, GCS_CX
         gis = GoogleImagesSearch(os.environ["GCS_DEVELOPER_KEY"], os.environ["GCS_CX"])

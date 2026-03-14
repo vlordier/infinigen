@@ -4,6 +4,7 @@
 # Authors: Lahav Lipson
 
 import argparse
+import logging
 import shutil
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from imageio.v3 import imread, imwrite
 from numpy.linalg import inv
 
 from infinigen.tools.dataset_loader import get_frame_path
+
+logger = logging.getLogger(__name__)
 
 try:
     from einops import einsum
@@ -82,8 +85,8 @@ if __name__ == "__main__":
     normals_color = cv2.resize(normals_color, target_shape)
 
     imwrite(args.output / "A.png", image)
-    print(f"Wrote {args.output / 'A.png'}")
+    logger.info(f'Wrote {args.output / 'A.png'}')
     imwrite(args.output / "B.png", normals_color)
-    print(f"Wrote {args.output / 'B.png'}")
+    logger.info(f'Wrote {args.output / 'B.png'}')
     shutil.copyfile(normal_path, args.output / "C.png")
-    print(f"Wrote {args.output / 'C.png'}")
+    logger.info(f'Wrote {args.output / 'C.png'}')

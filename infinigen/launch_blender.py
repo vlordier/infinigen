@@ -5,8 +5,11 @@
 # Authors: Alexander Raistrick
 
 import argparse
+import logging
 import subprocess
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 root = Path(__file__).parent.parent
 
@@ -63,6 +66,6 @@ if __name__ == "__main__":
     if len(unknown_args):
         cmd_args += unknown_args
 
-    print(" ".join(cmd_args))
+    logger.info(' '.join(cmd_args))
 
     subprocess.run(cmd_args, cwd=root)

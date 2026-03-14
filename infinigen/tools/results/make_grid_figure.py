@@ -4,10 +4,13 @@
 # Authors: Zeyu Ma
 
 
+import logging
 import os
 
 import cv2
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 root_folder = "outputs_scratch/fig1_v6"
 scene_types = [
@@ -50,11 +53,11 @@ canvas = (
 for i, scene_type, title in zip(range(len(scene_types)), scene_types, titles):
     y, x = i // level0_layout[1], i % level0_layout[1]
     for j in range(sublevel_layout[0] * sublevel_layout[1] + 1):
-        print(scene_type, j)
+        logger.info("%s %s", scene_type, j)
         folder = f"{scene_type}_{j}"
         path = f"{root_folder}/{folder}/frames_{folder}_resmpl0"
         if not os.path.exists(path):
-            print(f"{path} did not exist")
+            logger.info(f'{path} did not exist')
             continue
         image_path = [
             x for x in os.listdir(path) if x.startswith("Noisy") and x.endswith(".png")

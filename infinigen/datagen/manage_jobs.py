@@ -182,7 +182,7 @@ def slurm_submit_cmd(
             return executor.submit(render_fn)
         except submitit.core.utils.FailedJobError as e:
             current_time_str = datetime.now().strftime("%m/%d %I:%M%p")
-            print(f"[{current_time_str}] Job submission failed with error:\n{e}")
+            logger.info(f'[{current_time_str}] Job submission failed with error:\n{e}')
             time.sleep(60)
 
 
@@ -479,7 +479,7 @@ def record_crashed_seed(scene, taskname, f, fatal=True):
 
     reason = infer_crash_reason(stdout_file, stderr_file)
     text = f"{time_str} {str(stderr_file)} {reason=} {node=} {fatal=}\n"
-    print("Crashed: " + text)
+    logger.info('Crashed: ' + text)
     f.write(text)
 
     scene[f"{taskname}_crash_recorded"] = True
@@ -698,7 +698,7 @@ def manage_datagen_jobs(
     # Dont launch new scenes if disk is getting full
     if control_state["disk_usage"] > disk_sleep_threshold:
         message = f"{args.output_folder} is full ({100 * control_state['disk_usage']}%). Sleeping."
-        print(message)
+        logger.info(message)
         if wandb is not None:
             wandb.alert(
                 title=f"{args.output_folder.name} sleeping for full disk",
@@ -731,13 +731,11 @@ def print_stats_block(
 
     now = datetime.now()
 
-    print(
-        f"{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}"
-    )
-    print("=" * 60)
+    logger.info(f'{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}')
+    logger.info('=' * 60)
     for k, v in sorted(log_stats.items()):
-        print(f"{k.ljust(30)} : {v}")
-    print("-" * 60)
+        logger.info(f'{k.ljust(30)} : {v}')
+    logger.info('-' * 60)
 
 
 @gin.configurable
@@ -779,7 +777,7 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
         handlers=[filehandler, streamhandler],
     )
 
-    print(f"Using {get_slurm_banned_nodes()=}")
+    logger.info(f'Using get_slurm_banned_nodes()={get_slurm_banned_nodes()!r}')
 
     if shuffle:
         np.random.shuffle(all_scenes)
@@ -792,9 +790,7 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
         now = datetime.now()
 
         if args.print_stats:
-            print(
-                f"{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}"
-            )
+            logger.info(f'{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}')
 
         log_stats = manage_datagen_jobs(
             all_scenes, elapsed=time.perf_counter() - start_perf

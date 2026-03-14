@@ -5,6 +5,7 @@
 # Authors: Alexander Raistrick
 
 import argparse
+import logging
 from pathlib import Path
 
 import bpy
@@ -12,6 +13,8 @@ import mathutils
 
 from infinigen.core.rendering.render import enable_gpu
 from infinigen.core.util import blender as butil
+
+logger = logging.getLogger(__name__)
 
 
 def get_override(area_type, region_type):
@@ -72,6 +75,6 @@ args = parser.parse_args()
 
 for p in args.input_folder.iterdir():
     if not (p / "scene.blend").exists():
-        print(f"{p=} has no scene.blend")
+        logger.warning("%s has no scene.blend", p)
         continue
     process(p)

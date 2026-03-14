@@ -217,7 +217,7 @@ class UniformMesher:
             return Mesh()
 
         if self.verbose:
-            print(f"Coarse mesh has {N} vertices and {M} faces")
+            logger.info(f'Coarse mesh has {N} vertices and {M} faces')
 
         with Timer("bisection on in view coarse mesh"):
             positions = AC(np.zeros((N * 3,), dtype=np.float64))

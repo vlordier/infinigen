@@ -178,6 +178,7 @@ select = [
     "TID252", # relative imports only allowed for siblings
     "B",      # flake8-bugbear: opinionated bug/design checks
     "RUF",    # ruff-specific rules
+    "T20",    # flake8-print: no print() or pprint()
 ]
 ignore = [
     "E501",   # over-length lines, formatter should handle it
@@ -208,7 +209,6 @@ ignore = [
     "RUF021", # parenthesise chained operators
     "RUF022", # __all__ not sorted
     "RUF046", # unnecessary cast
-    "RUF059", # unused unpacked variable
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -228,6 +228,10 @@ ignore = [
 "infinigen_examples/generate_indoors.py" = ["E402"]
 "infinigen_examples/generate_material_balls.py" = ["E402"]
 "infinigen_examples/generate_nature.py" = ["E402"]
+
+# These test files use pytest.importorskip() before conditional imports; E402 is expected.
+"tests/sim/test_joint_export.py" = ["E402"]
+"tests/sim/test_sim_export.py" = ["E402"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"
