@@ -37,7 +37,13 @@ docker-build-cuda:
 		--progress $(DOCKER_BUILD_PROGRESS) \
 		--build-arg APP_IMAGE=nvidia/cuda:12.0.0-devel-ubuntu22.04 .
 
-docker-clean:
+docker-build-arm64:
+	docker build \
+		--tag $(DOCKER_TAG) \
+		--progress $(DOCKER_BUILD_PROGRESS) \
+		--platform linux/arm64 .
+
+
 	echo "Removing infinigen docker image if already exists..."
 	-docker rmi -f $(DOCKER_TAG)
 
@@ -98,8 +104,7 @@ docker-run-no-gpu:
 		-e ROS_IP=127.0.0.1 \
 		--cap-add=SYS_PTRACE \
 		-v /etc/group:/etc/group:ro \
-		"$(DOCKER_TAG)" /bin/bash \
-]
+		"$(DOCKER_TAG)" /bin/bash
 
 docker-run-no-gpu-opengl:
 	echo "Launching Docker image without GPU passthrough or OpenGL"
