@@ -41,7 +41,7 @@ def test_job_wrapper_passthrough_streams_files_and_console(tmp_path, monkeypatch
     monkeypatch.setattr(sys, "stdout", stdout_stream)
     monkeypatch.setattr(sys, "stderr", stderr_stream)
 
-    class FakePopen:
+    class SuccessfulPopen:
         def __init__(self, *args, **kwargs):
             self.stdout = iter(["hello stdout\n", "second stdout line\n"])
             self.stderr = iter(["hello stderr\n", "second stderr line\n"])
@@ -49,7 +49,7 @@ def test_job_wrapper_passthrough_streams_files_and_console(tmp_path, monkeypatch
         def wait(self):
             return 0
 
-    monkeypatch.setattr(submitit.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(submitit.subprocess, "Popen", SuccessfulPopen)
 
     submitit.job_wrapper(
         command=["ignored"],
@@ -70,7 +70,7 @@ def test_job_wrapper_passthrough_propagates_exit_code(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     monkeypatch.setattr(sys, "stderr", io.StringIO())
 
-    class FakePopen:
+    class FailingPopen:
         def __init__(self, *args, **kwargs):
             self.stdout = iter(["partial stdout\n"])
             self.stderr = iter(["partial stderr\n"])
@@ -78,7 +78,7 @@ def test_job_wrapper_passthrough_propagates_exit_code(tmp_path, monkeypatch):
         def wait(self):
             return 7
 
-    monkeypatch.setattr(submitit.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(submitit.subprocess, "Popen", FailingPopen)
 
     with pytest.raises(SystemExit, match="7"):
         submitit.job_wrapper(

@@ -115,7 +115,8 @@ def job_wrapper(
                 env=env,
                 bufsize=1,
             )
-            # text=True ensures text-mode file objects here.
+            # text=True ensures stdout/stderr are text-mode file objects, so the
+            # drain threads can forward output line-by-line.
 
             def drain(pipe, sinks):
                 for line in pipe:
