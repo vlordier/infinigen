@@ -193,10 +193,10 @@ def print_segments_summary(obj: bpy.types.Object):
 
     results.sort(key=lambda x: x[1], reverse=True)
 
-    print(f"Tag Segments Summary for {obj.name=}")
+    logger.info(f"Tag Segments Summary for {obj.name=}")
     for vi, mean in results:
         name = _name_for_tagval(vi)
-        print(f"  {mean * 100:.1f}% {vi=} {name}")
+        logger.info(f"  {mean * 100:.1f}% {vi=} {name}")
 
 
 def tag_object(obj, name=None, mask=None):
@@ -265,7 +265,6 @@ def tag_canonical_surfaces(obj, rtol=0.01):
     obj.update_from_editmode()
 
     n_vert = len(obj.data.vertices)
-    len(obj.data.polygons)
 
     verts = np.empty(n_vert * 3, dtype=float)
     obj.data.vertices.foreach_get("co", verts)
@@ -480,7 +479,7 @@ def tag_support_surfaces(obj, angle_threshold=0.1):
 
         tag_object(mesh_obj, name=t.Subpart.SupportSurface.value, mask=support_mask)
 
-        print(
+        logger.debug(
             f"Tagged {support_mask.sum()} faces as 'support' in object {mesh_obj.name}"
         )
 

@@ -38,8 +38,16 @@ CYCLES_GPUTYPES_PREFERENCE = [
     "CPU",
 ]
 
+# Cycles volume rendering defaults
+CYCLES_VOLUME_STEP_RATE = 0.1
+CYCLES_VOLUME_MAX_STEPS = 32
+CYCLES_VOLUME_BOUNCES = 4
+
 # Cached device enumeration result to avoid repeated Blender API calls
 _cached_devices: list | None = None
+
+# Upper bound for randomly chosen scene seeds
+MAX_RANDOM_SEED = int(1e7)
 
 
 def parse_args_blender(parser):
@@ -59,7 +67,7 @@ def parse_seed(seed, task=None):
                 "Running tasks on an already generated scene, you need to specify --seed or results will"
                 " not be view-consistent"
             )
-        return randint(1e7), "chosen at random"
+        return randint(MAX_RANDOM_SEED), "chosen at random"
 
     # WARNING: Do not add support for decimal numbers here, it will cause ambiguity, as some hex numbers are valid decimals
 
@@ -213,12 +221,12 @@ def configure_render_cycles(
 ):
     bpy.context.scene.render.engine = "CYCLES"
 
-    # For now, denoiser is always turned on, but the  _used_
+    # For now, denoiser is always turned on but can be configured via gin
     bpy.context.scene.cycles.use_denoising = denoise
     if denoise:
         try:
             bpy.context.scene.cycles.denoiser = "OPTIX"
-        except Exception as e:
+        except RuntimeError as e:
             logger.warning(f"Cannot use OPTIX denoiser {e}")
 
     bpy.context.scene.cycles.samples = num_samples  # i.e. infinity
@@ -228,10 +236,10 @@ def configure_render_cycles(
     )
     bpy.context.scene.cycles.time_limit = time_limit
     bpy.context.scene.cycles.film_exposure = exposure
-    bpy.context.scene.cycles.volume_step_rate = 0.1
-    bpy.context.scene.cycles.volume_preview_step_rate = 0.1
-    bpy.context.scene.cycles.volume_max_steps = 32
-    bpy.context.scene.cycles.volume_bounces = 4
+    bpy.context.scene.cycles.volume_step_rate = CYCLES_VOLUME_STEP_RATE
+    bpy.context.scene.cycles.volume_preview_step_rate = CYCLES_VOLUME_STEP_RATE
+    bpy.context.scene.cycles.volume_max_steps = CYCLES_VOLUME_MAX_STEPS
+    bpy.context.scene.cycles.volume_bounces = CYCLES_VOLUME_BOUNCES
 
     # Enable persistent data when rendering multiple frames
     frame_start = bpy.context.scene.frame_start
@@ -331,7 +339,7 @@ def require_blender_addon(addon: str, fail: str = "fatal", allow_online=False):
                 repo_index=0, pkg_id=addon, enable_on_install=True
             )
             bpy.ops.preferences.addon_enable(module=long)
-    except Exception as e:
+    except (RuntimeError, TypeError) as e:
         report_fail(f"Failed to install {addon=} due to {e=}")
 
     if long not in bpy.context.preferences.addons.keys():

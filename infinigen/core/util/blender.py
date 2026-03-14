@@ -28,6 +28,10 @@ from .logging import Suppress
 
 logger = logging.getLogger(__name__)
 
+# Blender-managed attribute names that should be skipped during custom attribute processing.
+# Note: attributes prefixed with "." are also treated as internal (checked separately in blender_internal_attr).
+BLENDER_INTERNAL_ATTRS = frozenset({"material_index", "uv_map", "UVMap", "sharp_face"})
+
 
 @gin.configurable("geometry")
 def set_geometry_option(material, option="BUMP"):
@@ -246,7 +250,7 @@ def garbage_collect(targets, keep_in_use=True, keep_names=None, verbose=False):
             if "(no gc)" in o.name:
                 continue
             if verbose:
-                print(f"Garbage collecting {o} from {t}")
+                logger.debug(f"Garbage collecting {o} from {t}")
             t.remove(o)
 
 
@@ -589,11 +593,11 @@ def set_geomod_inputs(mod, inputs: dict):
 
         try:
             mod[soc.identifier] = v
-        except TypeError as e:
-            print(
+        except TypeError:
+            logger.error(
                 f"Error incurred while assigning {v} with {type(v)=} to {soc.identifier=} of {mod.name=}"
             )
-            raise e
+            raise
 
 
 def modify_mesh(
@@ -671,8 +675,8 @@ def import_mesh(path, **kwargs):
         funcs[ext](filepath=str(path), **kwargs)
 
     if len(bpy.context.selected_objects) > 1 if ext != "usdc" else 2:
-        print(
-            f"Warning: {ext.upper()} Import produced {len(bpy.context.selected_objects)} objects, "
+        logger.warning(
+            f"{ext.upper()} Import produced {len(bpy.context.selected_objects)} objects, "
             f"but only the first is returned by import_obj"
         )
     if ext != "usdc":
@@ -765,10 +769,7 @@ def apply_modifiers(obj, mod=None, quiet=True):
                     bpy.ops.object.modifier_remove(modifier=m.name)
                     clear_mesh(obj)
                 else:
-                    raise e
-
-    # geometry nodes occasionally introduces empty material slots in 3.6, we consider this an error and remove them
-    purge_empty_materials(obj)
+                    raise
 
     # geometry nodes occasionally introduces empty material slots in 3.6, we consider this an error and remove them
     purge_empty_materials(obj)
@@ -782,7 +783,7 @@ def recalc_normals(obj, inside=False):
 
 def save_blend(path, autopack=False, verbose=False):
     if verbose:
-        print(f"Saving .blend to {path} ({'with' if autopack else 'without'} textures)")
+        logger.info(f"Saving .blend to {path} ({'with' if autopack else 'without'} textures)")
 
     with Suppress():
         if autopack:
@@ -794,7 +795,7 @@ def save_blend(path, autopack=False, verbose=False):
 
 def joined_kd(objs, include_origins=False):
     if not isinstance(objs, list):
-        objs = objs
+        objs = [objs]
     objs = [o for o in objs if o.type == "MESH"]
 
     size = sum(len(o.data.vertices) for o in objs)
@@ -854,7 +855,7 @@ def object_from_VF(vertices, faces, name):
 
 def object_from_trimesh(mesh, name, material=None):
     if name in bpy.data.objects.keys():
-        print("replacing original object")
+        logger.debug("replacing original object")
         delete(bpy.data.objects[name])
     new_object = object_from_VF(mesh.vertices, mesh.faces, name)
     for attr_name in mesh.vertex_attributes:
@@ -913,9 +914,7 @@ def blender_internal_attr(a):
         a = a.name
     if a.startswith("."):
         return True
-    if a in ["material_index", "uv_map", "UVMap", "sharp_face"]:
-        return True
-    return False
+    return a in BLENDER_INTERNAL_ATTRS
 
 
 def merge_by_distance(obj, face_size):
