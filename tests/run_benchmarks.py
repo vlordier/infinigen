@@ -46,8 +46,8 @@ def _load_module(name: str, filepath: Path):
 # ---------------------------------------------------------------------------
 
 N_REPEAT = 5
-N_REPEAT_SLOW = 2
-N_REPEAT_VERY_SLOW = 1
+N_REPEAT_SLOW = 3
+N_REPEAT_VERY_SLOW = 2
 
 
 def _median_time(fn, n_repeat=N_REPEAT):
@@ -83,6 +83,7 @@ def bench_np_unique_baseline():
 
 def bench_concatenation():
     """Concatenation of 200 arrays of 1000 floats."""
+    np.random.seed(99)
     arrays = [np.random.rand(1000) for _ in range(200)]
     mod = _load_module("batch_ops", _UTIL_DIR / "batch_ops.py")
     if mod is not None and hasattr(mod, "chunked_concat"):
@@ -94,6 +95,7 @@ def bench_concatenation():
 
 def bench_np_concatenate_baseline():
     """np.concatenate baseline for same data."""
+    np.random.seed(99)
     arrays = [np.random.rand(1000) for _ in range(200)]
     t = _median_time(lambda: np.concatenate(arrays))
     return ("np.concatenate baseline", t)
