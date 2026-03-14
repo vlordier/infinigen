@@ -69,6 +69,14 @@ ACCOUNT_ENVVAR = "INFINIGEN_SLURMACCOUNT"
 EXCLUDE_FILE_ENVVAR = "INFINIGEN_SLURM_EXCLUDENODES_LIST"
 NUM_CONCURRENT_ENVVAR = "INFINIGEN_NUMCONCURRENT_TARGET"
 
+# Retry and timeout configuration – extracted as named constants to avoid magic numbers
+_SLURM_SUBMIT_MAX_RETRIES: int = 10
+_SLURM_SUBMIT_RETRY_INTERVAL_SECONDS: int = 60
+_SUBPROCESS_TIMEOUT_SECONDS: int = 10
+# When disk usage cannot be determined, assume the disk is full so new jobs are
+# not launched into an unknown storage situation.
+_DISK_USAGE_UNKNOWN_SENTINEL: float = 1.0
+
 
 def node_from_slurm_jobid(scene_id):
     if not which("sacct"):
@@ -78,7 +86,7 @@ def node_from_slurm_jobid(scene_id):
         result = (
             subprocess.check_output(
                 f"{which('sacct')} -j {scene_id} --format Node --noheader".split(),
-                timeout=10,
+                timeout=_SUBPROCESS_TIMEOUT_SECONDS,
                 stderr=subprocess.PIPE,
             )
             .decode()
@@ -188,21 +196,20 @@ def slurm_submit_cmd(
             "Callable with submit_cmd is deprecated, please submit a commandline string"
         )
 
-    max_submit_retries = 10
-    for attempt in range(max_submit_retries):
+    for attempt in range(_SLURM_SUBMIT_MAX_RETRIES):
         try:
             render_fn = submitit.helpers.CommandFunction(cmd)
             return executor.submit(render_fn)
         except submitit.core.utils.FailedJobError as e:
             current_time_str = datetime.now().strftime("%m/%d %I:%M%p")
-            if attempt >= max_submit_retries - 1:
+            if attempt >= _SLURM_SUBMIT_MAX_RETRIES - 1:
                 raise RuntimeError(
-                    f"SLURM job submission failed after {max_submit_retries} attempts"
+                    f"SLURM job submission failed after {_SLURM_SUBMIT_MAX_RETRIES} attempts"
                 ) from e
             logger.warning(
-                f"[{current_time_str}] Job submission failed (attempt {attempt + 1}/{max_submit_retries}): {e}"
+                f"[{current_time_str}] Job submission failed (attempt {attempt + 1}/{_SLURM_SUBMIT_MAX_RETRIES}): {e}"
             )
-            time.sleep(60)
+            time.sleep(_SLURM_SUBMIT_RETRY_INTERVAL_SECONDS)
 
 
 @gin.configurable
@@ -386,19 +393,26 @@ def get_disk_usage(folder):
     try:
         out = subprocess.check_output(
             f"df -h {folder.resolve()}".replace(" (Princeton)", "").split(),
-            timeout=10,
+            timeout=_SUBPROCESS_TIMEOUT_SECONDS,
             stderr=subprocess.PIPE,
         ).decode()
     except subprocess.TimeoutExpired:
-        logger.warning(f"df timed out for {folder}")
-        return 0.0
+        logger.warning(
+            f"df timed out for {folder}; assuming disk is full to prevent launching new jobs"
+        )
+        return _DISK_USAGE_UNKNOWN_SENTINEL
     except subprocess.CalledProcessError as e:
-        logger.warning(f"df failed for {folder}: {e}")
-        return 0.0
+        logger.warning(
+            f"df failed for {folder}: {e}; assuming disk is full to prevent launching new jobs"
+        )
+        return _DISK_USAGE_UNKNOWN_SENTINEL
     match = re.search(r"([0-9]+)%", out)
     if not match:
-        logger.warning(f"Could not parse disk usage from df output for {folder}")
-        return 0.0
+        logger.warning(
+            f"Could not parse disk usage from df output for {folder};"
+            f" assuming disk is full to prevent launching new jobs"
+        )
+        return _DISK_USAGE_UNKNOWN_SENTINEL
     return int(match.group(1)) / 100
 
 
@@ -515,7 +529,7 @@ def record_crashed_seed(scene, taskname, f, fatal=True):
 
     reason = infer_crash_reason(stdout_file, stderr_file)
     text = f"{time_str} {str(stderr_file)} {reason=} {node=} {fatal=}\n"
-    print("Crashed: " + text)
+    logger.warning("Crashed: %s", text.rstrip())
     f.write(text)
 
     scene[f"{taskname}_crash_recorded"] = True
@@ -733,15 +747,15 @@ def manage_datagen_jobs(
 
     # Dont launch new scenes if disk is getting full
     if control_state["disk_usage"] > disk_sleep_threshold:
-        message = f"{args.output_folder} is full ({100 * control_state['disk_usage']}%). Sleeping."
-        print(message)
+        message = f"{args.output_folder} is full ({100 * control_state['disk_usage']:.1f}%). Sleeping."
+        logger.warning(message)
         if wandb is not None:
             wandb.alert(
                 title=f"{args.output_folder.name} sleeping for full disk",
                 text=message,
                 wait_duration=3 * 60 * 60,
             )
-        time.sleep(60)
+        time.sleep(_SLURM_SUBMIT_RETRY_INTERVAL_SECONDS)
         return {}
 
     for scene, taskname, queue_func in new_jobs:
@@ -766,14 +780,17 @@ def print_stats_block(
         return
 
     now = datetime.now()
-
-    print(
-        f"{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}"
+    separator = "=" * 60
+    logger.info(
+        "%s %s -> %s",
+        args.output_folder,
+        start_time.strftime("%m/%d %I:%M%p"),
+        now.strftime("%m/%d %I:%M%p"),
     )
-    print("=" * 60)
+    logger.info(separator)
     for k, v in sorted(log_stats.items()):
-        print(f"{k.ljust(30)} : {v}")
-    print("-" * 60)
+        logger.info("%s : %s", k.ljust(30), v)
+    logger.info("-" * 60)
 
 
 @gin.configurable
@@ -815,7 +832,7 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
         handlers=[filehandler, streamhandler],
     )
 
-    print(f"Using {get_slurm_banned_nodes()=}")
+    logger.info("Using banned nodes: %s", get_slurm_banned_nodes())
 
     if shuffle:
         np.random.shuffle(all_scenes)
@@ -828,8 +845,11 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
         now = datetime.now()
 
         if args.print_stats:
-            print(
-                f"{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}"
+            logger.info(
+                "%s %s -> %s",
+                args.output_folder,
+                start_time.strftime("%m/%d %I:%M%p"),
+                now.strftime("%m/%d %I:%M%p"),
             )
 
         log_stats = manage_datagen_jobs(
