@@ -32,11 +32,14 @@ CYCLES_GPUTYPES_PREFERENCE = [
     #  - e.g most OPTIX gpus will also show up as a CUDA gpu, but we will prefer to use OPTIX due to this list's ordering
     "OPTIX",
     "CUDA",
-    "METAL",  # untested
+    "METAL",  # Apple Silicon (M1/M2/M3/M4)
     "HIP",  # untested
     "ONEAPI",  # untested
     "CPU",
 ]
+
+# Cached device enumeration result to avoid repeated Blender API calls
+_cached_devices: list | None = None
 
 
 def parse_args_blender(parser):
@@ -239,6 +242,8 @@ def configure_render_cycles(
 
 @gin.configurable
 def configure_cycles_devices(use_gpu=True):
+    global _cached_devices
+
     if use_gpu is False:
         logger.info(f"Job will use CPU-only due to {use_gpu=}")
         bpy.context.scene.cycles.device = "CPU"
@@ -248,13 +253,15 @@ def configure_cycles_devices(use_gpu=True):
     bpy.context.scene.cycles.device = "GPU"
     prefs = bpy.context.preferences.addons["cycles"].preferences
 
-    # Necessary to "remind" cycles that the devices exist? Not sure. Without this no devices are found.
-    for dt in prefs.get_device_types(bpy.context):
-        prefs.get_devices_for_type(dt[0])
+    if _cached_devices is None:
+        # Enumerate devices once and cache the result
+        for dt in prefs.get_device_types(bpy.context):
+            prefs.get_devices_for_type(dt[0])
+        _cached_devices = list(prefs.devices)
 
-    assert len(prefs.devices) != 0, prefs.devices
+    assert len(_cached_devices) != 0, _cached_devices
 
-    types = list(d.type for d in prefs.devices)
+    types = list(d.type for d in _cached_devices)
 
     types = sorted(types, key=CYCLES_GPUTYPES_PREFERENCE.index)
     logger.info(f"Available devices have {types=}")
@@ -268,11 +275,11 @@ def configure_cycles_devices(use_gpu=True):
     bpy.context.preferences.addons[
         "cycles"
     ].preferences.compute_device_type = use_device_type
-    use_devices = [d for d in prefs.devices if d.type == use_device_type]
+    use_devices = [d for d in _cached_devices if d.type == use_device_type]
 
     logger.info(f"Cycles will use {use_device_type=}, {len(use_devices)=}")
 
-    for d in prefs.devices:
+    for d in _cached_devices:
         d.use = False
     for d in use_devices:
         d.use = True

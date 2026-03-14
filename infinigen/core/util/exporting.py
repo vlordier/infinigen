@@ -12,7 +12,6 @@ from uuid import uuid4
 
 import bpy
 import gin
-import mathutils
 import numpy as np
 from bpy.types import DepsgraphObjectInstance
 from tqdm import tqdm
@@ -23,14 +22,14 @@ from infinigen.core.util.math import int_hash
 def get_mesh_data(obj):
     polys = obj.data.polygons
     verts = obj.data.vertices
-    loop_totals = np.full((len(polys),), -1, dtype=np.int32)
+    loop_totals = np.empty(len(polys), dtype=np.int32)
     polys.foreach_get("loop_total", loop_totals)
-    indices = np.full((loop_totals.sum(),), -1, dtype=np.int32)
+    indices = np.empty(loop_totals.sum(), dtype=np.int32)
     polys.foreach_get("vertices", indices)
-    vert_lookup = np.full((len(verts) * 3,), np.nan, dtype=np.float32)
+    vert_lookup = np.empty(len(verts) * 3, dtype=np.float32)
     verts.foreach_get("co", vert_lookup)
     vert_lookup = vert_lookup.reshape((-1, 3))
-    masktag = np.full(
+    masktag = np.zeros(
         len(
             verts,
         ),
@@ -162,6 +161,16 @@ def parse_semantic_from_name(name: str):
             return match.group(1).replace("Factory", "").replace("_fine", "").title()
 
 
+def _transform_bbox(matrix_world, bound_box):
+    """Vectorized bounding box transformation using matrix multiplication."""
+    bbox = np.array(bound_box, dtype=np.float32)  # 8 x 3
+    mat = np.asarray(matrix_world, dtype=np.float32)  # 4 x 4
+    ones = np.ones((bbox.shape[0], 1), dtype=np.float32)
+    homo = np.concatenate((bbox, ones), axis=1)  # 8 x 4
+    transformed = (mat @ homo.T).T  # 8 x 4
+    return transformed[:, :3] / transformed[:, 3:]
+
+
 def calc_aa_bbox(pts):
     xx, yy, zz = zip(pts.min(axis=0), pts.max(axis=0))
     return np.stack(list(product(xx, yy, zz)))  # 8 x 3
@@ -285,10 +294,7 @@ def save_obj_and_instances(
                 json_val["materials"] = obj.material_slots.keys()
                 json_val["unapplied_modifiers"] = obj.modifiers.keys()
             if not is_instance:
-                non_aa_bbox = np.asarray(
-                    [(obj.matrix_world @ mathutils.Vector(v)) for v in obj.bound_box],
-                    dtype=np.float32,
-                )
+                non_aa_bbox = _transform_bbox(obj.matrix_world, obj.bound_box)
                 json_val["instance_bbox"] = calc_aa_bbox(non_aa_bbox).tolist()
                 # Todo add chain up parents
             else:
@@ -319,9 +325,7 @@ def save_obj_and_instances(
             object_name = obj.name
             if object_name not in object_names_mapping:
                 object_names_mapping[object_name] = len(object_names_mapping) + 1
-            non_aa_bbox = np.asarray(
-                [(obj.matrix_world @ mathutils.Vector(v)) for v in obj.bound_box]
-            )
+            non_aa_bbox = _transform_bbox(obj.matrix_world, obj.bound_box)
             json_val = {
                 "object_name": object_name,
                 "object_type": obj.type,

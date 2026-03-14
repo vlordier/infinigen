@@ -30,6 +30,16 @@ def register_func(me, dll, name, argtypes=[], restype=None, caller_name=None):
     func.restype = restype
 
 
+_cdll_cache: dict[str, CDLL] = {}
+
+
 def load_cdll(path):
+    """Load a shared library, returning a cached handle if already loaded."""
+    key = str(path)
+    if key in _cdll_cache:
+        return _cdll_cache[key]
     root = Path(__file__).parent.parent.parent
-    return CDLL(root / path, mode=RTLD_LOCAL)
+    resolved = root / path
+    dll = CDLL(str(resolved), mode=RTLD_LOCAL)
+    _cdll_cache[key] = dll
+    return dll

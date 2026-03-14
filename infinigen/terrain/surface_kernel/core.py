@@ -70,7 +70,7 @@ class SurfaceKernel:
         values = []
         for dtype in sorted(self.imp_values_of_type.keys()):
             M = len(self.imp_values_of_type[dtype]) // int(
-                np.product(KERNELDATATYPE_DIMS[dtype])
+                np.prod(KERNELDATATYPE_DIMS[dtype])
             )
             values.append(M)
             if dtype != KernelDataType.int:
