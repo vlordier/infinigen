@@ -161,7 +161,7 @@ def build_report(pr: dict, upstream: dict) -> str:
     # ── Overall geometric-mean speedup ───────────────────────────────────
     if speedups:
         geo_mean = _geometric_mean(speedups)
-        scale_note = " (log₁₀ scale)" if use_log else ""
+        scale_note = ", log₁₀ scale" if use_log else ""
         lines.append(
             f"**Overall geometric-mean speedup: {geo_mean:.1f}×** "
             f"(across {len(speedups)} benchmarks{scale_note})"

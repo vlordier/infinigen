@@ -160,7 +160,7 @@ def bench_heightmap_grid(upstream=False):
                     v11 = (i + 1) * N + j + 1
                     faces.append([v00, v10, v01])
                     faces.append([v01, v10, v11])
-            return np.array(verts), np.array(faces, dtype=np.int32)
+            return verts, np.array(faces, dtype=np.int32)
 
         t = _median_time(_run, n_repeat=N_REPEAT_VERY_SLOW)
     return ("heightmap_grid", t)
