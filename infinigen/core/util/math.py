@@ -174,7 +174,7 @@ def md5_hash(x):
         x = str(x).encode("utf-8")
         return hashlib.md5(x)
     else:
-        raise ValueError(f"util.md5_hash doesnt currently support type({type(x)}")
+        raise ValueError(f"util.md5_hash doesnt currently support type {type(x)}")
 
 
 def int_hash(x, max=(2**32 - 1)):
