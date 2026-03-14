@@ -179,7 +179,15 @@ class SceneBudget:
         objects: int = 0,
         memory_mb: float = 0.0,
     ) -> None:
-        """Return previously allocated resources."""
+        """Return previously allocated resources.
+
+        Raises
+        ------
+        ValueError
+            If any amount is negative.
+        """
+        if any(x < 0 for x in (polygons, vertices, objects, memory_mb)):
+            raise ValueError("Cannot release negative amounts")
         for name, releasing, used in [
             ("polygons", polygons, self._used_polygons),
             ("vertices", vertices, self._used_vertices),

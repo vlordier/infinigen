@@ -13,6 +13,11 @@ upstream stages can be skipped on subsequent runs.  Each cached entry stores:
 
 This speeds up iterative workflows where only downstream stages (e.g. render)
 are modified but terrain / population stages remain unchanged.
+
+.. warning::
+
+   Pickle deserialization can execute arbitrary code.  Only load cache files
+   from **trusted** cache directories that are not writable by other users.
 """
 
 from __future__ import annotations
@@ -21,6 +26,8 @@ import hashlib
 import json
 import logging
 import pickle
+import re
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +35,18 @@ logger = logging.getLogger(__name__)
 
 # Sentinel indicating a cache miss
 _MISS = object()
+
+# Only allow safe characters in stage names (prevent path traversal)
+_SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+def _sanitize_stage_name(name: str) -> str:
+    """Ensure *name* is safe for use in a file path (no path traversal)."""
+    if not name or not _SAFE_NAME_RE.match(name):
+        safe = re.sub(r"[^A-Za-z0-9._-]", "_", name)
+        logger.debug("Sanitised stage name %r → %r", name, safe)
+        return safe
+    return name
 
 
 def _params_hash(params: dict[str, Any]) -> str:
@@ -41,7 +60,7 @@ def _params_hash(params: dict[str, Any]) -> str:
     except (TypeError, ValueError):
         raw = str(sorted((k, str(v)) for k, v in params.items()))
         logger.debug("Used fallback serialisation for params hash")
-    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
 class StageCache:
@@ -76,7 +95,8 @@ class StageCache:
         return self._misses
 
     def _key_path(self, stage_name: str, params_hash: str) -> Path:
-        return self._cache_dir / f"{stage_name}_{params_hash}.pkl"
+        safe_name = _sanitize_stage_name(stage_name)
+        return self._cache_dir / f"{safe_name}_{params_hash}.pkl"
 
     def get(self, stage_name: str, params: dict[str, Any]) -> Any:
         """Return cached result for *stage_name* or the sentinel :data:`_MISS`.
@@ -102,7 +122,7 @@ class StageCache:
 
         try:
             with open(path, "rb") as f:
-                result = pickle.load(f)
+                result = pickle.load(f)  # trusted local cache only
             self._hits += 1
             logger.info("Cache hit for stage '%s' (hash=%s)", stage_name, h)
             return result
@@ -115,7 +135,11 @@ class StageCache:
             return _MISS
 
     def put(self, stage_name: str, params: dict[str, Any], result: Any) -> None:
-        """Store *result* in the cache for *stage_name*."""
+        """Store *result* in the cache for *stage_name*.
+
+        Uses an atomic write (temp file + rename) to prevent corruption if
+        the process is interrupted mid-write.
+        """
         if not self._enabled:
             return
 
@@ -123,8 +147,16 @@ class StageCache:
         path = self._key_path(stage_name, h)
 
         try:
-            with open(path, "wb") as f:
-                pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+            fd, tmp = tempfile.mkstemp(
+                dir=self._cache_dir, suffix=".tmp", prefix=".cache_"
+            )
+            try:
+                with open(fd, "wb") as f:
+                    pickle.dump(result, f, protocol=pickle.HIGHEST_PROTOCOL)
+                Path(tmp).replace(path)
+            except BaseException:
+                Path(tmp).unlink(missing_ok=True)
+                raise
             logger.debug("Cached result for stage '%s' (hash=%s)", stage_name, h)
         except Exception:
             logger.warning("Failed to cache result for stage '%s'", stage_name)
@@ -147,7 +179,11 @@ class StageCache:
             return 0
 
         removed = 0
-        pattern = f"{stage_name}_*.pkl" if stage_name else "*.pkl"
+        if stage_name:
+            safe = _sanitize_stage_name(stage_name)
+            pattern = f"{safe}_*.pkl"
+        else:
+            pattern = "*.pkl"
         for path in self._cache_dir.glob(pattern):
             path.unlink(missing_ok=True)
             removed += 1

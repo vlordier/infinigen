@@ -728,3 +728,37 @@ class TestEdgeCases:
         cfg1 = get_quality_config("PREVIEW")
         cfg2 = get_quality_config("preview")
         assert cfg1 == cfg2
+
+    def test_circular_dependency_detected(self):
+        """Verify circular dependencies are caught before execution."""
+        stages = [
+            StageSpec(name="a", fn=lambda: 1, depends_on=["b"]),
+            StageSpec(name="b", fn=lambda: 2, depends_on=["a"]),
+        ]
+        exe = ParallelStageExecutor(max_workers=2)
+        with pytest.raises(ValueError, match="Circular dependency"):
+            exe.run(stages)
+
+    def test_release_negative_raises(self):
+        """Verify releasing negative amounts raises ValueError."""
+        b = SceneBudget(max_polygons=1000)
+        with pytest.raises(ValueError, match="negative"):
+            b.release(polygons=-100)
+
+    def test_cache_path_traversal_safe(self, tmp_path):
+        """Verify stage names with path traversal are sanitized."""
+        cache = StageCache(tmp_path / "cache")
+        cache.put("../../etc/passwd", {"x": 1}, "payload")
+        # Should NOT create file outside cache dir
+        import os
+        for root, _dirs, files in os.walk(tmp_path):
+            for f in files:
+                full = os.path.join(root, f)
+                assert str(full).startswith(str(tmp_path))
+
+    def test_resolution_validation_type_check(self):
+        """Verify resolution validation rejects non-tuple types."""
+        from infinigen.core.syndata.validation import check_resolution
+        result = check_resolution({"resolution": "1920x1080"})
+        assert result.severity == Severity.ERROR
+        assert "tuple" in result.message

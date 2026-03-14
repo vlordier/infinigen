@@ -19,6 +19,7 @@ configuration dictionary and returns a summary.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -142,7 +143,13 @@ def check_resolution(
 ) -> ValidationResult:
     """Verify render resolution is sane."""
     res = config.get("resolution", (0, 0))
-    w, h = res if len(res) == 2 else (0, 0)
+    if not isinstance(res, list | tuple) or len(res) != 2:
+        return ValidationResult(
+            "resolution",
+            Severity.ERROR,
+            f"resolution must be a (width, height) tuple, got {type(res).__name__}",
+        )
+    w, h = res
     if w < min_res or h < min_res:
         return ValidationResult(
             "resolution",
@@ -209,7 +216,7 @@ _ALL_CHECKS = [
 def validate_scene_config(
     config: dict[str, Any],
     *,
-    extra_checks: list | None = None,
+    extra_checks: list[Callable[[dict[str, Any]], ValidationResult]] | None = None,
 ) -> ValidationReport:
     """Run all built-in (and optional extra) checks on *config*.
 

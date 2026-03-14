@@ -86,17 +86,8 @@ wandb = [
     "wandb"
 ]
 
-# Use the official Blender PyPI as the primary source for bpy wheels.
-# To regenerate uv.lock from this index, run:
-#   INFINIGEN_MINIMAL_INSTALL=True uv lock
-# (requires access to download.blender.org)
-[[tool.uv.index]]
-name = "blender-pypi"
-url = "https://download.blender.org/pypi/bpy/"
-explicit = true
-
-[tool.uv.sources]
-bpy = { index = "blender-pypi" }
+# bpy wheels are available on standard PyPI (pypi.org) since 4.5.x.
+# No custom index is needed.
 
 [tool.setuptools]
 # include-package-data is terribly named. package-data is still included if false,

@@ -89,6 +89,28 @@ class ParallelStageExecutor:
         """All completed stage outcomes."""
         return list(self._outcomes)
 
+    @staticmethod
+    def _check_cycles(stages: list[StageSpec]) -> None:
+        """Raise ``ValueError`` if the dependency graph has a cycle."""
+        WHITE, GREY, BLACK = 0, 1, 2
+        colour: dict[str, int] = {s.name: WHITE for s in stages}
+        deps_map = {s.name: s.depends_on for s in stages}
+
+        def _visit(node: str) -> None:
+            colour[node] = GREY
+            for dep in deps_map.get(node, ()):
+                if colour[dep] == GREY:
+                    raise ValueError(
+                        f"Circular dependency detected: '{node}' → '{dep}'"
+                    )
+                if colour[dep] == WHITE:
+                    _visit(dep)
+            colour[node] = BLACK
+
+        for name in colour:
+            if colour[name] == WHITE:
+                _visit(name)
+
     def run(
         self, stages: list[StageSpec], *, timeout_s: float | None = None
     ) -> list[StageOutcome]:
@@ -118,6 +140,9 @@ class ParallelStageExecutor:
                     raise ValueError(
                         f"Stage '{s.name}' depends on unknown stage '{dep}'"
                     )
+
+        # Detect circular dependencies via topological colouring
+        self._check_cycles(stages)
 
         completed: dict[str, StageOutcome] = {}
         pending = {s.name: s for s in stages}
