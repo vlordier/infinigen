@@ -99,8 +99,8 @@ def optimal_dtype(device=None):
     if device is None:
         device = get_torch_device()
 
-    dtype = device.type
-    if dtype == "cuda":
+    device_type = device.type
+    if device_type == "cuda":
         return torch.float16
     # MPS and CPU work best with float32
     return torch.float32
@@ -116,13 +116,13 @@ def optimal_batch_size(device=None, element_bytes: int = 4) -> int:
     if device is None:
         device = get_torch_device()
 
-    dtype = device.type
-    if dtype == "cuda":
+    device_type = device.type
+    if device_type == "cuda":
         import torch
 
         free, _total = torch.cuda.mem_get_info()
         return max(1, int(free * 0.6) // max(element_bytes, 1))
-    if dtype == "mps":
+    if device_type == "mps":
         return 256_000
     # CPU
     return 1_000_000
@@ -144,10 +144,10 @@ def optimal_num_threads(device=None) -> int:
     if device is None:
         device = get_torch_device()
 
-    dtype = device.type
-    if dtype == "cuda":
+    device_type = device.type
+    if device_type == "cuda":
         return 1
-    if dtype == "mps":
+    if device_type == "mps":
         return 2
     return min(os.cpu_count() or 4, 8)
 
