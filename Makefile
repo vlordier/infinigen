@@ -43,7 +43,7 @@ docker-build-arm64:
 		--progress $(DOCKER_BUILD_PROGRESS) \
 		--platform linux/arm64 .
 
-
+docker-clean:
 	echo "Removing infinigen docker image if already exists..."
 	-docker rmi -f $(DOCKER_TAG)
 
