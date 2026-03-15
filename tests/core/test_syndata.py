@@ -1987,3 +1987,90 @@ class TestWorldConfigPresets:
             assert 0.0 <= cfg.complexity <= 1.0
             boxes = generate_world(cfg)
             assert len(boxes) > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  FlappyColumnConfig preset & DomainRandomiser determinism tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestFlappyPresets:
+    """Test FlappyColumnConfig preset factory methods."""
+
+    @pytest.mark.parametrize("method", [
+        FlappyColumnConfig.easy,
+        FlappyColumnConfig.medium,
+        FlappyColumnConfig.hard,
+    ])
+    def test_preset_creates_valid_config(self, method):
+        cfg = method()
+        assert isinstance(cfg, FlappyColumnConfig)
+        assert cfg.corridor_length > 0
+        assert cfg.num_columns >= 0
+
+    @pytest.mark.parametrize("method", [
+        FlappyColumnConfig.easy,
+        FlappyColumnConfig.medium,
+        FlappyColumnConfig.hard,
+    ])
+    def test_preset_generates_obstacles(self, method):
+        cfg = method()
+        obstacles = generate_flappy_obstacles(cfg, seed=42)
+        assert len(obstacles) > 0
+        # Should have floor and ceiling at minimum
+        labels = [o.label for o in obstacles]
+        assert "floor" in labels
+        assert "ceiling" in labels
+
+    def test_preset_difficulty_ordering(self):
+        """Harder presets have smaller gaps and more columns."""
+        easy = FlappyColumnConfig.easy()
+        medium = FlappyColumnConfig.medium()
+        hard = FlappyColumnConfig.hard()
+        assert easy.gap_height > medium.gap_height > hard.gap_height
+        assert easy.num_columns < medium.num_columns < hard.num_columns
+
+    def test_flappy_frame_metadata_valid(self):
+        """flappy_frame_metadata produces valid metadata dict."""
+        cfg = FlappyColumnConfig.easy()
+        meta = flappy_frame_metadata(cfg, seed=42)
+        assert "obstacles" in meta
+        assert "depth_stats" in meta
+        assert "traversability_ratio" in meta
+        assert 0.0 <= meta["traversability_ratio"] <= 1.0
+        assert meta["depth_stats"]["min_m"] > 0
+        assert meta["depth_stats"]["max_m"] > meta["depth_stats"]["min_m"]
+
+
+class TestDomainRandomiserDeterminism:
+    """Test DomainRandomiser.sample() reproducibility."""
+
+    def test_same_seed_same_samples(self):
+        r1 = DomainRandomiser(difficulty=0.5, seed=42)
+        r2 = DomainRandomiser(difficulty=0.5, seed=42)
+        s1 = r1.sample()
+        s2 = r2.sample()
+        assert s1 == s2
+
+    def test_different_seed_different_samples(self):
+        r1 = DomainRandomiser(difficulty=0.5, seed=42)
+        r2 = DomainRandomiser(difficulty=0.5, seed=99)
+        s1 = r1.sample()
+        s2 = r2.sample()
+        assert s1 != s2
+
+    def test_samples_within_ranges(self):
+        """All samples must fall within their difficulty-scaled ranges."""
+        dr = DomainRandomiser(difficulty=0.7, seed=123)
+        ranges = dr.ranges()
+        samples = dr.sample()
+        for name, value in samples.items():
+            lo, hi = ranges[name]
+            assert lo <= value <= hi, f"{name}: {value} not in [{lo}, {hi}]"
+
+    def test_from_curriculum_progress(self):
+        """Convenience constructor produces valid randomiser."""
+        dr = DomainRandomiser.from_curriculum_progress(0.5, seed=42)
+        assert 0.0 <= dr.difficulty <= 1.0
+        samples = dr.sample()
+        assert len(samples) > 0
