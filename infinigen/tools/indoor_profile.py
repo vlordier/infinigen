@@ -41,12 +41,7 @@ def main(dir: Path):
     for seed in seeds:
         try:
             coarse_log = (dir / seed / "logs" / "coarse.err").read_text()
-            render_log_path = next(
-                (dir / seed / "logs").glob("shortrender*.err"), None
-            )
-            if render_log_path is None:
-                continue
-            render_log = render_log_path.read_text()
+            render_log = next((dir / seed / "logs").glob("shortrender*.err")).read_text()
         except FileNotFoundError:
             continue
 
