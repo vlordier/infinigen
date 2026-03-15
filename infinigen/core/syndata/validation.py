@@ -80,6 +80,35 @@ class SceneValidator:
     max_poly_count: int = 10_000_000
     custom_checks: list[tuple[str, CheckFn]] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if self.min_obstacles < 0:
+            msg = f"min_obstacles must be non-negative, got {self.min_obstacles}"
+            raise ValueError(msg)
+        if self.min_obstacles > self.max_obstacles:
+            msg = f"min_obstacles ({self.min_obstacles}) must be <= max_obstacles ({self.max_obstacles})"
+            raise ValueError(msg)
+        if self.min_depth_range_m < 0:
+            msg = f"min_depth_range_m must be non-negative, got {self.min_depth_range_m}"
+            raise ValueError(msg)
+        if not 0.0 <= self.min_traversability <= 1.0:
+            msg = f"min_traversability must be in [0, 1], got {self.min_traversability}"
+            raise ValueError(msg)
+        if not 0.0 <= self.max_traversability <= 1.0:
+            msg = f"max_traversability must be in [0, 1], got {self.max_traversability}"
+            raise ValueError(msg)
+        if self.min_traversability > self.max_traversability:
+            msg = (
+                f"min_traversability ({self.min_traversability}) must be <= "
+                f"max_traversability ({self.max_traversability})"
+            )
+            raise ValueError(msg)
+        if self.min_poly_count < 0:
+            msg = f"min_poly_count must be non-negative, got {self.min_poly_count}"
+            raise ValueError(msg)
+        if self.min_poly_count > self.max_poly_count:
+            msg = f"min_poly_count ({self.min_poly_count}) must be <= max_poly_count ({self.max_poly_count})"
+            raise ValueError(msg)
+
     def validate(self, metadata: dict[str, object], *, fail_fast: bool = False) -> list[ValidationResult]:
         """Run all checks against the supplied metadata dict.
 

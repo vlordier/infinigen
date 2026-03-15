@@ -2496,3 +2496,74 @@ class TestResolutionEdgeCases:
             resolution_for_stage(0, 5, aspect_ratio=0.1)
         with pytest.raises(ValueError, match="aspect_ratio"):
             resolution_for_stage(0, 5, aspect_ratio=5.0)
+
+
+# ── Commit 8: SceneValidator __post_init__ validation + __repr__ tests ──────
+
+
+class TestSceneValidatorPostInit:
+    """Test SceneValidator parameter validation."""
+
+    def test_min_obstacles_negative(self):
+        with pytest.raises(ValueError, match="min_obstacles"):
+            SceneValidator(min_obstacles=-1)
+
+    def test_min_gt_max_obstacles(self):
+        with pytest.raises(ValueError, match="min_obstacles.*max_obstacles"):
+            SceneValidator(min_obstacles=10, max_obstacles=5)
+
+    def test_min_traversability_out_of_range(self):
+        with pytest.raises(ValueError, match="min_traversability"):
+            SceneValidator(min_traversability=-0.1)
+
+    def test_max_traversability_out_of_range(self):
+        with pytest.raises(ValueError, match="max_traversability"):
+            SceneValidator(max_traversability=1.5)
+
+    def test_min_gt_max_traversability(self):
+        with pytest.raises(ValueError, match="min_traversability.*max_traversability"):
+            SceneValidator(min_traversability=0.9, max_traversability=0.1)
+
+    def test_min_poly_count_negative(self):
+        with pytest.raises(ValueError, match="min_poly_count"):
+            SceneValidator(min_poly_count=-1)
+
+    def test_min_gt_max_poly_count(self):
+        with pytest.raises(ValueError, match="min_poly_count.*max_poly_count"):
+            SceneValidator(min_poly_count=1000000, max_poly_count=100)
+
+    def test_negative_depth_range(self):
+        with pytest.raises(ValueError, match="min_depth_range_m"):
+            SceneValidator(min_depth_range_m=-1.0)
+
+
+class TestReprMethods:
+    """Test __repr__ methods on key classes."""
+
+    def test_scene_budget_repr(self):
+        sb = SceneBudget(poly_count=100000)
+        r = repr(sb)
+        assert "SceneBudget" in r
+        assert "100000" in r
+
+    def test_overlay_hints_repr(self):
+        from infinigen.core.syndata.world_gen import InfinigenOverlayHints
+        hints = InfinigenOverlayHints.from_complexity(0.6)
+        r = repr(hints)
+        assert "InfinigenOverlayHints" in r
+        assert "vegetation" in r
+
+    def test_visual_style_repr(self):
+        from infinigen.core.syndata.world_gen import VisualStyle
+        vs = VisualStyle(fog_density=0.5, point_light_count=4)
+        r = repr(vs)
+        assert "VisualStyle" in r
+        assert "fog=0.50" in r
+        assert "lights=4" in r
+
+    def test_world_config_repr(self):
+        from infinigen.core.syndata.world_gen import WorldConfig
+        wc = WorldConfig(complexity=0.5, seed=42)
+        r = repr(wc)
+        assert "WorldConfig" in r
+        assert "complexity=0.5" in r
