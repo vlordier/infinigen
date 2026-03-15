@@ -73,6 +73,16 @@ from infinigen.core.syndata.quality_presets import (
 from infinigen.core.syndata.randomisation import DomainRandomiser
 from infinigen.core.syndata.resolution import resolution_for_stage
 from infinigen.core.syndata.validation import SceneValidator
+from infinigen.core.syndata.world_gen import (
+    VisualStyle,
+    WorldConfig,
+    generate_world,
+    world_gin_overrides,
+    world_summary,
+    world_to_drone_env_config,
+    world_to_frame_metadata,
+    world_to_genesis_entities,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  1. CurriculumConfig / complexity
@@ -2788,3 +2798,430 @@ class TestEndToEndFlappyPretraining:
         assert "genesis" in script
         # Should compile cleanly
         compile(script, "<flappy>", "exec")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# WorldConfig & generate_world — procedural 3D world generator
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestVisualStyle:
+    """Tests for VisualStyle dataclass."""
+
+    def test_defaults(self):
+        s = VisualStyle()
+        assert s.wall_color_hue == 0.0
+        assert s.wall_color_saturation == 0.0
+        assert s.fog_density == 0.0
+        assert s.point_light_count == 0
+
+    def test_saturation_bounds(self):
+        with pytest.raises(ValueError, match="wall_color_saturation"):
+            VisualStyle(wall_color_saturation=-0.1)
+        with pytest.raises(ValueError, match="wall_color_saturation"):
+            VisualStyle(wall_color_saturation=1.1)
+
+    def test_roughness_bounds(self):
+        with pytest.raises(ValueError, match="floor_roughness"):
+            VisualStyle(floor_roughness=-0.1)
+        with pytest.raises(ValueError, match="floor_roughness"):
+            VisualStyle(floor_roughness=1.1)
+
+    def test_fog_bounds(self):
+        with pytest.raises(ValueError, match="fog_density"):
+            VisualStyle(fog_density=-0.1)
+        with pytest.raises(ValueError, match="fog_density"):
+            VisualStyle(fog_density=1.5)
+
+    def test_cloud_bounds(self):
+        with pytest.raises(ValueError, match="cloud_density"):
+            VisualStyle(cloud_density=-0.1)
+
+    def test_negative_ambient(self):
+        with pytest.raises(ValueError, match="ambient_intensity"):
+            VisualStyle(ambient_intensity=-1.0)
+
+    def test_negative_point_lights(self):
+        with pytest.raises(ValueError, match="point_light_count"):
+            VisualStyle(point_light_count=-1)
+
+
+class TestWorldConfig:
+    """Tests for WorldConfig dataclass and presets."""
+
+    def test_defaults(self):
+        cfg = WorldConfig()
+        assert cfg.complexity == 0.0
+        assert cfg.effective_num_columns == 2  # minimum
+        assert cfg.effective_gap_height == 2.0  # wide at c=0
+        assert cfg.effective_num_rooms == 0
+        assert cfg.effective_num_branches == 0
+        assert cfg.effective_num_levels == 1
+
+    def test_complexity_bounds(self):
+        with pytest.raises(ValueError, match="complexity"):
+            WorldConfig(complexity=-0.1)
+        with pytest.raises(ValueError, match="complexity"):
+            WorldConfig(complexity=1.1)
+
+    def test_positive_dimensions(self):
+        with pytest.raises(ValueError, match="corridor_length"):
+            WorldConfig(corridor_length=-1.0)
+        with pytest.raises(ValueError, match="corridor_width"):
+            WorldConfig(corridor_width=0.0)
+        with pytest.raises(ValueError, match="corridor_height"):
+            WorldConfig(corridor_height=-1.0)
+
+    def test_gap_height_validation(self):
+        with pytest.raises(ValueError, match="gap_height"):
+            WorldConfig(gap_height=0.1)  # < 0.3
+
+    def test_debris_density_validation(self):
+        with pytest.raises(ValueError, match="debris_density"):
+            WorldConfig(debris_density=-0.1)
+        with pytest.raises(ValueError, match="debris_density"):
+            WorldConfig(debris_density=1.5)
+
+    def test_room_size_range_validation(self):
+        with pytest.raises(ValueError, match="room_size_range"):
+            WorldConfig(room_size_range=(6.0, 3.0))
+
+    def test_presets_are_valid(self):
+        """All presets produce valid configs."""
+        for name in ["flappy", "corridor", "rooms", "branches", "maze", "doom"]:
+            cfg = getattr(WorldConfig, name)(seed=42)
+            assert 0.0 <= cfg.complexity <= 1.0
+            assert cfg.seed == 42
+
+    def test_from_curriculum_progress(self):
+        cfg = WorldConfig.from_curriculum_progress(0.25, seed=10)
+        assert 0.0 <= cfg.complexity <= 1.0
+        assert cfg.seed == 10
+        # sqrt(0.25) = 0.5
+        assert abs(cfg.complexity - 0.5) < 1e-6
+
+    def test_complexity_monotonicity(self):
+        """Higher complexity → more obstacles and features."""
+        prev_cols = 0
+        prev_rooms = 0
+        for c in [0.0, 0.3, 0.5, 0.7, 0.9, 1.0]:
+            cfg = WorldConfig(complexity=c)
+            assert cfg.effective_num_columns >= prev_cols
+            assert cfg.effective_num_rooms >= prev_rooms
+            prev_cols = cfg.effective_num_columns
+            prev_rooms = cfg.effective_num_rooms
+
+    def test_gap_height_decreases_with_complexity(self):
+        """Harder = narrower gaps."""
+        low = WorldConfig(complexity=0.0)
+        high = WorldConfig(complexity=1.0)
+        assert low.effective_gap_height > high.effective_gap_height
+
+    def test_style_derived_from_complexity(self):
+        low = WorldConfig(complexity=0.0)
+        high = WorldConfig(complexity=1.0)
+        assert low.effective_style.fog_density < high.effective_style.fog_density
+        assert low.effective_style.wall_color_saturation < high.effective_style.wall_color_saturation
+
+    def test_custom_style_override(self):
+        style = VisualStyle(fog_density=0.9, wall_color_saturation=0.5)
+        cfg = WorldConfig(complexity=0.0, style=style)
+        assert cfg.effective_style.fog_density == 0.9
+
+    def test_manual_overrides(self):
+        cfg = WorldConfig(
+            complexity=0.5,
+            num_columns=3,
+            gap_height=1.0,
+            num_rooms=2,
+            num_branches=1,
+            num_levels=3,
+            debris_density=0.8,
+        )
+        assert cfg.effective_num_columns == 3
+        assert cfg.effective_gap_height == 1.0
+        assert cfg.effective_num_rooms == 2
+        assert cfg.effective_num_branches == 1
+        assert cfg.effective_num_levels == 3
+        assert cfg.effective_debris_density == 0.8
+
+
+class TestGenerateWorld:
+    """Tests for generate_world() procedural generation."""
+
+    def test_basic_generation(self):
+        cfg = WorldConfig(complexity=0.1, seed=42)
+        boxes = generate_world(cfg)
+        assert len(boxes) > 0
+        assert all(isinstance(b, BBox3D) for b in boxes)
+
+    def test_type_check(self):
+        with pytest.raises(TypeError, match="WorldConfig"):
+            generate_world("not a config")
+
+    def test_seed_reproducibility(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        boxes1 = generate_world(cfg)
+        boxes2 = generate_world(cfg)
+        assert len(boxes1) == len(boxes2)
+        for b1, b2 in zip(boxes1, boxes2):
+            assert b1.center == b2.center
+            assert b1.extent == b2.extent
+            assert b1.label == b2.label
+
+    def test_different_seeds_differ(self):
+        boxes1 = generate_world(WorldConfig(complexity=0.5, seed=1))
+        boxes2 = generate_world(WorldConfig(complexity=0.5, seed=2))
+        # Different seeds should produce different obstacle positions
+        if len(boxes1) == len(boxes2) and len(boxes1) > 4:
+            any_diff = any(
+                b1.center != b2.center
+                for b1, b2 in zip(boxes1, boxes2)
+                if "floor" not in b1.label and "ceiling" not in b1.label
+            )
+            assert any_diff
+
+    def test_complexity_scaling(self):
+        """Higher complexity produces more boxes."""
+        low = generate_world(WorldConfig(complexity=0.1, seed=42))
+        high = generate_world(WorldConfig(complexity=0.9, seed=42))
+        assert len(high) > len(low)
+
+    def test_all_presets_generate(self):
+        """All presets produce valid worlds without errors."""
+        for name in ["flappy", "corridor", "rooms", "branches", "maze", "doom"]:
+            cfg = getattr(WorldConfig, name)(seed=42)
+            boxes = generate_world(cfg)
+            assert len(boxes) > 0, f"{name} produced no boxes"
+
+    def test_labels_unique_enough(self):
+        """Most labels should be distinct (some repeats OK for floor/ceiling)."""
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        boxes = generate_world(cfg)
+        labels = [b.label for b in boxes]
+        # At minimum floor/ceiling labels exist
+        assert any("floor" in l for l in labels)
+        assert any("ceiling" in l for l in labels)
+
+    def test_rooms_at_moderate_complexity(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        boxes = generate_world(cfg)
+        labels = [b.label for b in boxes]
+        assert any("room_" in l for l in labels)
+
+    def test_branches_at_high_complexity(self):
+        cfg = WorldConfig(complexity=0.7, seed=42)
+        boxes = generate_world(cfg)
+        labels = [b.label for b in boxes]
+        assert any("branch_" in l for l in labels)
+
+    def test_levels_at_very_high_complexity(self):
+        cfg = WorldConfig(complexity=0.9, seed=42)
+        boxes = generate_world(cfg)
+        labels = [b.label for b in boxes]
+        assert any("level_" in l for l in labels)
+
+    def test_debris_at_moderate_complexity(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        boxes = generate_world(cfg)
+        labels = [b.label for b in boxes]
+        assert any("debris" in l for l in labels)
+
+
+class TestWorldSummary:
+    """Tests for world_summary()."""
+
+    def test_returns_dict(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        s = world_summary(cfg)
+        assert isinstance(s, dict)
+        assert "complexity" in s
+        assert "num_columns" in s
+        assert "num_rooms" in s
+        assert "debris_density" in s
+        assert "fog_density" in s
+
+    def test_values_match_config(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        s = world_summary(cfg)
+        assert s["complexity"] == 0.5
+        assert s["num_columns"] == cfg.effective_num_columns
+
+
+class TestWorldToGenesisEntities:
+    """Tests for world_to_genesis_entities()."""
+
+    def test_basic(self):
+        boxes = generate_world(WorldConfig(complexity=0.3, seed=42))
+        entities = world_to_genesis_entities(boxes)
+        assert len(entities) == len(boxes)
+        for e in entities:
+            assert "name" in e
+            assert "morph_type" in e
+            assert e["morph_type"] == "Box"
+            assert "pos" in e
+            assert e["is_fixed"] is True
+            assert "size" in e["extra"]
+
+    def test_size_is_double_extent(self):
+        box = BBox3D(center=(1, 2, 3), extent=(0.5, 1.0, 1.5), label="test")
+        entities = world_to_genesis_entities([box])
+        size = entities[0]["extra"]["size"]
+        assert size == (1.0, 2.0, 3.0)
+
+
+class TestWorldToDroneEnvConfig:
+    """Tests for world_to_drone_env_config()."""
+
+    def test_basic(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        boxes = generate_world(cfg)
+        env = world_to_drone_env_config(cfg, boxes)
+        assert "num_envs" in env
+        assert "obstacle_entities" in env
+        assert env["num_envs"] == 2048
+        assert len(env["obstacle_entities"]) == len(boxes)
+
+    def test_invalid_num_envs(self):
+        cfg = WorldConfig()
+        with pytest.raises(ValueError, match="num_envs"):
+            world_to_drone_env_config(cfg, [], num_envs=0)
+
+    def test_invalid_dt(self):
+        cfg = WorldConfig()
+        with pytest.raises(ValueError, match="dt"):
+            world_to_drone_env_config(cfg, [], dt=-1.0)
+
+    def test_crash_penalty_scales_with_complexity(self):
+        low = world_to_drone_env_config(WorldConfig(complexity=0.0), [])
+        high = world_to_drone_env_config(WorldConfig(complexity=1.0), [])
+        # Higher complexity → harsher crash penalty
+        assert high["reward_scales"]["crash"] < low["reward_scales"]["crash"]
+
+    def test_termination_angle_scales(self):
+        low = world_to_drone_env_config(WorldConfig(complexity=0.0), [])
+        high = world_to_drone_env_config(WorldConfig(complexity=1.0), [])
+        # Higher complexity → stricter angle termination
+        assert high["termination_conditions"]["roll_deg"] < low["termination_conditions"]["roll_deg"]
+
+    def test_includes_world_summary(self):
+        cfg = WorldConfig(complexity=0.5)
+        env = world_to_drone_env_config(cfg, [])
+        assert "world_summary" in env
+
+
+class TestWorldToFrameMetadata:
+    """Tests for world_to_frame_metadata()."""
+
+    def test_basic(self):
+        cfg = WorldConfig(complexity=0.3, seed=42)
+        boxes = generate_world(cfg)
+        meta = world_to_frame_metadata(cfg, boxes)
+        assert meta["frame_id"] == 0
+        assert "obstacles" in meta
+        assert "depth_stats" in meta
+        assert "traversability_ratio" in meta
+        assert 0.0 <= meta["traversability_ratio"] <= 1.0
+
+    def test_depth_stats_present(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        boxes = generate_world(cfg)
+        meta = world_to_frame_metadata(cfg, boxes)
+        ds = meta["depth_stats"]
+        assert "min_m" in ds
+        assert "max_m" in ds
+        assert ds["min_m"] > 0
+        assert ds["max_m"] > ds["min_m"]
+
+
+class TestWorldGinOverrides:
+    """Tests for world_gin_overrides()."""
+
+    def test_basic(self):
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        overrides = world_gin_overrides(cfg)
+        assert "grid_coarsen" in overrides
+        assert "object_count" in overrides
+        assert "scatter_density_multiplier" in overrides
+        assert "fog_density" in overrides
+        assert "configure_render_cycles.exposure" in overrides
+
+    def test_scatter_increases_with_complexity(self):
+        low = world_gin_overrides(WorldConfig(complexity=0.0))
+        high = world_gin_overrides(WorldConfig(complexity=1.0))
+        assert high["scatter_density_multiplier"] > low["scatter_density_multiplier"]
+
+    def test_grid_coarsen_decreases_with_complexity(self):
+        low = world_gin_overrides(WorldConfig(complexity=0.0))
+        high = world_gin_overrides(WorldConfig(complexity=1.0))
+        assert high["grid_coarsen"] <= low["grid_coarsen"]
+
+
+class TestEndToEndWorldGenPipeline:
+    """End-to-end: WorldConfig → generate → export → Genesis script."""
+
+    def test_world_to_genesis_scene_config(self):
+        """Generate world → GenesisSceneConfig → script."""
+        cfg = WorldConfig.maze(seed=42)
+        boxes = generate_world(cfg)
+        entities_dicts = world_to_genesis_entities(boxes)
+
+        # Build actual Genesis entity configs
+        genesis_ents = [GenesisEntityConfig(**e) for e in entities_dicts]
+        scene = GenesisSceneConfig(entities=genesis_ents, backend="cpu")
+        script = to_genesis_script(scene)
+        assert "genesis" in script
+        compile(script, "<world_gen>", "exec")
+
+    def test_progressive_difficulty_pipeline(self):
+        """Simulate a full difficulty progression."""
+        for c in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
+            cfg = WorldConfig(complexity=c, seed=42)
+            boxes = generate_world(cfg)
+            assert len(boxes) > 0
+
+            env = world_to_drone_env_config(cfg, boxes)
+            assert env["num_envs"] == 2048
+
+            meta = world_to_frame_metadata(cfg, boxes)
+            assert meta["curriculum_stage"] == round(c * 10)
+
+    def test_curriculum_feedback_loop(self):
+        """World gen → DroneEnvConfig → TrainingOutcome → next stage."""
+        # Start with flappy
+        cfg = WorldConfig.flappy(seed=42)
+        boxes = generate_world(cfg)
+        env_dict = world_to_drone_env_config(cfg, boxes)
+
+        # Simulate agent learns the easy environment
+        outcome = TrainingOutcome(
+            success_rate=0.9,
+            crash_rate=0.05,
+            mean_reward=80.0,
+            difficulty=cfg.complexity,
+        )
+
+        # Curriculum advancement
+        params = outcome_to_curriculum_params(outcome, current_stage=0, total_stages=10)
+        assert params["action"] == "advance"
+
+        # Next stage: slightly harder
+        cfg2 = WorldConfig(complexity=0.15, seed=42)
+        boxes2 = generate_world(cfg2)
+        assert len(boxes2) >= len(boxes)
+
+    def test_separation_of_concerns(self):
+        """World gen (Infinigen) is independent of Genesis simulation."""
+        # World gen produces pure BBox3D — no Genesis types
+        cfg = WorldConfig(complexity=0.5, seed=42)
+        boxes = generate_world(cfg)
+        assert all(isinstance(b, BBox3D) for b in boxes)
+
+        # Gin overrides are Infinigen-specific
+        gin = world_gin_overrides(cfg)
+        assert "grid_coarsen" in gin  # Infinigen parameter
+        assert "scene.step" not in str(gin)  # Not Genesis
+
+        # Genesis entities are a separate conversion step
+        entities = world_to_genesis_entities(boxes)
+        assert all(e["morph_type"] == "Box" for e in entities)

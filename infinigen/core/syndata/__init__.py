@@ -67,17 +67,25 @@ from infinigen.core.syndata.quality_presets import drone_preset, to_gin_bindings
 from infinigen.core.syndata.randomisation import DomainRandomiser
 from infinigen.core.syndata.resolution import resolution_for_stage
 from infinigen.core.syndata.validation import SceneValidator
+from infinigen.core.syndata.world_gen import (
+    VisualStyle,
+    WorldConfig,
+    generate_world,
+    world_gin_overrides,
+    world_summary,
+    world_to_drone_env_config,
+    world_to_frame_metadata,
+    world_to_genesis_entities,
+)
 
 __all__ = [
-    # ── Infinigen pipeline ──
+    # ── Infinigen pipeline — scene generation config ──
     "CameraRigConfig",
     "CurriculumConfig",
     "DensityScaler",
     "DomainRandomiser",
     "DroneCamera",
     "EpisodeConfig",
-    "FlappyColumnConfig",
-    "FlappyObstacle",
     "FrameMetadata",
     "ObservationConfig",
     "SceneBudget",
@@ -86,11 +94,23 @@ __all__ = [
     "StageGraph",
     "curriculum_overrides",
     "drone_preset",
+    "resolution_for_stage",
+    "to_gin_bindings",
+    # ── Infinigen pipeline — procedural world generation ──
+    "VisualStyle",
+    "WorldConfig",
+    "generate_world",
+    "world_gin_overrides",
+    "world_summary",
+    "world_to_drone_env_config",
+    "world_to_frame_metadata",
+    "world_to_genesis_entities",
+    # ── Infinigen pipeline — simple pre-training (legacy) ──
+    "FlappyColumnConfig",
+    "FlappyObstacle",
     "flappy_drone_env_config",
     "flappy_genesis_entities",
     "generate_flappy_obstacles",
-    "resolution_for_stage",
-    "to_gin_bindings",
     # ── Genesis World bridge ──
     "GenesisCamera",
     "GenesisEntityConfig",
