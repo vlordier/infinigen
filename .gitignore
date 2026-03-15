@@ -16,11 +16,18 @@ coverage.xml
 .ruff_cache/
 .pytest_cache/
 .uv/
+.venv/
+venv/
+ENV/
+.env
+.env.*
+.direnv/
 
 # ---- IDE / editor ----
 .vscode/
 .idea/
-**.swp
+*.swp
+*.swo
 
 # ---- OS junk ----
 *.DS_Store
@@ -98,3 +105,5 @@ articulated_asset_preview.html
 MUJOCO_LOG.txt
 MUJOCO_LOG.TXT
 *tmp*
+*.orig
+*.rej
