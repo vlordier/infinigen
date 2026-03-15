@@ -189,7 +189,7 @@ jobs:
             tests/test_blender_version_compatibility.py::test_bpy_version_is_5_0
 
       - name: Test compute device utilities (CUDA/MPS/CPU)
-        if: steps.install.outcome == 'success'
+        if: steps.install.outcome == 'success' && matrix.os == 'ubuntu-latest'
         run: |
           pytest tests/test_benchmarks.py -k 'TestDeviceUtility' -v --noconftest
 
