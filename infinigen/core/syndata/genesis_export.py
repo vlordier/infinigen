@@ -37,6 +37,19 @@ from pathlib import Path
 from typing import Any
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+#: Minimum sun elevation (degrees) to avoid degenerate light placement.
+_MIN_ELEVATION_DEG: float = 5.0
+#: Maximum sun elevation (degrees).
+_MAX_ELEVATION_DEG: float = 85.0
+#: Multiplier mapping Infinigen sun intensity to Genesis HDR light color.
+_GENESIS_LIGHT_INTENSITY_SCALE: float = 10.0
+#: Default number of simulation steps in generated scripts.
+_DEFAULT_SIMULATION_STEPS: int = 1000
+
+# ---------------------------------------------------------------------------
 # Supported file extensions (lowered) → Genesis morph type
 # ---------------------------------------------------------------------------
 
@@ -86,7 +99,8 @@ class GenesisEntityConfig:
     pos : tuple[float, float, float]
         World position ``(x, y, z)``.
     euler : tuple[float, float, float]
-        Euler rotation ``(rx, ry, rz)`` in **degrees** (Genesis convention).
+        Euler rotation ``(rx, ry, rz)`` in **degrees**, applied in XYZ
+        order (Genesis convention).
     scale : float | tuple[float, float, float]
         Uniform or per-axis scale factor.
     is_fixed : bool
@@ -525,13 +539,13 @@ def randomisation_to_genesis_lights(
     elevation_deg = sample.get("sun_elevation", 45.0)
 
     # Place the sun light at an angle matching the sampled elevation
-    elev_rad = math.radians(max(5.0, min(85.0, elevation_deg)))
+    elev_rad = math.radians(max(_MIN_ELEVATION_DEG, min(_MAX_ELEVATION_DEG, elevation_deg)))
     distance = base_height / max(math.sin(elev_rad), 0.01)
     lx = distance * math.cos(elev_rad)
     lz = base_height
 
     # Map intensity to Genesis HDR light color
-    color_val = 10.0 * intensity
+    color_val = _GENESIS_LIGHT_INTENSITY_SCALE * intensity
 
     return [
         GenesisLight(
@@ -570,7 +584,8 @@ def metadata_to_entities(
     """
     entities: list[GenesisEntityConfig] = []
     for i, obs in enumerate(frame_meta.obstacles):
-        # BBox3D stores half-extents; Genesis Box uses full size
+        # BBox3D.extent stores half-extents (dx, dy, dz); Genesis Box
+        # ``size`` parameter expects full dimensions, so we double them.
         cx, cy, cz = obs.center
         dx, dy, dz = obs.extent
         entities.append(GenesisEntityConfig(
@@ -739,7 +754,7 @@ def to_genesis_script(config: GenesisSceneConfig) -> str:
     lines.append("scene.build()")
     lines.append("")
     lines.append("# ---- Simulation loop ----")
-    lines.append("for step in range(1000):")
+    lines.append(f"for step in range({_DEFAULT_SIMULATION_STEPS}):")
     lines.append("    scene.step()")
     if config.cameras:
         first_cam = config.cameras[0].name.replace("-", "_").replace(" ", "_")

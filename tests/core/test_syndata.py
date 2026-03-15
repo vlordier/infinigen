@@ -1403,7 +1403,7 @@ class TestMetadataToEntities:
         assert len(ents) == 2
         assert ents[0].morph_type == "Box"
         assert ents[0].pos == (1, 2, 3)
-        assert ents[0].extra["size"] == (1.0, 1.0, 1.0)  # 2 * half-extents
+        assert ents[0].extra["size"] == (1.0, 1.0, 1.0)  # 2 × half-extents (0.5, 0.5, 0.5)
         assert "tree" in ents[0].name
         assert ents[1].extra["size"] == (2, 2, 4)
 
@@ -1500,9 +1500,10 @@ class TestBuildGenesisConfig:
         )
         cfg = build_genesis_config(frame_metadata=meta, backend="cpu")
         assert cfg.backend == "cpu"
-        # Should have ground plane + 1 obstacle
+        # Should have ground plane + 1 obstacle = at least 2 entities
         assert any(e.morph_type == "Plane" for e in cfg.entities)
         assert any(e.morph_type == "Box" for e in cfg.entities)
+        assert len(cfg.entities) >= 2
         assert len(cfg.cameras) >= 1
         assert len(cfg.lights) >= 1
 
@@ -1561,7 +1562,7 @@ class TestBuildGenesisConfig:
 
         # Verify structure
         assert cfg.backend == "cpu"
-        assert len(cfg.entities) >= 3  # ground + terrain + drone + obstacle
+        assert len(cfg.entities) >= 4  # ground + terrain.obj + drone.xml + obstacle
         assert len(cfg.cameras) == 4  # 2 drones × 2 (stereo)
         assert len(cfg.lights) >= 1
 
