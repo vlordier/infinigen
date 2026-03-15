@@ -2416,6 +2416,94 @@ class TestBlender5VolumeGridNodesBenchmark:
 
 
 # ---------------------------------------------------------------------------
+# P3: Light Linking benchmark (Blender 5.0 stable feature)
+# ---------------------------------------------------------------------------
+
+
+class TestBlender5LightLinkingBenchmark:
+    """Benchmark: Blender 5.0 Light Linking constants and mode validation.
+
+    Light Linking (stabilised in Blender 5.0) enables per-object light
+    inclusion/exclusion. These bpy-free benchmarks validate that:
+    - ``LIGHT_LINKING_MODES`` frozenset membership is sub-microsecond
+    - Mode validation logic stays within Princeton upstream budget
+    - ``BLENDER_LIGHT_TYPES`` tuple lookup is fast
+    """
+
+    _LIGHT_LINKING_MODES = frozenset(
+        {"none", "sun_exclude_interior", "annotation", "custom"}
+    )
+    _BLENDER_LIGHT_TYPES = ("SUN", "POINT", "SPOT", "AREA")
+
+    def test_light_linking_mode_validation_speed(self):
+        """Light linking mode validation (frozenset 'in') must be sub-microsecond."""
+        modes = self._LIGHT_LINKING_MODES
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = "sun_exclude_interior" in modes
+            _ = "annotation" in modes
+            _ = "unknown_mode" in modes
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 1.0, (
+            f"Light linking mode validation: {avg_us:.3f} µs/iteration (3 lookups each, expected < 1 µs/iter)"
+        )
+
+    def test_light_types_tuple_membership_speed(self):
+        """BLENDER_LIGHT_TYPES tuple membership must complete quickly."""
+        light_types = self._BLENDER_LIGHT_TYPES
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = "SUN" in light_types
+            _ = "AREA" in light_types
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 5.0, (
+            f"BLENDER_LIGHT_TYPES lookup: {avg_us:.3f} µs/iteration (2 lookups each, expected < 5 µs/iter)"
+        )
+
+    def test_light_linking_modes_count(self):
+        """LIGHT_LINKING_MODES must contain exactly 4 modes."""
+        assert len(self._LIGHT_LINKING_MODES) == 4
+
+    def test_light_linking_none_is_default(self):
+        """'none' mode must be in LIGHT_LINKING_MODES (default = no overhead)."""
+        assert "none" in self._LIGHT_LINKING_MODES
+
+    def test_light_linking_modes_correctness(self):
+        """All four light linking modes must be present and named correctly."""
+        expected = {"none", "sun_exclude_interior", "annotation", "custom"}
+        assert self._LIGHT_LINKING_MODES == expected
+
+    def test_light_types_all_present(self):
+        """SUN, POINT, SPOT, AREA must all be in BLENDER_LIGHT_TYPES."""
+        for expected in ("SUN", "POINT", "SPOT", "AREA"):
+            assert expected in self._BLENDER_LIGHT_TYPES, (
+                f"Expected light type {expected!r} missing from BLENDER_LIGHT_TYPES"
+            )
+
+    def test_configure_light_linking_function_exists(self):
+        """configure_light_linking must be accessible from core/init.py."""
+        m = _load_core_init_module()
+        fn = getattr(m, "configure_light_linking", None)
+        if fn is None:
+            pytest.skip("configure_light_linking not found (bpy unavailable)")
+        assert callable(fn)
+
+    def test_light_linking_constant_access_from_module(self):
+        """LIGHT_LINKING_MODES and BLENDER_LIGHT_TYPES must be importable."""
+        m = _load_core_init_module()
+        modes = getattr(m, "LIGHT_LINKING_MODES", None)
+        types = getattr(m, "BLENDER_LIGHT_TYPES", None)
+        if modes is None or types is None:
+            pytest.skip("Light linking constants not found (bpy unavailable)")
+        assert isinstance(modes, frozenset)
+        assert isinstance(types, tuple)
+
+
+# ---------------------------------------------------------------------------
 # Princeton upstream comparison benchmarks — for Mac M4 / Apple Silicon
 # ---------------------------------------------------------------------------
 
@@ -2467,6 +2555,8 @@ class TestBlender5UpstreamComparison:
         "volume_grid_frozenset_10k": 1.0,
         # Node zone types: zone frozenset membership 10k (new in this PR)
         "zone_frozenset_10k": 1.0,
+        # Light linking: frozenset membership 10k (new in this PR — P3)
+        "light_linking_frozenset_10k": 0.5,
     }
 
     @property
@@ -2608,6 +2698,16 @@ class TestBlender5UpstreamComparison:
         elapsed_ms = (time.perf_counter() - t0) * 1e3
         self._assert_within_budget("denoiser_priority_list_10k", elapsed_ms)
 
+    def test_light_linking_frozenset_vs_princeton(self):
+        """Light Linking mode frozenset membership must stay within Princeton budget."""
+        _MODES = frozenset({"none", "sun_exclude_interior", "annotation", "custom"})
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = "sun_exclude_interior" in _MODES
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+        self._assert_within_budget("light_linking_frozenset_10k", elapsed_ms)
+
     def test_apple_silicon_platform_detection(self):
         """Platform detection must correctly identify Apple Silicon (arm64)."""
         arch = platform.machine()
@@ -2629,6 +2729,7 @@ class TestBlender5UpstreamComparison:
             "volume_grid_frozenset_10k",
             "zone_frozenset_10k",
             "denoiser_priority_list_10k",
+            "light_linking_frozenset_10k",
         }
         missing = set(self._PRINCETON_BASELINES_MS.keys()) - tested_keys
         # sky_gin_signature_1k and eevee_gin_signature_1k require bpy — excluded from bpy-free suite

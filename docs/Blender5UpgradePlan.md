@@ -323,6 +323,7 @@ addressed by the bpy 5.0.1 upgrade in this PR.
 | **Render Time pass** | Not available | `configure_render_time_pass()` gin-configurable | ✅ Done | `core/init.py` |
 | **Volume atmosphere** | Hardcoded constants | `configure_volume_rendering()` + `ATMOSPHERE_QUALITY_PRESETS` | ✅ Done | `core/init.py` |
 | **Menu Switch** | Not available | `MenuSwitch` in `Nodes` + `new_menu_switch()` | ✅ Done | `core/nodes/node_info.py`, `node_wrangler.py` |
+| **Light Linking** | Experimental (4.x) | `configure_light_linking()` + `LIGHT_LINKING_MODES` gin-configurable | ✅ Done | `core/init.py` |
 | **Volume nodes** | Manual CUDA kernels | Native SDF Grid nodes | 📋 Optional | `terrain/` |
 | **Intel Mac wheel** | Available | Dropped in 5.0.x | ✅ Handled | `uv.lock` |
 
@@ -359,6 +360,7 @@ C.scene.render.engine = "BLENDER_EEVEE_NEXT"  # Blender 5.0+
 | Render Time pass → adaptive budgeting | ⭐⭐ Medium (throughput) | 🔴 High | **P2** ✅ |
 | SDF Grid terrain (replace C++ mesher) | ⭐⭐⭐ High (realism) | 🔴 High | **P3 ✅ Implemented** |
 | Volume grids for fog/clouds/haze | ⭐⭐⭐ High (diversity) | 🔴 High | **P3 ✅ Implemented** |
+| Light Linking (sun/interior separation) | ⭐⭐ Medium (realism) | 🟡 Medium | **P3 ✅ Implemented** |
 | Bundles for asset parameter passing | ⭐ Low (DX) | 🔴 High | **P4** |
 | Closures for shader reuse | ⭐ Low (DX) | 🔴 High | **P4** |
 

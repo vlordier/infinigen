@@ -1410,3 +1410,108 @@ def test_new_field_to_grid_helper_signature():
     assert params["resolution"].default == 32
     assert "voxel_size" in params
     assert params["voxel_size"].default is None
+
+
+# ---------------------------------------------------------------------------
+# P3: Light Linking (Blender 5.0 stable feature)
+# ---------------------------------------------------------------------------
+
+
+def test_light_linking_modes_frozenset_exists():
+    """LIGHT_LINKING_MODES frozenset must exist in core/init.py."""
+    m = _load_core_init_module()
+    assert hasattr(m, "LIGHT_LINKING_MODES"), (
+        "LIGHT_LINKING_MODES frozenset is missing from core/init.py"
+    )
+    modes = m.LIGHT_LINKING_MODES
+    assert isinstance(modes, frozenset), (
+        f"LIGHT_LINKING_MODES should be a frozenset, got {type(modes)}"
+    )
+
+
+def test_light_linking_modes_contains_expected():
+    """LIGHT_LINKING_MODES must contain all four expected policy modes."""
+    m = _load_core_init_module()
+    modes = m.LIGHT_LINKING_MODES
+    for expected in ("none", "sun_exclude_interior", "annotation", "custom"):
+        assert expected in modes, (
+            f"Expected mode {expected!r} missing from LIGHT_LINKING_MODES"
+        )
+
+
+def test_blender_light_types_constant_exists():
+    """BLENDER_LIGHT_TYPES tuple must be present in core/init.py."""
+    m = _load_core_init_module()
+    assert hasattr(m, "BLENDER_LIGHT_TYPES"), (
+        "BLENDER_LIGHT_TYPES tuple is missing from core/init.py"
+    )
+    light_types = m.BLENDER_LIGHT_TYPES
+    assert isinstance(light_types, tuple), (
+        f"BLENDER_LIGHT_TYPES should be a tuple, got {type(light_types)}"
+    )
+    assert "SUN" in light_types
+    assert "AREA" in light_types
+    assert "POINT" in light_types
+
+
+def test_configure_light_linking_function_exists():
+    """configure_light_linking must be defined in core/init.py."""
+    m = _load_core_init_module()
+    assert hasattr(m, "configure_light_linking"), (
+        "configure_light_linking function is missing from core/init.py"
+    )
+    assert callable(m.configure_light_linking)
+
+
+def test_configure_light_linking_is_gin_configurable():
+    """configure_light_linking must be decorated with @gin.configurable."""
+    import inspect
+
+    m = _load_core_init_module()
+    fn = m.configure_light_linking
+    # gin.configurable wraps the function; check the original is accessible
+    # via __wrapped__ or inspect the qualname
+    sig = inspect.signature(fn)
+    params = sig.parameters
+    assert "mode" in params, "configure_light_linking must accept 'mode' param"
+
+
+def test_configure_light_linking_default_mode_is_none():
+    """configure_light_linking default mode must be 'none' (zero overhead)."""
+    import inspect
+
+    m = _load_core_init_module()
+    sig = inspect.signature(m.configure_light_linking)
+    params = sig.parameters
+    assert "mode" in params
+    default = params["mode"].default
+    assert default == "none", (
+        f"configure_light_linking.mode default should be 'none', got {default!r}"
+    )
+
+
+def test_configure_light_linking_signature_include_exclude():
+    """configure_light_linking must accept include_names and exclude_names."""
+    import inspect
+
+    m = _load_core_init_module()
+    sig = inspect.signature(m.configure_light_linking)
+    params = sig.parameters
+    assert "include_names" in params, "configure_light_linking needs include_names"
+    assert "exclude_names" in params, "configure_light_linking needs exclude_names"
+    assert params["include_names"].default == ()
+    assert params["exclude_names"].default == ()
+
+
+def test_configure_light_linking_returns_int():
+    """configure_light_linking return type annotation must be int."""
+    import inspect
+
+    m = _load_core_init_module()
+    sig = inspect.signature(m.configure_light_linking)
+    ret = sig.return_annotation
+    # return annotation may be inspect.Parameter.empty if annotations not loaded
+    if ret is not inspect.Parameter.empty:
+        assert ret is int or ret == "int", (
+            f"configure_light_linking should return int, got {ret}"
+        )

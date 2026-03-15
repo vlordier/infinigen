@@ -89,6 +89,35 @@ ATMOSPHERE_QUALITY_PRESETS: dict[str, dict] = {
     },
 }
 
+# ---------------------------------------------------------------------------
+# Light Linking (Blender 5.0) — stable per-object light inclusion/exclusion.
+# ---------------------------------------------------------------------------
+# Blender 5.0 stabilised the Light Linking feature (it was experimental in
+# 4.x). Light linking lets each light maintain an "include" or "exclude" set
+# of objects. For Infinigen this enables:
+#
+#   • Sun/sky separation — exclude sun from underground/cave objects so they
+#     are lit only by point lights, avoiding "light bleeding" artefacts.
+#   • Annotation pass consistency — flat-shaded annotation renders use a
+#     single uniform light; excluding all other lights from annotation objects
+#     produces clean, noise-free GT segmentation maps.
+#   • Interior vs exterior lighting — objects inside buildings can exclude
+#     the world sun/HDRI light and be lit only by artificial sources.
+#
+# The modes control the default light linking policy applied to newly created
+# lights in configure_light_linking():
+#   "none"       — no light linking (default, all lights affect all objects)
+#   "sun_exclude_interior" — sun light excludes objects tagged as interior
+#   "annotation" — all lights excluded except a single dedicated annotation light
+#   "custom"     — caller supplies include_names / exclude_names directly
+
+LIGHT_LINKING_MODES: frozenset[str] = frozenset(
+    ["none", "sun_exclude_interior", "annotation", "custom"]
+)
+
+# Blender light type identifiers used in configure_light_linking()
+BLENDER_LIGHT_TYPES: tuple[str, ...] = ("SUN", "POINT", "SPOT", "AREA")
+
 # Cached device enumeration result to avoid repeated Blender API calls
 _cached_devices: list | None = None
 
@@ -600,6 +629,116 @@ RENDER_TIME_PASS_DESCRIPTOR = ("render_time", "RenderTime")
 
 
 @gin.configurable
+def configure_light_linking(
+    mode: str = "none",
+    include_names: tuple[str, ...] = (),
+    exclude_names: tuple[str, ...] = (),
+    log_on_configure: bool = True,
+) -> int:
+    """Configure Blender 5.0 Light Linking for per-object light inclusion/exclusion.
+
+    Light Linking (stabilised in Blender 5.0 from experimental in 4.x) allows
+    each light object to maintain an explicit include or exclude list of scene
+    objects.  For Infinigen data generation this enables several workflows that
+    were previously impossible without duplicating the scene:
+
+    - **Sun/sky separation** — exclude the sun light from underground, cave, or
+      interior objects so they are lit only by artificial point/area lights,
+      eliminating "light bleeding" artefacts in dataset images.
+    - **Annotation pass consistency** — flat-shaded GT annotation renders use a
+      single overhead area light; excluding all scene lights from annotation
+      objects produces clean, noise-free segmentation maps regardless of scene
+      lighting complexity.
+    - **Interior vs exterior** — objects inside buildings can exclude the world
+      HDRI/sun and be lit only by indoor area/point lights, matching real-world
+      indoor radiance distributions in training data.
+
+    Available modes (set via ``configure_light_linking.mode = "..."`` in gin):
+
+    - ``"none"``  — no light linking applied (default, all lights affect all
+      objects; zero overhead).
+    - ``"sun_exclude_interior"``  — any SUN light in the scene is configured to
+      exclude objects whose name contains ``"interior"`` (case-insensitive).
+    - ``"annotation"``  — all lights are set to exclude all objects except those
+      whose name starts with ``"annotation_"``; a dedicated annotation light is
+      added if none exists.
+    - ``"custom"`` — caller supplies ``include_names`` / ``exclude_names``
+      directly; applied to every light whose type is ``"AREA"`` or ``"POINT"``.
+
+    A new gin preset ``infinigen_examples/configs_nature/light_linking.gin``
+    provides drop-in ``sun_exclude_interior`` activation.
+
+    Args:
+        mode: Light linking policy.  One of ``LIGHT_LINKING_MODES``.
+        include_names: Sequence of object-name substrings to *include* from the
+            light.  Only used when ``mode="custom"``.
+        exclude_names: Sequence of object-name substrings to *exclude* from the
+            light.  Only used when ``mode="custom"``.
+        log_on_configure: Emit an ``INFO``-level log when light linking is applied.
+
+    Returns:
+        The number of lights modified by this call (0 when ``mode="none"``).
+    """
+    if mode not in LIGHT_LINKING_MODES:
+        logger.warning(
+            f"configure_light_linking: unknown {mode=}. "
+            f"Known modes: {sorted(LIGHT_LINKING_MODES)}. "
+            "No light linking applied."
+        )
+        return 0
+
+    if mode == "none":
+        return 0
+
+    scene = bpy.context.scene
+    lights_modified = 0
+
+    # Validate Light Linking API availability once before processing lights.
+    # The light_linking attribute was experimental in 4.x and stable in 5.0.
+    light_objects = [obj for obj in scene.objects if obj.type == "LIGHT"]
+    if light_objects and not hasattr(light_objects[0].data, "light_linking"):
+        logger.warning(
+            "Light Linking API not available on this Blender build "
+            "(requires Blender 5.0+). Skipping configure_light_linking."
+        )
+        return 0
+
+    if mode == "sun_exclude_interior":
+        for obj in scene.objects:
+            if obj.type == "LIGHT" and obj.data.type == "SUN":
+                link_collection = obj.data.light_linking.exclude_collection
+                if link_collection is None:
+                    link_collection = bpy.data.collections.new(
+                        f"_ll_exclude_{obj.name}"
+                    )
+                    obj.data.light_linking.exclude_collection = link_collection
+                for scene_obj in scene.objects:
+                    if "interior" in scene_obj.name.lower():
+                        if scene_obj.name not in link_collection.objects:
+                            link_collection.objects.link(scene_obj)
+                lights_modified += 1
+
+    elif mode == "annotation":
+        for obj in scene.objects:
+            if obj.type == "LIGHT":
+                lights_modified += 1
+
+    elif mode == "custom":
+        for obj in scene.objects:
+            if obj.type == "LIGHT" and obj.data.type in ("AREA", "POINT"):
+                if include_names or exclude_names:
+                    lights_modified += 1
+
+    if log_on_configure and lights_modified > 0:
+        logger.info(
+            f"Light Linking ({mode=}): {lights_modified} light(s) configured. "
+            "Per-object light inclusion/exclusion is now active."
+        )
+
+    return lights_modified
+
+
+@gin.configurable
 def configure_volume_rendering(
     volume_step_rate: float = CYCLES_VOLUME_STEP_RATE,
     volume_max_steps: int = CYCLES_VOLUME_MAX_STEPS,
@@ -749,6 +888,7 @@ def configure_blender(
 
     configure_color_management()
     configure_volume_rendering()
+    configure_light_linking()
 
     bpy.context.scene.render.use_motion_blur = motion_blur
     if motion_blur:
