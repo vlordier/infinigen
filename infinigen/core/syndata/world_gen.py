@@ -400,6 +400,29 @@ class VisualStyle:
 
 
 # ---------------------------------------------------------------------------
+# Derived effective values (typed container replacing dict[str, Any])
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class _EffectiveValues:
+    """Typed container for complexity-derived parameters.
+
+    Replaces the previous ``dict[str, Any]`` for type safety and
+    faster attribute access via ``__slots__``.
+    """
+
+    num_columns: int
+    gap_height: float
+    num_rooms: int
+    num_branches: int
+    num_levels: int
+    debris_density: float
+    corridor_length: float
+    style: VisualStyle
+
+
+# ---------------------------------------------------------------------------
 # Main world config
 # ---------------------------------------------------------------------------
 
@@ -491,7 +514,7 @@ class WorldConfig:
     style: VisualStyle | None = None
 
     # Derived values
-    _effective: dict[str, Any] = field(init=False, repr=False, default_factory=dict)
+    _effective: _EffectiveValues = field(init=False, repr=False, default=None)  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.complexity <= 1.0:
@@ -518,60 +541,54 @@ class WorldConfig:
 
         # Compute effective values from complexity
         c = self.complexity
-        eff: dict[str, Any] = {}
 
-        # Columns: 2 at c=0, up to 15 at c=1
-        eff["num_columns"] = (
-            self.num_columns if self.num_columns is not None
-            else max(2, round(2 + 13 * c))
+        eff = _EffectiveValues(
+            # Columns: 2 at c=0, up to 15 at c=1
+            num_columns=(
+                self.num_columns if self.num_columns is not None
+                else max(2, round(2 + 13 * c))
+            ),
+            # Gap height: 2.0m at c=0 (easy), 0.5m at c=1 (hard)
+            gap_height=(
+                self.gap_height if self.gap_height is not None
+                else max(_MIN_GAP, 2.0 - 1.5 * c)
+            ),
+            # Rooms emerge at c >= COMPLEXITY_ROOMS
+            num_rooms=(
+                self.num_rooms if self.num_rooms is not None
+                else max(0, round(8 * max(0, c - COMPLEXITY_ROOMS) / (1.0 - COMPLEXITY_ROOMS)))
+            ),
+            # Branches emerge at c >= COMPLEXITY_BRANCHES
+            num_branches=(
+                self.num_branches if self.num_branches is not None
+                else max(0, round(6 * max(0, c - COMPLEXITY_BRANCHES) / (1.0 - COMPLEXITY_BRANCHES)))
+            ),
+            # Vertical levels at c >= COMPLEXITY_MAZE
+            num_levels=(
+                self.num_levels if self.num_levels is not None
+                else max(1, round(1 + 3 * max(0, c - COMPLEXITY_MAZE) / (1.0 - COMPLEXITY_MAZE)))
+            ),
+            # Debris density emerges at c >= COMPLEXITY_CORRIDOR
+            debris_density=(
+                self.debris_density if self.debris_density is not None
+                else min(1.0, max(0.0, (c - COMPLEXITY_CORRIDOR) / (1.0 - COMPLEXITY_CORRIDOR)))
+            ),
+            # Corridor length scales with complexity
+            corridor_length=self.corridor_length * (1.0 + 1.5 * c),
+            # Visual style
+            style=(
+                self.style if self.style is not None
+                else VisualStyle(
+                    wall_color_hue=0.0,  # will be randomised per-wall
+                    wall_color_saturation=min(1.0, c * 1.5),
+                    floor_roughness=0.3 + 0.5 * c,
+                    ambient_intensity=max(0.3, 1.0 - 0.5 * c),
+                    fog_density=max(0.0, (c - 0.5) * 1.2),
+                    cloud_density=max(0.0, (c - 0.4) * 1.0),
+                    point_light_count=max(0, round(c * 8)),
+                )
+            ),
         )
-
-        # Gap height: 2.0m at c=0 (easy), 0.5m at c=1 (hard)
-        eff["gap_height"] = (
-            self.gap_height if self.gap_height is not None
-            else max(_MIN_GAP, 2.0 - 1.5 * c)
-        )
-
-        # Rooms emerge at c >= COMPLEXITY_ROOMS
-        eff["num_rooms"] = (
-            self.num_rooms if self.num_rooms is not None
-            else max(0, round(8 * max(0, c - COMPLEXITY_ROOMS) / (1.0 - COMPLEXITY_ROOMS)))
-        )
-
-        # Branches emerge at c >= COMPLEXITY_BRANCHES
-        eff["num_branches"] = (
-            self.num_branches if self.num_branches is not None
-            else max(0, round(6 * max(0, c - COMPLEXITY_BRANCHES) / (1.0 - COMPLEXITY_BRANCHES)))
-        )
-
-        # Vertical levels at c >= COMPLEXITY_MAZE
-        eff["num_levels"] = (
-            self.num_levels if self.num_levels is not None
-            else max(1, round(1 + 3 * max(0, c - COMPLEXITY_MAZE) / (1.0 - COMPLEXITY_MAZE)))
-        )
-
-        # Debris density emerges at c >= COMPLEXITY_CORRIDOR
-        eff["debris_density"] = (
-            self.debris_density if self.debris_density is not None
-            else min(1.0, max(0.0, (c - COMPLEXITY_CORRIDOR) / (1.0 - COMPLEXITY_CORRIDOR)))
-        )
-
-        # Corridor length scales with complexity
-        eff["corridor_length"] = self.corridor_length * (1.0 + 1.5 * c)
-
-        # Visual style
-        if self.style is not None:
-            eff["style"] = self.style
-        else:
-            eff["style"] = VisualStyle(
-                wall_color_hue=0.0,  # will be randomised per-wall
-                wall_color_saturation=min(1.0, c * 1.5),
-                floor_roughness=0.3 + 0.5 * c,
-                ambient_intensity=max(0.3, 1.0 - 0.5 * c),
-                fog_density=max(0.0, (c - 0.5) * 1.2),
-                cloud_density=max(0.0, (c - 0.4) * 1.0),
-                point_light_count=max(0, round(c * 8)),
-            )
 
         object.__setattr__(self, "_effective", eff)
 
@@ -580,42 +597,42 @@ class WorldConfig:
     @property
     def effective_num_columns(self) -> int:
         """Number of column obstacles after applying complexity."""
-        return self._effective["num_columns"]
+        return self._effective.num_columns
 
     @property
     def effective_gap_height(self) -> float:
         """Flyable gap height (metres) after applying complexity."""
-        return self._effective["gap_height"]
+        return self._effective.gap_height
 
     @property
     def effective_num_rooms(self) -> int:
         """Number of connected rooms after applying complexity."""
-        return self._effective["num_rooms"]
+        return self._effective.num_rooms
 
     @property
     def effective_num_branches(self) -> int:
         """Number of maze branches / dead-ends after applying complexity."""
-        return self._effective["num_branches"]
+        return self._effective.num_branches
 
     @property
     def effective_num_levels(self) -> int:
         """Number of vertical levels after applying complexity."""
-        return self._effective["num_levels"]
+        return self._effective.num_levels
 
     @property
     def effective_debris_density(self) -> float:
         """Debris density in [0, 1] after applying complexity."""
-        return self._effective["debris_density"]
+        return self._effective.debris_density
 
     @property
     def effective_corridor_length(self) -> float:
         """Corridor length (metres) after applying complexity scaling."""
-        return self._effective["corridor_length"]
+        return self._effective.corridor_length
 
     @property
     def effective_style(self) -> VisualStyle:
         """Visual style after applying complexity defaults."""
-        return self._effective["style"]
+        return self._effective.style
 
     @property
     def overlay_hints(self) -> InfinigenOverlayHints:
