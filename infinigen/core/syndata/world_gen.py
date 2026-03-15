@@ -73,7 +73,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -154,13 +154,13 @@ class InfinigenOverlayHints:
     material_complexity: str = "flat"
     lighting_complexity: str = "uniform"
 
-    _VALID_ENV_TYPES: tuple[str, ...] = (
+    _VALID_ENV_TYPES: ClassVar[tuple[str, ...]] = (
         "corridor", "indoor", "outdoor_street", "outdoor_forest", "mixed",
     )
-    _VALID_MATERIALS: tuple[str, ...] = (
+    _VALID_MATERIALS: ClassVar[tuple[str, ...]] = (
         "flat", "basic_pbr", "full_pbr", "subsurface",
     )
-    _VALID_LIGHTING: tuple[str, ...] = (
+    _VALID_LIGHTING: ClassVar[tuple[str, ...]] = (
         "uniform", "single_sun", "multi_light", "hdr_environment",
     )
 

@@ -3299,19 +3299,19 @@ class TestInfinigenOverlayHints:
 
     def test_progressive_texture_resolution(self):
         """Texture resolution increases monotonically with complexity."""
-        prev = 0
+        prev_resolution = 0
         for c in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
             h = InfinigenOverlayHints.from_complexity(c)
-            assert h.texture_resolution >= prev
-            prev = h.texture_resolution
+            assert h.texture_resolution >= prev_resolution
+            prev_resolution = h.texture_resolution
 
     def test_progressive_subdiv_level(self):
         """Subdiv level increases monotonically with complexity."""
-        prev = 0
+        prev_subdiv = 0
         for c in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
             h = InfinigenOverlayHints.from_complexity(c)
-            assert h.subdiv_level >= prev
-            prev = h.subdiv_level
+            assert h.subdiv_level >= prev_subdiv
+            prev_subdiv = h.subdiv_level
 
     def test_to_gin_hints(self):
         """to_gin_hints() returns a dict with all overlay keys."""
