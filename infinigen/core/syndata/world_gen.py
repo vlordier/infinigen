@@ -517,7 +517,7 @@ class WorldConfig:
     style: VisualStyle | None = None
 
     # Derived values (populated by __post_init__, never None after construction)
-    _effective: _EffectiveValues | None = field(init=False, repr=False, default=None)
+    _effective: _EffectiveValues = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.complexity <= 1.0:
