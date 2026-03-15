@@ -246,6 +246,7 @@ ignore = [
 "tests/run_benchmarks.py" = ["T20"]
 "tests/compare_benchmarks.py" = ["T20"]
 
+
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"
 
