@@ -153,6 +153,14 @@ jobs:
         run: |
           uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
 
+      - name: Install torch (CPU wheel on Linux, default on macOS)
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            uv pip install torch --extra-index-url https://download.pytorch.org/whl/cpu
+          else
+            uv pip install torch
+          fi
+
       - name: Test Blender version compatibility
         if: steps.install.outcome == 'success'
         run: |
