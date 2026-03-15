@@ -69,7 +69,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import numpy as np
 
@@ -1239,7 +1239,7 @@ def overlay_hints_for_complexity(complexity: float) -> InfinigenOverlayHints:
     return InfinigenOverlayHints.from_complexity(complexity)
 
 
-def world_summary(config: WorldConfig) -> dict[str, Any]:
+def world_summary(config: WorldConfig) -> dict[str, object]:
     """Return a human-readable summary of the world configuration.
 
     Useful for logging, debugging, and curriculum tracking dashboards.
@@ -1286,7 +1286,7 @@ def world_to_frame_metadata(
     *,
     frame_id: int = 0,
     scene_seed: int = 0,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Build a FrameMetadata-compatible dict from world geometry.
 
     Computes depth statistics, traversability ratio, obstacle list, and
@@ -1307,7 +1307,7 @@ def world_to_frame_metadata(
 
     Returns
     -------
-    dict[str, Any]
+    dict[str, object]
         FrameMetadata-compatible dict.
     """
     cor_len = config.effective_corridor_length

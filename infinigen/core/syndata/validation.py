@@ -16,7 +16,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ __all__ = ["SceneValidator", "ValidationResult"]
 
 # Type alias for custom validation check callables.
 # Each callable receives the metadata dict and returns (passed, message).
-CheckFn = Callable[[dict[str, Any]], tuple[bool, str]]
+CheckFn = Callable[[dict[str, object]], tuple[bool, str]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +80,7 @@ class SceneValidator:
     max_poly_count: int = 10_000_000
     custom_checks: list[tuple[str, CheckFn]] = field(default_factory=list)
 
-    def validate(self, metadata: dict[str, Any], *, fail_fast: bool = False) -> list[ValidationResult]:
+    def validate(self, metadata: dict[str, object], *, fail_fast: bool = False) -> list[ValidationResult]:
         """Run all checks against the supplied metadata dict.
 
         Expected keys (all optional — missing keys skip their check):
@@ -93,7 +92,7 @@ class SceneValidator:
 
         Parameters
         ----------
-        metadata : dict[str, Any]
+        metadata : dict[str, object]
             Scene metadata to validate.
         fail_fast : bool
             If *True*, stop after the first failed check.  Useful in
@@ -193,6 +192,6 @@ class SceneValidator:
 
         return results
 
-    def is_valid(self, metadata: dict[str, Any]) -> bool:
+    def is_valid(self, metadata: dict[str, object]) -> bool:
         """Return *True* if all checks pass."""
         return all(r.passed for r in self.validate(metadata))
