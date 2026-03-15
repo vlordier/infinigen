@@ -704,13 +704,16 @@ def observation_to_genesis(obs: Any) -> GenesisObservationConfig:
         PASS_OBJECT_INDEX,
     )
 
+    passes = obs.passes or frozenset()
+    noise_std = getattr(obs.noise, "gaussian_std", 0.0) if obs.noise else 0.0
+
     return GenesisObservationConfig(
         rgb=obs.include_rgb,
-        depth=PASS_DEPTH in obs.passes,
-        segmentation=PASS_OBJECT_INDEX in obs.passes,
-        normal=PASS_NORMAL in obs.passes,
+        depth=PASS_DEPTH in passes,
+        segmentation=PASS_OBJECT_INDEX in passes,
+        normal=PASS_NORMAL in passes,
         depth_clip_m=obs.depth_clip_m,
-        gaussian_noise_std=obs.noise.gaussian_std,
+        gaussian_noise_std=noise_std,
     )
 
 
