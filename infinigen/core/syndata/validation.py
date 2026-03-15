@@ -19,7 +19,7 @@ from typing import Any
 __all__ = ["SceneValidator", "ValidationResult"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ValidationResult:
     """Outcome of a single validation check.
 

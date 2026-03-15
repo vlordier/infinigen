@@ -194,7 +194,7 @@ class FlappyColumnConfig:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class FlappyObstacle:
     """A single box obstacle in the flappy corridor.
 

@@ -24,7 +24,7 @@ import numpy as np
 __all__ = ["BBox3D", "DepthStats", "FrameMetadata"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class BBox3D:
     """Axis-aligned 3-D bounding box.
 
@@ -43,7 +43,7 @@ class BBox3D:
     label: str = "unknown"
 
 
-@dataclass
+@dataclass(frozen=True)
 class DepthStats:
     """Summary statistics for a depth map."""
 
