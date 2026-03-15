@@ -2387,7 +2387,9 @@ class TestBlender5VolumeGridNodesBenchmark:
         """BLENDER5_VOLUME_GRID_NODE_TYPES frozenset membership < 1 µs each."""
         try:
             from infinigen.core.nodes.node_info import Nodes
-            from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+            from infinigen.core.nodes.node_wrangler import (
+                BLENDER5_VOLUME_GRID_NODE_TYPES,
+            )
         except ModuleNotFoundError:
             pytest.skip("bpy not available")
 

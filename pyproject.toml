@@ -22,11 +22,6 @@ classifiers = [
     "Topic :: Multimedia :: Graphics :: 3D Modeling",
 ]
 
-[project.urls]
-Homepage = "https://infinigen.org"
-Repository = "https://github.com/princeton-vl/infinigen"
-Documentation = "https://infinigen.org/docs"
-
 requires-python = "==3.11.*"
 dependencies = [
 
@@ -58,6 +53,11 @@ dependencies = [
     "python-fcl",
     "rtree",
 ]
+
+[project.urls]
+Homepage = "https://infinigen.org"
+Repository = "https://github.com/princeton-vl/infinigen"
+Documentation = "https://infinigen.org/docs"
 
 [project.optional-dependencies]
 terrain = [

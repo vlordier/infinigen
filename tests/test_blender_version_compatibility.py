@@ -1058,8 +1058,8 @@ def test_nodes_foreach_geometry_element_defined():
 
 def test_blender5_zone_node_types_constant():
     """BLENDER5_ZONE_NODE_TYPES must be a frozenset containing the zone node values."""
-    from infinigen.core.nodes.node_wrangler import BLENDER5_ZONE_NODE_TYPES
     from infinigen.core.nodes.node_info import Nodes
+    from infinigen.core.nodes.node_wrangler import BLENDER5_ZONE_NODE_TYPES
 
     assert isinstance(BLENDER5_ZONE_NODE_TYPES, frozenset), (
         "BLENDER5_ZONE_NODE_TYPES must be a frozenset"
@@ -1174,7 +1174,7 @@ def test_configure_volume_rendering_signature():
         spec.loader.exec_module(m)  # type: ignore[union-attr]
     except Exception:
         pass
-    fn = getattr(m, "configure_volume_rendering")
+    fn = m.configure_volume_rendering
     sig = inspect.signature(fn)
     assert "volume_step_rate" in sig.parameters
     assert "volume_max_steps" in sig.parameters
@@ -1199,7 +1199,7 @@ def test_configure_volume_rendering_defaults():
         spec.loader.exec_module(m)  # type: ignore[union-attr]
     except Exception:
         pass
-    fn = getattr(m, "configure_volume_rendering")
+    fn = m.configure_volume_rendering
     sig = inspect.signature(fn)
     assert sig.parameters["atmosphere_preset"].default is None, (
         "atmosphere_preset must default to None (no preset active)"
@@ -1415,6 +1415,21 @@ def test_new_field_to_grid_helper_signature():
 # ---------------------------------------------------------------------------
 # P3: Light Linking (Blender 5.0 stable feature)
 # ---------------------------------------------------------------------------
+
+
+def _load_core_init_module():
+    """Load infinigen.core.init without bpy (best-effort; exceptions silenced)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    return m
 
 
 def test_light_linking_modes_frozenset_exists():
