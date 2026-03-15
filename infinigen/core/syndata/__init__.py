@@ -19,6 +19,15 @@ from infinigen.core.syndata.camera_config import CameraRigConfig, DroneCamera
 from infinigen.core.syndata.complexity import CurriculumConfig, curriculum_overrides
 from infinigen.core.syndata.density_scaling import DensityScaler
 from infinigen.core.syndata.episode import EpisodeConfig
+from infinigen.core.syndata.genesis_export import (
+    GenesisCamera,
+    GenesisEntityConfig,
+    GenesisLight,
+    GenesisSceneConfig,
+    GenesisSceneManifest,
+    build_genesis_config,
+    to_genesis_script,
+)
 from infinigen.core.syndata.metadata import FrameMetadata
 from infinigen.core.syndata.metrics import SceneBudget
 from infinigen.core.syndata.observation import ObservationConfig, SensorNoiseModel
@@ -36,13 +45,20 @@ __all__ = [
     "DroneCamera",
     "EpisodeConfig",
     "FrameMetadata",
+    "GenesisCamera",
+    "GenesisEntityConfig",
+    "GenesisLight",
+    "GenesisSceneConfig",
+    "GenesisSceneManifest",
     "ObservationConfig",
     "SceneBudget",
     "SceneValidator",
     "SensorNoiseModel",
     "StageGraph",
+    "build_genesis_config",
     "curriculum_overrides",
     "drone_preset",
     "resolution_for_stage",
+    "to_genesis_script",
     "to_gin_bindings",
 ]

@@ -23,6 +23,21 @@ from infinigen.core.syndata.camera_config import (
 from infinigen.core.syndata.complexity import CurriculumConfig, curriculum_overrides
 from infinigen.core.syndata.density_scaling import DensityScaler
 from infinigen.core.syndata.episode import EpisodeConfig
+from infinigen.core.syndata.genesis_export import (
+    GenesisCamera,
+    GenesisEntityConfig,
+    GenesisLight,
+    GenesisSceneConfig,
+    GenesisSceneManifest,
+    build_genesis_config,
+    camera_from_syndata,
+    manifest_to_entities,
+    metadata_to_entities,
+    observation_to_render_kwargs,
+    randomisation_to_genesis_lights,
+    scene_manifest_from_dir,
+    to_genesis_script,
+)
 from infinigen.core.syndata.metadata import BBox3D, DepthStats, FrameMetadata
 from infinigen.core.syndata.metrics import SceneBudget
 from infinigen.core.syndata.observation import (
@@ -1128,3 +1143,440 @@ class TestStageGraphValidation:
             ["export", "mesh_save", "render"],
             ["ground_truth"],
         ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  19. Genesis World integration
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestGenesisEntityConfig:
+    def test_auto_detect_obj(self):
+        ent = GenesisEntityConfig.from_file("/scene/mesh.obj")
+        assert ent.morph_type == "Mesh"
+        assert ent.name == "mesh"
+
+    def test_auto_detect_urdf(self):
+        ent = GenesisEntityConfig.from_file("/scene/robot.urdf")
+        assert ent.morph_type == "URDF"
+
+    def test_auto_detect_mjcf(self):
+        ent = GenesisEntityConfig.from_file("/scene/model.xml")
+        assert ent.morph_type == "MJCF"
+
+    def test_auto_detect_stl(self):
+        ent = GenesisEntityConfig.from_file("/scene/part.stl")
+        assert ent.morph_type == "Mesh"
+
+    def test_auto_detect_ply(self):
+        ent = GenesisEntityConfig.from_file("/scene/cloud.ply")
+        assert ent.morph_type == "Mesh"
+
+    def test_auto_detect_gltf(self):
+        ent = GenesisEntityConfig.from_file("/scene/model.glb")
+        assert ent.morph_type == "Mesh"
+
+    def test_auto_detect_usd(self):
+        ent = GenesisEntityConfig.from_file("/scene/world.usda")
+        assert ent.morph_type == "USD"
+
+    def test_unknown_extension_raises(self):
+        with pytest.raises(ValueError, match="Unsupported"):
+            GenesisEntityConfig.from_file("/scene/data.npz")
+
+    def test_invalid_morph_type_raises(self):
+        with pytest.raises(ValueError, match="morph_type"):
+            GenesisEntityConfig(morph_type="InvalidType")
+
+    def test_box_entity(self):
+        ent = GenesisEntityConfig(
+            name="box1", morph_type="Box", pos=(1, 2, 3),
+            extra={"size": (2, 2, 2)},
+        )
+        assert ent.morph_type == "Box"
+        assert ent.extra["size"] == (2, 2, 2)
+
+    def test_plane_entity(self):
+        ent = GenesisEntityConfig(morph_type="Plane", is_fixed=True)
+        assert ent.is_fixed
+
+    def test_to_dict_round_trip(self):
+        ent = GenesisEntityConfig(
+            name="test", file_path="/a.obj", morph_type="Mesh",
+            pos=(1, 2, 3), surface="Rough",
+        )
+        d = ent.to_dict()
+        restored = GenesisEntityConfig(**d)
+        assert restored.name == "test"
+        assert restored.pos == (1, 2, 3)
+
+    def test_custom_name(self):
+        ent = GenesisEntityConfig.from_file("/scene/mesh.obj", name="custom")
+        assert ent.name == "custom"
+
+
+class TestGenesisCamera:
+    def test_default(self):
+        cam = GenesisCamera()
+        assert cam.res == (640, 480)
+        assert cam.fov == 60.0
+
+    def test_invalid_resolution_raises(self):
+        with pytest.raises(ValueError, match="Resolution"):
+            GenesisCamera(res=(0, 480))
+
+    def test_invalid_fov_raises(self):
+        with pytest.raises(ValueError, match="fov"):
+            GenesisCamera(fov=0.5)
+
+    def test_invalid_clip_raises(self):
+        with pytest.raises(ValueError, match="clip"):
+            GenesisCamera(near=-1.0)
+
+    def test_to_dict(self):
+        cam = GenesisCamera(name="test", res=(320, 240), fov=90.0)
+        d = cam.to_dict()
+        assert d["name"] == "test"
+        assert d["res"] == (320, 240)
+
+
+class TestGenesisLight:
+    def test_default(self):
+        light = GenesisLight()
+        assert light.pos == (0.0, 0.0, 10.0)
+        assert light.radius == 3.0
+
+    def test_to_dict(self):
+        light = GenesisLight(pos=(5, 5, 20), color=(15, 15, 15))
+        d = light.to_dict()
+        assert d["pos"] == (5, 5, 20)
+        assert d["color"] == (15, 15, 15)
+        assert "radius" in d
+
+
+class TestGenesisSceneConfig:
+    def test_default(self):
+        cfg = GenesisSceneConfig()
+        assert cfg.renderer == "RayTracer"
+        assert cfg.backend == "cuda"
+
+    def test_invalid_renderer_raises(self):
+        with pytest.raises(ValueError, match="renderer"):
+            GenesisSceneConfig(renderer="OpenGL")
+
+    def test_invalid_dt_raises(self):
+        with pytest.raises(ValueError, match="dt"):
+            GenesisSceneConfig(dt=0)
+
+    def test_json_round_trip(self, tmp_path):
+        cfg = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(name="box", morph_type="Box", pos=(1, 2, 3)),
+            ],
+            cameras=[GenesisCamera(name="cam", res=(320, 240))],
+            lights=[GenesisLight(pos=(0, 0, 5))],
+            renderer="Rasterizer",
+            backend="cpu",
+        )
+        path = tmp_path / "scene.json"
+        cfg.save_json(path)
+        loaded = GenesisSceneConfig.load_json(path)
+        assert loaded.renderer == "Rasterizer"
+        assert loaded.backend == "cpu"
+        assert len(loaded.entities) == 1
+        assert loaded.entities[0].name == "box"
+        assert len(loaded.cameras) == 1
+        assert len(loaded.lights) == 1
+
+    def test_to_dict(self):
+        cfg = GenesisSceneConfig(entities=[], cameras=[], lights=[])
+        d = cfg.to_dict()
+        assert isinstance(d["entities"], list)
+        assert isinstance(d["cameras"], list)
+
+
+class TestGenesisSceneManifest:
+    def test_manifest_from_dir(self, tmp_path):
+        # Create mock export directory
+        (tmp_path / "mesh.obj").write_text("v 0 0 0")
+        (tmp_path / "robot.urdf").write_text("<robot/>")
+        (tmp_path / "scene.xml").write_text("<mujoco/>")
+        (tmp_path / "world.usda").write_text("")
+        (tmp_path / "meta.json").write_text("{}")
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (sub / "part.stl").write_bytes(b"\x00" * 10)
+
+        manifest = scene_manifest_from_dir(tmp_path)
+        assert manifest.root_dir == str(tmp_path.resolve())
+        assert "mesh.obj" in manifest.mesh_files
+        assert any("part.stl" in f for f in manifest.mesh_files)
+        assert "robot.urdf" in manifest.urdf_files
+        assert "scene.xml" in manifest.mjcf_files
+        assert "world.usda" in manifest.usd_files
+        assert "meta.json" in manifest.metadata_files
+        assert manifest.total_assets >= 5
+
+    def test_manifest_nonexistent_dir_raises(self):
+        with pytest.raises(FileNotFoundError, match="does not exist"):
+            scene_manifest_from_dir("/nonexistent/path")
+
+    def test_manifest_json_round_trip(self, tmp_path):
+        manifest = GenesisSceneManifest(
+            root_dir="/test",
+            mesh_files=["a.obj", "b.ply"],
+            mjcf_files=["robot.xml"],
+        )
+        path = tmp_path / "manifest.json"
+        manifest.save_json(path)
+        loaded = GenesisSceneManifest.load_json(path)
+        assert loaded.root_dir == "/test"
+        assert loaded.mesh_files == ["a.obj", "b.ply"]
+        assert loaded.total_assets == 3
+
+    def test_empty_dir(self, tmp_path):
+        manifest = scene_manifest_from_dir(tmp_path)
+        assert manifest.total_assets == 0
+
+
+class TestCameraFromSyndata:
+    def test_monocular_single_drone(self):
+        cam = DroneCamera(fov_deg=90.0, aspect_ratio=ASPECT_4_3)
+        rig = CameraRigConfig.monocular(n_drones=1)
+        genesis_cams = camera_from_syndata(cam, rig, resolution=(320, 240))
+        assert len(genesis_cams) == 1
+        assert genesis_cams[0].fov == 90.0
+        assert genesis_cams[0].res == (320, 240)
+
+    def test_stereo_multi_drone(self):
+        cam = DroneCamera(fov_deg=120.0)
+        rig = CameraRigConfig.stereo(baseline_m=0.065, n_drones=3)
+        genesis_cams = camera_from_syndata(cam, rig)
+        # 3 rigs × 2 cameras (stereo) = 6
+        assert len(genesis_cams) == 6
+        for gc in genesis_cams:
+            assert gc.fov == 120.0
+
+
+class TestObservationToRenderKwargs:
+    def test_navigation_passes(self):
+        obs = ObservationConfig(passes=PASSES_NAVIGATION, include_rgb=True)
+        kwargs = observation_to_render_kwargs(obs)
+        assert kwargs["rgb"] is True
+        assert kwargs["depth"] is True
+        assert kwargs["segmentation"] is True
+        assert kwargs["normal"] is True
+
+    def test_minimal_passes(self):
+        obs = ObservationConfig(passes=PASSES_MINIMAL, include_rgb=False)
+        kwargs = observation_to_render_kwargs(obs)
+        assert kwargs["rgb"] is False
+        assert kwargs["depth"] is True
+        assert kwargs["segmentation"] is True
+        assert kwargs["normal"] is False
+
+
+class TestRandomisationToLights:
+    def test_produces_lights(self):
+        r = DomainRandomiser(difficulty=0.5, seed=42)
+        lights = randomisation_to_genesis_lights(r)
+        assert len(lights) >= 1
+        assert all(isinstance(l, GenesisLight) for l in lights)
+
+    def test_reproducible(self):
+        r = DomainRandomiser(difficulty=0.5, seed=42)
+        l1 = randomisation_to_genesis_lights(r)
+        l2 = randomisation_to_genesis_lights(r)
+        assert l1[0].pos == l2[0].pos
+        assert l1[0].color == l2[0].color
+
+
+class TestMetadataToEntities:
+    def test_obstacle_boxes(self):
+        meta = FrameMetadata(
+            obstacles=[
+                BBox3D(center=(1, 2, 3), extent=(0.5, 0.5, 0.5), label="tree"),
+                BBox3D(center=(4, 5, 6), extent=(1, 1, 2), label="wall"),
+            ],
+        )
+        ents = metadata_to_entities(meta)
+        assert len(ents) == 2
+        assert ents[0].morph_type == "Box"
+        assert ents[0].pos == (1, 2, 3)
+        assert ents[0].extra["size"] == (1.0, 1.0, 1.0)  # 2 * half-extents
+        assert "tree" in ents[0].name
+        assert ents[1].extra["size"] == (2, 2, 4)
+
+    def test_no_obstacles(self):
+        meta = FrameMetadata(obstacles=[])
+        ents = metadata_to_entities(meta)
+        assert ents == []
+
+
+class TestManifestToEntities:
+    def test_converts_manifest(self):
+        manifest = GenesisSceneManifest(
+            root_dir="/export",
+            mesh_files=["mesh.obj", "terrain.ply"],
+            mjcf_files=["robot.xml"],
+            urdf_files=["arm.urdf"],
+        )
+        ents = manifest_to_entities(manifest)
+        assert len(ents) == 4
+        types = {e.morph_type for e in ents}
+        assert types == {"Mesh", "MJCF", "URDF"}
+
+    def test_filter_types(self):
+        manifest = GenesisSceneManifest(
+            root_dir="/export",
+            mesh_files=["mesh.obj"],
+            mjcf_files=["robot.xml"],
+            urdf_files=["arm.urdf"],
+        )
+        ents = manifest_to_entities(manifest, include_mjcf=False, include_urdf=False)
+        assert len(ents) == 1
+        assert ents[0].morph_type == "Mesh"
+
+
+class TestToGenesisScript:
+    def test_generates_valid_python(self):
+        cfg = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(name="ground", morph_type="Plane", is_fixed=True),
+                GenesisEntityConfig(
+                    name="obstacle", morph_type="Box", pos=(1, 0, 0.5),
+                    extra={"size": (2, 2, 1)},
+                ),
+            ],
+            cameras=[GenesisCamera(name="cam_0", res=(320, 240), fov=90.0)],
+            lights=[GenesisLight(pos=(0, 0, 10))],
+            backend="cpu",
+        )
+        script = to_genesis_script(cfg)
+        assert "import genesis as gs" in script
+        assert "gs.init(backend=gs.cpu)" in script
+        assert "scene = gs.Scene(" in script
+        assert "gs.morphs.Plane" in script
+        assert "gs.morphs.Box" in script
+        assert "scene.add_camera(" in script
+        assert "scene.build()" in script
+        assert "scene.step()" in script
+        assert "cam_0.render(" in script
+        # The script should be parseable Python
+        compile(script, "<genesis_script>", "exec")
+
+    def test_empty_scene_compiles(self):
+        cfg = GenesisSceneConfig()
+        script = to_genesis_script(cfg)
+        compile(script, "<genesis_script>", "exec")
+
+    def test_mesh_entity_in_script(self):
+        cfg = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig.from_file("/scene/mesh.obj", pos=(0, 0, 1)),
+            ],
+        )
+        script = to_genesis_script(cfg)
+        assert "gs.morphs.Mesh(" in script
+        assert '"/scene/mesh.obj"' in script
+
+    def test_surface_in_script(self):
+        cfg = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(
+                    name="wall", morph_type="Box",
+                    surface="Rough", surface_color=(0.8, 0.2, 0.1),
+                ),
+            ],
+        )
+        script = to_genesis_script(cfg)
+        assert "gs.surfaces.Rough(" in script
+
+
+class TestBuildGenesisConfig:
+    def test_from_metadata_only(self):
+        meta = FrameMetadata(
+            obstacles=[BBox3D(center=(1, 0, 1), extent=(0.5, 0.5, 0.5))],
+        )
+        cfg = build_genesis_config(frame_metadata=meta, backend="cpu")
+        assert cfg.backend == "cpu"
+        # Should have ground plane + 1 obstacle
+        assert any(e.morph_type == "Plane" for e in cfg.entities)
+        assert any(e.morph_type == "Box" for e in cfg.entities)
+        assert len(cfg.cameras) >= 1
+        assert len(cfg.lights) >= 1
+
+    def test_from_camera_config(self):
+        cam = DroneCamera(fov_deg=90.0)
+        rig = CameraRigConfig.monocular(n_drones=2)
+        cfg = build_genesis_config(
+            drone_camera=cam, camera_rig=rig,
+            resolution=(320, 240), backend="cpu",
+        )
+        assert len(cfg.cameras) == 2
+
+    def test_from_randomiser(self):
+        r = DomainRandomiser(difficulty=0.7, seed=42)
+        cfg = build_genesis_config(randomiser=r, backend="cpu")
+        assert len(cfg.lights) >= 1
+
+    def test_from_export_dir(self, tmp_path):
+        (tmp_path / "terrain.obj").write_text("v 0 0 0")
+        (tmp_path / "robot.urdf").write_text("<robot/>")
+        cfg = build_genesis_config(export_dir=tmp_path, backend="cpu")
+        # Should have ground + terrain.obj + robot.urdf
+        mesh_ents = [e for e in cfg.entities if e.morph_type == "Mesh"]
+        urdf_ents = [e for e in cfg.entities if e.morph_type == "URDF"]
+        assert len(mesh_ents) >= 1
+        assert len(urdf_ents) >= 1
+
+    def test_full_pipeline(self, tmp_path):
+        """End-to-end: syndata configs → Genesis scene config → script."""
+        # Export dir with assets
+        (tmp_path / "terrain.obj").write_text("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3")
+        (tmp_path / "drone.xml").write_text("<mujoco><worldbody/></mujoco>")
+
+        meta = FrameMetadata(
+            frame_id=0,
+            camera_position=(3, 0, 2),
+            obstacles=[
+                BBox3D(center=(1, 0, 1), extent=(0.5, 0.5, 0.5), label="rock"),
+            ],
+        )
+        cam = DroneCamera(fov_deg=90.0, aspect_ratio=ASPECT_4_3)
+        rig = CameraRigConfig.stereo(baseline_m=0.065, n_drones=2)
+        obs = ObservationConfig(passes=PASSES_NAVIGATION)
+        randomiser = DomainRandomiser(difficulty=0.5, seed=42)
+
+        cfg = build_genesis_config(
+            export_dir=tmp_path,
+            frame_metadata=meta,
+            drone_camera=cam,
+            camera_rig=rig,
+            observation=obs,
+            randomiser=randomiser,
+            resolution=(320, 240),
+            backend="cpu",
+        )
+
+        # Verify structure
+        assert cfg.backend == "cpu"
+        assert len(cfg.entities) >= 3  # ground + terrain + drone + obstacle
+        assert len(cfg.cameras) == 4  # 2 drones × 2 (stereo)
+        assert len(cfg.lights) >= 1
+
+        # Generate script
+        script = to_genesis_script(cfg)
+        assert "import genesis as gs" in script
+        compile(script, "<genesis_full_pipeline>", "exec")
+
+        # Check observation mapping
+        render_kwargs = observation_to_render_kwargs(obs)
+        assert render_kwargs["depth"] is True
+        assert render_kwargs["normal"] is True
+
+        # Save/load config
+        cfg_path = tmp_path / "genesis_scene.json"
+        cfg.save_json(cfg_path)
+        loaded = GenesisSceneConfig.load_json(cfg_path)
+        assert len(loaded.entities) == len(cfg.entities)
