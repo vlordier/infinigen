@@ -410,7 +410,18 @@ def syndata_to_drone_env_config(
     -------
     DroneEnvConfig
         GenesisDroneEnv-compatible configuration.
+
+    Raises
+    ------
+    ValueError
+        If *num_envs* < 1 or *dt* is not positive.
     """
+    if num_envs < 1:
+        msg = f"num_envs must be >= 1, got {num_envs}"
+        raise ValueError(msg)
+    if dt <= 0:
+        msg = f"dt must be positive, got {dt}"
+        raise ValueError(msg)
     cfg = DroneEnvConfig(num_envs=num_envs, dt=dt)
 
     # ---- Camera from syndata ----
@@ -511,7 +522,15 @@ def scene_to_drone_entities(
     -------
     list[str]
         Python code lines for adding entities.
+
+    Raises
+    ------
+    TypeError
+        If *scene_config* has no ``entities`` attribute.
     """
+    if not hasattr(scene_config, "entities"):
+        msg = f"scene_config must have an 'entities' attribute, got {type(scene_config).__name__}"
+        raise TypeError(msg)
     lines: list[str] = []
     for ent in scene_config.entities:
         if ent.morph_type in ("Plane",):
@@ -590,9 +609,21 @@ def outcome_to_curriculum_params(
 
     Raises
     ------
+    TypeError
+        If *outcome* has no ``success_rate`` or ``crash_rate`` attributes.
     ValueError
-        If *current_stage* or *total_stages* are invalid.
+        If *current_stage* or *total_stages* are invalid, or thresholds
+        are outside [0, 1].
     """
+    if not hasattr(outcome, "success_rate") or not hasattr(outcome, "crash_rate"):
+        msg = f"outcome must have 'success_rate' and 'crash_rate' attributes, got {type(outcome).__name__}"
+        raise TypeError(msg)
+    if not 0.0 <= advance_threshold <= 1.0:
+        msg = f"advance_threshold must be in [0, 1], got {advance_threshold}"
+        raise ValueError(msg)
+    if not 0.0 <= regress_crash_threshold <= 1.0:
+        msg = f"regress_crash_threshold must be in [0, 1], got {regress_crash_threshold}"
+        raise ValueError(msg)
     if total_stages < 1:
         msg = f"total_stages must be >= 1, got {total_stages}"
         raise ValueError(msg)
@@ -662,7 +693,19 @@ def apply_curriculum_adjustment(
     -------
     DroneEnvConfig
         Updated configuration.
+
+    Raises
+    ------
+    TypeError
+        If *base_config* is not a :class:`DroneEnvConfig` or *adjustment*
+        is not a dict.
     """
+    if not isinstance(base_config, DroneEnvConfig):
+        msg = f"base_config must be DroneEnvConfig, got {type(base_config).__name__}"
+        raise TypeError(msg)
+    if not isinstance(adjustment, dict):
+        msg = f"adjustment must be a dict, got {type(adjustment).__name__}"
+        raise TypeError(msg)
     d = asdict(base_config)
     hints = adjustment.get("scene_adjustments", {})
     difficulty = adjustment.get("difficulty", 0.0)

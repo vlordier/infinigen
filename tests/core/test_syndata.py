@@ -59,6 +59,12 @@ from infinigen.core.syndata.observation import (
     SensorNoiseModel,
 )
 from infinigen.core.syndata.parallel_stages import Stage, StageGraph
+from infinigen.core.syndata.pretraining import (
+    FlappyColumnConfig,
+    flappy_drone_env_config,
+    flappy_genesis_entities,
+    generate_flappy_obstacles,
+)
 from infinigen.core.syndata.quality_presets import (
     VALID_PRESETS,
     drone_preset,
@@ -2367,3 +2373,418 @@ class TestEndToEndCurriculumLoop:
         env_cfg.save_json(p)
         loaded = DroneEnvConfig.load_json(p)
         assert loaded.num_envs == 256
+
+
+# ===========================================================================
+# Pre-training (flappy-bird corridor)
+# ===========================================================================
+
+
+class TestFlappyColumnConfig:
+    def test_defaults(self):
+        cfg = FlappyColumnConfig()
+        assert cfg.corridor_length == 8.0
+        assert cfg.num_columns == 5
+        assert cfg.gap_height >= 0.2
+
+    def test_custom(self):
+        cfg = FlappyColumnConfig(num_columns=10, gap_height=0.8)
+        assert cfg.num_columns == 10
+        assert cfg.gap_height == 0.8
+
+    def test_zero_columns(self):
+        cfg = FlappyColumnConfig(num_columns=0)
+        assert cfg.num_columns == 0
+
+    def test_negative_columns_raises(self):
+        with pytest.raises(ValueError, match="num_columns"):
+            FlappyColumnConfig(num_columns=-1)
+
+    def test_small_gap_raises(self):
+        with pytest.raises(ValueError, match="gap_height"):
+            FlappyColumnConfig(gap_height=0.1)
+
+    def test_negative_corridor_length_raises(self):
+        with pytest.raises(ValueError, match="corridor_length"):
+            FlappyColumnConfig(corridor_length=-1)
+
+    def test_negative_gap_variation_raises(self):
+        with pytest.raises(ValueError, match="gap_height_variation"):
+            FlappyColumnConfig(gap_height_variation=-0.1)
+
+    def test_inverted_gap_z_raises(self):
+        with pytest.raises(ValueError, match="max_gap_z"):
+            FlappyColumnConfig(min_gap_z=1.5, max_gap_z=0.5)
+
+
+class TestGenerateFlappyObstacles:
+    def test_default_produces_obstacles(self):
+        cfg = FlappyColumnConfig()
+        obs = generate_flappy_obstacles(cfg, seed=42)
+        # 5 columns × 2 (upper+lower) + floor + ceiling = 12
+        assert len(obs) >= 7  # at least floor + ceiling + some columns
+
+    def test_zero_columns_has_floor_ceiling(self):
+        cfg = FlappyColumnConfig(num_columns=0)
+        obs = generate_flappy_obstacles(cfg, seed=0)
+        labels = [o.label for o in obs]
+        assert "floor" in labels
+        assert "ceiling" in labels
+
+    def test_reproducible_with_seed(self):
+        cfg = FlappyColumnConfig(num_columns=3)
+        obs1 = generate_flappy_obstacles(cfg, seed=123)
+        obs2 = generate_flappy_obstacles(cfg, seed=123)
+        assert len(obs1) == len(obs2)
+        for a, b in zip(obs1, obs2):
+            assert a.center == b.center
+            assert a.half_extents == b.half_extents
+
+    def test_different_seeds_differ(self):
+        cfg = FlappyColumnConfig(num_columns=5)
+        obs1 = generate_flappy_obstacles(cfg, seed=1)
+        obs2 = generate_flappy_obstacles(cfg, seed=2)
+        # At least one obstacle should differ in z position
+        any_differ = any(
+            a.center[2] != b.center[2]
+            for a, b in zip(obs1, obs2)
+            if a.label == b.label and "column" in a.label
+        )
+        assert any_differ
+
+    def test_obstacle_labels(self):
+        cfg = FlappyColumnConfig(num_columns=2)
+        obs = generate_flappy_obstacles(cfg, seed=42)
+        labels = {o.label for o in obs}
+        assert "floor" in labels
+        assert "ceiling" in labels
+        # At least one column obstacle
+        assert any("column" in lbl for lbl in labels)
+
+    def test_invalid_config_type_raises(self):
+        with pytest.raises(TypeError, match="FlappyColumnConfig"):
+            generate_flappy_obstacles("not a config")
+
+    def test_obstacles_are_dataclass(self):
+        cfg = FlappyColumnConfig(num_columns=1)
+        obs = generate_flappy_obstacles(cfg, seed=0)
+        for o in obs:
+            assert hasattr(o, "center")
+            assert hasattr(o, "half_extents")
+            assert hasattr(o, "label")
+            d = o.to_dict()
+            assert "center" in d
+
+    def test_half_extents_positive(self):
+        cfg = FlappyColumnConfig(num_columns=5, corridor_height=3.0)
+        obs = generate_flappy_obstacles(cfg, seed=42)
+        for o in obs:
+            for v in o.half_extents:
+                assert v > 0, f"Non-positive half_extent in {o.label}"
+
+
+class TestFlappyDroneEnvConfig:
+    def test_defaults(self):
+        result = flappy_drone_env_config()
+        assert result["num_envs"] == 2048
+        assert result["dt"] == 0.01
+        assert len(result["obstacle_entities"]) > 0
+
+    def test_custom_num_envs(self):
+        result = flappy_drone_env_config(num_envs=512)
+        assert result["num_envs"] == 512
+
+    def test_custom_config(self):
+        cfg = FlappyColumnConfig(num_columns=3, corridor_length=5.0)
+        result = flappy_drone_env_config(cfg, seed=42)
+        assert result["map_size"][0] == pytest.approx(6.0)
+
+    def test_invalid_num_envs_raises(self):
+        with pytest.raises(ValueError, match="num_envs"):
+            flappy_drone_env_config(num_envs=0)
+
+    def test_invalid_dt_raises(self):
+        with pytest.raises(ValueError, match="dt"):
+            flappy_drone_env_config(dt=0)
+
+    def test_reward_scales(self):
+        result = flappy_drone_env_config()
+        assert "crash" in result["reward_scales"]
+        assert result["reward_scales"]["crash"] < 0
+
+    def test_termination_conditions(self):
+        result = flappy_drone_env_config()
+        assert "roll_deg" in result["termination_conditions"]
+        # Strict termination for pre-training
+        assert result["termination_conditions"]["roll_deg"] <= 90.0
+
+    def test_command_ranges_forward_biased(self):
+        cfg = FlappyColumnConfig(corridor_length=8.0)
+        result = flappy_drone_env_config(cfg)
+        x_lo, x_hi = result["command_ranges"]["x"]
+        # Target at far end of corridor
+        assert x_lo > 2.0
+        assert x_hi > x_lo
+
+    def test_can_construct_drone_env_config(self):
+        """Verify the output dict is compatible with DroneEnvConfig."""
+        result = flappy_drone_env_config(seed=42)
+        env = DroneEnvConfig(**result)
+        assert env.num_envs == 2048
+
+
+class TestFlappyGenesisEntities:
+    def test_produces_entities(self):
+        entities = flappy_genesis_entities(seed=42)
+        assert len(entities) > 0
+
+    def test_entity_structure(self):
+        entities = flappy_genesis_entities(FlappyColumnConfig(num_columns=2), seed=0)
+        for ent in entities:
+            assert "name" in ent
+            assert "morph_type" in ent
+            assert ent["morph_type"] == "Box"
+            assert "pos" in ent
+            assert "is_fixed" in ent
+
+    def test_custom_config(self):
+        cfg = FlappyColumnConfig(num_columns=0)
+        entities = flappy_genesis_entities(cfg, seed=0)
+        # Floor + ceiling only
+        names = {e["name"] for e in entities}
+        assert "floor" in names
+        assert "ceiling" in names
+
+
+# ===========================================================================
+# Input sanitisation for converter functions
+# ===========================================================================
+
+
+class TestConverterInputSanitisation:
+    """Verify converter functions reject invalid input types early."""
+
+    def test_camera_from_syndata_bad_cam(self):
+        from infinigen.core.syndata.genesis_export import camera_from_syndata
+
+        rig = CameraRigConfig.monocular()
+        with pytest.raises(TypeError, match="fov_deg"):
+            camera_from_syndata("not a cam", rig)
+
+    def test_camera_from_syndata_bad_rig(self):
+        from infinigen.core.syndata.genesis_export import camera_from_syndata
+
+        cam = DroneCamera(fov_deg=90)
+        with pytest.raises(TypeError, match="effective_cameras"):
+            camera_from_syndata(cam, "not a rig")
+
+    def test_camera_from_syndata_bad_resolution(self):
+        from infinigen.core.syndata.genesis_export import camera_from_syndata
+
+        cam = DroneCamera(fov_deg=90)
+        rig = CameraRigConfig.monocular()
+        with pytest.raises(ValueError, match="resolution"):
+            camera_from_syndata(cam, rig, resolution=(0, 480))
+
+    def test_episode_to_genesis_bad_episode(self):
+        from infinigen.core.syndata.genesis_export import episode_to_genesis
+
+        with pytest.raises(TypeError, match="num_frames"):
+            episode_to_genesis("not an episode")
+
+    def test_episode_to_genesis_bad_dt(self):
+        from infinigen.core.syndata.genesis_export import episode_to_genesis
+
+        ep = EpisodeConfig.single_frame()
+        with pytest.raises(ValueError, match="dt"):
+            episode_to_genesis(ep, dt=0)
+
+    def test_observation_to_genesis_bad_obs(self):
+        from infinigen.core.syndata.genesis_export import observation_to_genesis
+
+        with pytest.raises(TypeError, match="passes"):
+            observation_to_genesis("not an obs")
+
+    def test_observation_to_render_kwargs_bad_obs(self):
+        from infinigen.core.syndata.genesis_export import observation_to_render_kwargs
+
+        with pytest.raises(TypeError, match="include_rgb"):
+            observation_to_render_kwargs("not an obs")
+
+    def test_randomisation_to_genesis_lights_bad_randomiser(self):
+        from infinigen.core.syndata.genesis_export import (
+            randomisation_to_genesis_lights,
+        )
+
+        with pytest.raises(TypeError, match="sample"):
+            randomisation_to_genesis_lights("not a randomiser")
+
+    def test_randomisation_to_genesis_lights_bad_height(self):
+        from infinigen.core.syndata.genesis_export import (
+            randomisation_to_genesis_lights,
+        )
+
+        rand = DomainRandomiser(difficulty=0.5, seed=42)
+        with pytest.raises(ValueError, match="base_height"):
+            randomisation_to_genesis_lights(rand, base_height=-1)
+
+    def test_metadata_to_entities_bad_metadata(self):
+        from infinigen.core.syndata.genesis_export import metadata_to_entities
+
+        with pytest.raises(TypeError, match="obstacles"):
+            metadata_to_entities("not metadata")
+
+    def test_scene_to_drone_entities_bad_config(self):
+        with pytest.raises(TypeError, match="entities"):
+            scene_to_drone_entities("not a config")
+
+    def test_syndata_to_drone_env_invalid_num_envs(self):
+        with pytest.raises(ValueError, match="num_envs"):
+            syndata_to_drone_env_config(num_envs=0)
+
+    def test_syndata_to_drone_env_invalid_dt(self):
+        with pytest.raises(ValueError, match="dt"):
+            syndata_to_drone_env_config(dt=-1)
+
+    def test_outcome_to_curriculum_bad_outcome(self):
+        with pytest.raises(TypeError, match="success_rate"):
+            outcome_to_curriculum_params("not an outcome", 0, 5)
+
+    def test_outcome_to_curriculum_bad_advance_threshold(self):
+        outcome = TrainingOutcome(success_rate=0.5)
+        with pytest.raises(ValueError, match="advance_threshold"):
+            outcome_to_curriculum_params(outcome, 0, 5, advance_threshold=1.5)
+
+    def test_outcome_to_curriculum_bad_regress_threshold(self):
+        outcome = TrainingOutcome(success_rate=0.5)
+        with pytest.raises(ValueError, match="regress_crash_threshold"):
+            outcome_to_curriculum_params(outcome, 0, 5, regress_crash_threshold=-0.1)
+
+    def test_apply_curriculum_adjustment_bad_config(self):
+        with pytest.raises(TypeError, match="DroneEnvConfig"):
+            apply_curriculum_adjustment("not a config", {})
+
+    def test_apply_curriculum_adjustment_bad_adjustment(self):
+        with pytest.raises(TypeError, match="dict"):
+            apply_curriculum_adjustment(DroneEnvConfig(), "not a dict")
+
+
+# ===========================================================================
+# Separation of concerns — verify clean import groups
+# ===========================================================================
+
+
+class TestImportSeparation:
+    """Verify that the public API is properly grouped by concern."""
+
+    def test_infinigen_exports_no_genesis(self):
+        """Core Infinigen types should not depend on Genesis types."""
+        import importlib
+
+        for mod in [
+            "infinigen.core.syndata.camera_config",
+            "infinigen.core.syndata.complexity",
+            "infinigen.core.syndata.episode",
+            "infinigen.core.syndata.observation",
+            "infinigen.core.syndata.randomisation",
+        ]:
+            m = importlib.import_module(mod)
+            assert m is not None
+
+    def test_genesis_bridge_imports(self):
+        """Genesis bridge types should all be importable."""
+        import importlib
+
+        m = importlib.import_module("infinigen.core.syndata.genesis_export")
+        for name in [
+            "GenesisCamera",
+            "GenesisEntityConfig",
+            "GenesisEpisodeConfig",
+            "GenesisObservationConfig",
+            "GenesisSceneConfig",
+        ]:
+            assert hasattr(m, name)
+
+    def test_drone_env_bridge_imports(self):
+        """DroneEnv bridge types should all be importable."""
+        import importlib
+
+        m = importlib.import_module("infinigen.core.syndata.drone_env_bridge")
+        for name in [
+            "DroneEnvConfig",
+            "TrainingOutcome",
+            "apply_curriculum_adjustment",
+            "outcome_to_curriculum_params",
+        ]:
+            assert hasattr(m, name)
+
+    def test_pretraining_imports(self):
+        """Pre-training types should all be importable."""
+        import importlib
+
+        m = importlib.import_module("infinigen.core.syndata.pretraining")
+        for name in [
+            "FlappyColumnConfig",
+            "FlappyObstacle",
+            "flappy_drone_env_config",
+            "flappy_genesis_entities",
+            "generate_flappy_obstacles",
+        ]:
+            assert hasattr(m, name)
+
+    def test_all_exports_present(self):
+        """All __all__ entries should be importable."""
+        import infinigen.core.syndata as syndata
+
+        for name in syndata.__all__:
+            assert hasattr(syndata, name), f"Missing export: {name}"
+
+
+class TestEndToEndFlappyPretraining:
+    """End-to-end: flappy corridor → DroneEnvConfig → curriculum feedback."""
+
+    def test_flappy_to_drone_env_to_outcome(self):
+        # Stage 0: simplest possible environment
+        flappy_cfg = FlappyColumnConfig(num_columns=3, gap_height=0.8)
+        env_dict = flappy_drone_env_config(flappy_cfg, seed=0, num_envs=128)
+        env = DroneEnvConfig(**env_dict)
+
+        assert env.num_envs == 128
+        assert len(env.obstacle_entities) > 0
+        # Strict termination for pre-training
+        assert env.termination_conditions["roll_deg"] <= 90.0
+
+        # Simulate training feedback — agent learned basic control
+        outcome = TrainingOutcome(
+            success_rate=0.85,
+            crash_rate=0.1,
+            mean_reward=50.0,
+            difficulty=0.0,
+        )
+
+        # Curriculum says: advance
+        params = outcome_to_curriculum_params(outcome, current_stage=0, total_stages=10)
+        assert params["action"] == "advance"
+        assert params["recommended_stage"] == 1
+
+        # Now use full Infinigen scene for stage 1
+        cfg = CurriculumConfig(stage=1, total_stages=10)
+        assert cfg.object_count > 0
+
+    def test_flappy_genesis_entities_to_scene_config(self):
+        """Flappy entities → GenesisSceneConfig → script."""
+        entities = flappy_genesis_entities(
+            FlappyColumnConfig(num_columns=2), seed=42
+        )
+        from infinigen.core.syndata.genesis_export import (
+            GenesisEntityConfig,
+            GenesisSceneConfig,
+            to_genesis_script,
+        )
+
+        genesis_ents = [GenesisEntityConfig(**e) for e in entities]
+        scene = GenesisSceneConfig(entities=genesis_ents, backend="cpu")
+        script = to_genesis_script(scene)
+        assert "genesis" in script
+        # Should compile cleanly
+        compile(script, "<flappy>", "exec")

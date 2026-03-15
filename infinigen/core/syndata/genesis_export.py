@@ -602,7 +602,23 @@ def camera_from_syndata(
     list[GenesisCamera]
         One :class:`GenesisCamera` per effective camera in the rig,
         repeated for each rig instance (``n_rigs``).
+
+    Raises
+    ------
+    TypeError
+        If *drone_cam* has no ``fov_deg`` or *rig* has no ``effective_cameras``.
+    ValueError
+        If *resolution* components are not positive.
     """
+    if not hasattr(drone_cam, "fov_deg"):
+        msg = f"drone_cam must have a 'fov_deg' attribute, got {type(drone_cam).__name__}"
+        raise TypeError(msg)
+    if not hasattr(rig, "effective_cameras") or not hasattr(rig, "n_rigs"):
+        msg = f"rig must have 'effective_cameras' and 'n_rigs' attributes, got {type(rig).__name__}"
+        raise TypeError(msg)
+    if len(resolution) != 2 or resolution[0] < 1 or resolution[1] < 1:
+        msg = f"resolution must be (w, h) with positive values, got {resolution}"
+        raise ValueError(msg)
     cameras: list[GenesisCamera] = []
     effective = rig.effective_cameras
     rig_idx = 0
@@ -635,7 +651,15 @@ def observation_to_render_kwargs(obs: Any) -> dict[str, bool]:
     dict[str, bool]
         Keyword arguments for ``camera.render()``, e.g.
         ``{"rgb": True, "depth": True, "segmentation": True, "normal": False}``.
+
+    Raises
+    ------
+    TypeError
+        If *obs* has no ``include_rgb`` or ``passes`` attributes.
     """
+    if not hasattr(obs, "include_rgb") or not hasattr(obs, "passes"):
+        msg = f"obs must have 'include_rgb' and 'passes' attributes, got {type(obs).__name__}"
+        raise TypeError(msg)
     # Import locally to avoid circular deps at module level
     from infinigen.core.syndata.observation import (
         PASS_DEPTH,
@@ -670,7 +694,20 @@ def episode_to_genesis(episode: Any, *, dt: float = 0.01) -> GenesisEpisodeConfi
     -------
     GenesisEpisodeConfig
         Genesis-native episode configuration.
+
+    Raises
+    ------
+    TypeError
+        If *episode* has no ``num_frames`` or ``fps`` attributes.
+    ValueError
+        If *dt* is not positive.
     """
+    if not hasattr(episode, "num_frames") or not hasattr(episode, "fps"):
+        msg = f"episode must have 'num_frames' and 'fps' attributes, got {type(episode).__name__}"
+        raise TypeError(msg)
+    if dt <= 0:
+        msg = f"dt must be positive, got {dt}"
+        raise ValueError(msg)
     return GenesisEpisodeConfig(
         num_steps=episode.num_frames,
         dt=dt,
@@ -697,7 +734,15 @@ def observation_to_genesis(obs: Any) -> GenesisObservationConfig:
     -------
     GenesisObservationConfig
         Genesis-native observation configuration.
+
+    Raises
+    ------
+    TypeError
+        If *obs* has no ``passes`` or ``include_rgb`` attributes.
     """
+    if not hasattr(obs, "passes") or not hasattr(obs, "include_rgb"):
+        msg = f"obs must have 'passes' and 'include_rgb' attributes, got {type(obs).__name__}"
+        raise TypeError(msg)
     from infinigen.core.syndata.observation import (
         PASS_DEPTH,
         PASS_NORMAL,
@@ -739,7 +784,20 @@ def randomisation_to_genesis_lights(
     -------
     list[GenesisLight]
         Light(s) configured from the sampled parameters.
+
+    Raises
+    ------
+    TypeError
+        If *randomiser* has no ``sample()`` method.
+    ValueError
+        If *base_height* is not positive.
     """
+    if not hasattr(randomiser, "sample"):
+        msg = f"randomiser must have a 'sample()' method, got {type(randomiser).__name__}"
+        raise TypeError(msg)
+    if base_height <= 0:
+        msg = f"base_height must be positive, got {base_height}"
+        raise ValueError(msg)
     sample = randomiser.sample()
     intensity = sample.get("sun_intensity", 1.0)
     elevation_deg = sample.get("sun_elevation", 45.0)
@@ -787,7 +845,15 @@ def metadata_to_entities(
     -------
     list[GenesisEntityConfig]
         One ``Box`` entity per obstacle bounding box.
+
+    Raises
+    ------
+    TypeError
+        If *frame_meta* has no ``obstacles`` attribute.
     """
+    if not hasattr(frame_meta, "obstacles"):
+        msg = f"frame_meta must have an 'obstacles' attribute, got {type(frame_meta).__name__}"
+        raise TypeError(msg)
     entities: list[GenesisEntityConfig] = []
     for i, obs in enumerate(frame_meta.obstacles):
         # BBox3D.extent stores half-extents (dx, dy, dz); Genesis Box

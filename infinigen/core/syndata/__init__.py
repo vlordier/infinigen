@@ -8,6 +8,18 @@ This bpy-free package provides configuration, scheduling, and validation
 tools that sit *outside* the Blender render loop.  Every module can be
 imported and tested without ``bpy`` so that CI stays fast and portable.
 
+The public API is organised into three concern groups:
+
+**Infinigen pipeline** — scene generation config, gin bindings, resource
+budgeting.  No dependency on Genesis or GenesisDroneEnv.
+
+**Genesis World bridge** — converters that map Infinigen config/assets
+to Genesis entity/camera/light types and generate runnable scripts.
+
+**GenesisDroneEnv bridge** — bidirectional data exchange between
+Infinigen (scene export) and GenesisDroneEnv (training feedback →
+curriculum adjustment).  Curriculum *control* logic lives elsewhere.
+
 Typical usage
 -------------
 >>> from infinigen.core.syndata import complexity, quality_presets
@@ -44,20 +56,42 @@ from infinigen.core.syndata.metadata import FrameMetadata
 from infinigen.core.syndata.metrics import SceneBudget
 from infinigen.core.syndata.observation import ObservationConfig, SensorNoiseModel
 from infinigen.core.syndata.parallel_stages import StageGraph
+from infinigen.core.syndata.pretraining import (
+    FlappyColumnConfig,
+    FlappyObstacle,
+    flappy_drone_env_config,
+    flappy_genesis_entities,
+    generate_flappy_obstacles,
+)
 from infinigen.core.syndata.quality_presets import drone_preset, to_gin_bindings
 from infinigen.core.syndata.randomisation import DomainRandomiser
 from infinigen.core.syndata.resolution import resolution_for_stage
 from infinigen.core.syndata.validation import SceneValidator
 
 __all__ = [
+    # ── Infinigen pipeline ──
     "CameraRigConfig",
     "CurriculumConfig",
     "DensityScaler",
     "DomainRandomiser",
     "DroneCamera",
-    "DroneEnvConfig",
     "EpisodeConfig",
+    "FlappyColumnConfig",
+    "FlappyObstacle",
     "FrameMetadata",
+    "ObservationConfig",
+    "SceneBudget",
+    "SceneValidator",
+    "SensorNoiseModel",
+    "StageGraph",
+    "curriculum_overrides",
+    "drone_preset",
+    "flappy_drone_env_config",
+    "flappy_genesis_entities",
+    "generate_flappy_obstacles",
+    "resolution_for_stage",
+    "to_gin_bindings",
+    # ── Genesis World bridge ──
     "GenesisCamera",
     "GenesisEntityConfig",
     "GenesisEpisodeConfig",
@@ -65,22 +99,15 @@ __all__ = [
     "GenesisObservationConfig",
     "GenesisSceneConfig",
     "GenesisSceneManifest",
-    "ObservationConfig",
-    "SceneBudget",
-    "SceneValidator",
-    "SensorNoiseModel",
-    "StageGraph",
-    "TrainingOutcome",
-    "apply_curriculum_adjustment",
     "build_genesis_config",
-    "curriculum_overrides",
-    "drone_preset",
     "episode_to_genesis",
     "observation_to_genesis",
+    "to_genesis_script",
+    # ── GenesisDroneEnv bridge ──
+    "DroneEnvConfig",
+    "TrainingOutcome",
+    "apply_curriculum_adjustment",
     "outcome_to_curriculum_params",
-    "resolution_for_stage",
     "scene_to_drone_entities",
     "syndata_to_drone_env_config",
-    "to_genesis_script",
-    "to_gin_bindings",
 ]
