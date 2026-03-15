@@ -46,9 +46,6 @@ def apply(obj, scale=0.4, density=1.0, n=10, selection=None):
 
 
 class Mollusk:
-    def __init__(self):
-        pass
-
     def apply(self, obj, scale=0.4, density=1.0, n=10, selection=None):
         with CountInstance("mollusk"):
             n_species = np.random.randint(4, 6)

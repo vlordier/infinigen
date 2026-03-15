@@ -45,9 +45,6 @@ def apply(obj, scale=1, density=1.0, n=6, selection=None):
 
 
 class Jellyfish:
-    def __init__(self):
-        pass
-
     def apply(self, obj, scale=1, density=1.0, n=6, selection=None):
         n_species = np.random.randint(2, 3)
         factories = list(

@@ -236,12 +236,3 @@ def is_within_margin_from_plane(obj, obj_b, margin, tol=1e-6):
         if not math.isclose(distance, margin, abs_tol=tol):
             return False
     return True
-
-
-# def update_blender_representation(scene, trimesh_obj):
-
-#     transform_matrix =
-
-
-# def update_trimesh_representation(scnene, blender_obj):
-#     pass

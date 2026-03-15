@@ -8,6 +8,8 @@ from pathlib import Path
 
 __version__ = "1.19.1"
 
+__all__ = ["__version__", "repo_root"]
+
 
 def repo_root():
     return Path(__file__).parent.parent

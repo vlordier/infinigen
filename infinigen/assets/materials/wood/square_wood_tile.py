@@ -15,6 +15,3 @@ class SquareWoodTile:
         return tile.Tile().generate(shader_func, "square")
 
     __call__ = generate
-
-
-# def make_sphere():e

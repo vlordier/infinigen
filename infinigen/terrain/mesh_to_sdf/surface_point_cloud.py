@@ -213,7 +213,7 @@ class SurfacePointCloud:
             )
         else:
             raise ValueError(
-                "Unknown sign determination method: {:s}".format(sign_method)
+                f"Unknown sign determination method: {sign_method}"
             )
         if return_gradients:
             sdf, gradients = sdf

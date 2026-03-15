@@ -1,0 +1,1 @@
+"""Example configurations and entry-points for Infinigen."""

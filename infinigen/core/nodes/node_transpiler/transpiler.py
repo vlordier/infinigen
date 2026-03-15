@@ -823,7 +823,9 @@ def get_func_name(target):
     return finalname
 
 
-def transpile(orig_targets, module_dependencies=[]):
+def transpile(orig_targets, module_dependencies=None):
+    if module_dependencies is None:
+        module_dependencies = []
     code = ""
 
     # initialize all targets as un-processed
@@ -1054,7 +1056,9 @@ class {class_name}(AssetFactory):
     return code, class_name
 
 
-def transpile_object(obj, module_dependencies=[]):
+def transpile_object(obj, module_dependencies=None):
+    if module_dependencies is None:
+        module_dependencies = []
     targets = []
     targets += [mod for mod in obj.modifiers if mod.type == "NODES"]
     targets += [slot.material for slot in obj.material_slots if slot.material.use_nodes]
@@ -1072,7 +1076,9 @@ def transpile_object(obj, module_dependencies=[]):
     return code
 
 
-def transpile_world(module_dependencies=[], compositing=True, worldshader=True):
+def transpile_world(module_dependencies=None, compositing=True, worldshader=True):
+    if module_dependencies is None:
+        module_dependencies = []
     targets = []
     if compositing and bpy.context.scene.use_nodes:
         targets.append(bpy.context.scene)

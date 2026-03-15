@@ -40,9 +40,6 @@ def shader_mold(nw: NodeWrangler, base_hue):
 
 
 class SlimeMold:
-    def __init__(self):
-        pass
-
     def apply(self, obj, selection=None):
         scatter_obj = butil.spawn_vert("scatter:" + "slime_mold")
         surface.add_geomod(

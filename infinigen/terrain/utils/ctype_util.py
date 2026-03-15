@@ -21,7 +21,9 @@ def ASFLOAT(x):
     return x.ctypes.data_as(POINTER(c_float))
 
 
-def register_func(me, dll, name, argtypes=[], restype=None, caller_name=None):
+def register_func(me, dll, name, argtypes=None, restype=None, caller_name=None):
+    if argtypes is None:
+        argtypes = []
     if caller_name is None:
         caller_name = name
     setattr(me, caller_name, getattr(dll, name))

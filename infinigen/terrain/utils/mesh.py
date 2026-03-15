@@ -460,7 +460,9 @@ def move_modifier(target_obj, m):
                 modifier[f"{id}_attribute_name"] = m[f"{id}_attribute_name"]
 
 
-def write_attributes(elements, mesh=None, meshes=[]):
+def write_attributes(elements, mesh=None, meshes=None):
+    if meshes is None:
+        meshes = []
     n_elements = len(elements)
     if mesh is not None:
         returns = []

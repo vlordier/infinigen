@@ -37,9 +37,6 @@ def apply(obj, selection=None, density=1.0):
 
 
 class Flowerplant:
-    def __init__(self):
-        pass
-
     def apply(self, obj, selection=None, density=1.0):
         flowerplant_col = make_asset_collection(
             FlowerPlantFactory(np.random.randint(1e5)), n=12, verbose=True

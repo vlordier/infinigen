@@ -1,3 +1,10 @@
+.PHONY: cleanpip clean_terrain terrain customgt flip_fluids default \
+       docker-build docker-build-cuda docker-build-arm64 docker-clean \
+       docker-setup docker-run docker-run-no-opengl docker-run-no-gpu \
+       docker-run-no-gpu-opengl
+
+# ---- Build / clean targets ----
+
 cleanpip:
 	rm -rf *.egg-info
 	rm -rf build
@@ -15,6 +22,8 @@ customgt:
 
 flip_fluids:
 	bash scripts/install/compile_flip_fluids.sh
+
+# ---- Docker configuration ----
 
 DOCKER_BUILD_PROGRESS ?= auto
 DOCKER_TAG ?= infinigen_docker_img
