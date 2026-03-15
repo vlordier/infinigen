@@ -59,11 +59,6 @@ dependencies = [
     "rtree",
 ]
 
-[project.urls]
-Homepage = "https://infinigen.org"
-Repository = "https://github.com/princeton-vl/infinigen"
-Documentation = "https://infinigen.org/docs"
-
 [project.optional-dependencies]
 terrain = [
     "landlab==2.6.0",
