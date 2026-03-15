@@ -783,7 +783,7 @@ def print_stats_block(
     separator = "=" * 60
     logger.info(
         "%s %s -> %s",
-        args.output_folder,
+        output_folder,
         start_time.strftime("%m/%d %I:%M%p"),
         now.strftime("%m/%d %I:%M%p"),
     )
