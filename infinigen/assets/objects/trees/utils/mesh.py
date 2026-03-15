@@ -14,7 +14,13 @@ C = bpy.context
 D = bpy.data
 
 
-def init_mesh(name, verts=[], edges=[], faces=[], coll=None):
+def init_mesh(name, verts=None, edges=None, faces=None, coll=None):
+    if verts is None:
+        verts = []
+    if edges is None:
+        edges = []
+    if faces is None:
+        faces = []
     mesh = D.meshes.new(name)
     obj = D.objects.new(mesh.name, mesh)
 

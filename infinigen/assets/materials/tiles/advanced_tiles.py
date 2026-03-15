@@ -149,10 +149,6 @@ def shader_raw_tiles(nw: NodeWrangler, **kwargs):
     )
 
 
-# def apply(obj, selection=None, **kwargs):
-#     surface.add_material(obj, shader_raw_tiles, selection=selection, input_kwargs=kwargs)
-
-
 # this applies masks on existing materials
 def tile_of_material(
     nw: NodeWrangler,

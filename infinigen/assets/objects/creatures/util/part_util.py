@@ -138,25 +138,6 @@ def rdict_comb(corners, weights):
     return linear_combination(corners_list, weights_list)
 
 
-# def rdict_comb(corners, weights):
-
-#     '''
-#     Take a linear combination of the dicts in `corners`, according to correspondng `weights`
-#     '''
-
-#     res = {}
-#     first = corners[next(iter(corners))]
-#     for k in first.keys():
-#         if isinstance(first[k], dict):
-#             res[k] = rdict_comb({ke: corners[ke][k] for ke in weights}, weights)
-#         else:
-#             res[k] = sum(w * corners[ke][k] for ke, w in weights.items())
-
-#             if isinstance(first[k], int):
-#                 res[k] = int(res[k])
-#     return res
-
-
 def random_convex_coord(names, select=None, temp=1):
     """
     corners: dict[dict[]]

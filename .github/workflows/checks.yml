@@ -81,6 +81,10 @@ jobs:
         run: |
           pytest tests/test_benchmarks.py --noconftest --maxfail=1 -v
 
+      - name: Test new features (bpy-free)
+        run: |
+          pytest tests/test_new_features.py --noconftest --maxfail=1 -v
+
   test-bpy:
     name: Tests (bpy-dependent)
     runs-on: ubuntu-latest

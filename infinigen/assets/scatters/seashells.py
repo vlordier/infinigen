@@ -46,9 +46,6 @@ def apply(obj, density=("uniform", 0.2, 1.0), n=10, selection=None):
 
 
 class Seashells:
-    def __init__(self):
-        pass
-
     def apply(self, obj, density=("uniform", 0.2, 1.0), n=10, selection=None):
         n_species = np.random.randint(4, 6)
         factories = list(

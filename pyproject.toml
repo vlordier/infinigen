@@ -16,7 +16,16 @@ keywords = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: BSD License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
 ]
+
+[project.urls]
+Homepage = "https://infinigen.org"
+Repository = "https://github.com/princeton-vl/infinigen"
+Documentation = "https://infinigen.org/docs"
 
 requires-python = "==3.11.*"
 dependencies = [
@@ -86,9 +95,7 @@ wandb = [
     "wandb"
 ]
 
-# bpy 5.0.1 is available on the official Blender PyPI archive and on PyPI proper.
-# The Blender PyPI index is kept as an explicit source so that `uv sync` resolves
-# from there; `uv pip install` (used in CI) resolves directly from PyPI.
+# Use the official Blender PyPI as the primary source for bpy wheels.
 # To regenerate uv.lock from this index, run:
 #   INFINIGEN_MINIMAL_INSTALL=True uv lock
 # (requires access to download.blender.org)
@@ -188,7 +195,7 @@ ignore = [
     "F841",   # local variable is assigned to but never used
 
     # ---- B (bugbear) rules with too many violations to address at once ----
-    "B006",   # mutable default argument – pervasive in transpiler/assets
+    "B006",   # mutable default argument – most core instances fixed; remaining in generated asset code
     "B007",   # unused loop variable – many in core; use _var convention where practical
     "B008",   # function call in default args – common in Blender API wrappers
     "B020",   # loop variable shadows outer scope

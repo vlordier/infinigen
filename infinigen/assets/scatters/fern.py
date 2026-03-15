@@ -32,9 +32,6 @@ def apply(obj, selection=None, density=("uniform", 1, 6), **kwargs):
 
 
 class Fern:
-    def __init__(self):
-        pass
-
     def apply(self, obj, selection=None, density=("uniform", 1, 6), **kwargs):
         fern_col = make_asset_collection(
             FernFactory(np.random.randint(1e5)), n=2, verbose=True

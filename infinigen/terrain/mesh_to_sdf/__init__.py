@@ -2,6 +2,8 @@
 
 # Original files authored by Marian Kleineberg: https://github.com/marian42/mesh_to_sdf/tree/master
 
+import logging
+
 import numpy as np
 import trimesh
 
@@ -13,6 +15,8 @@ from .utils import (
     scale_to_unit_cube,
     scale_to_unit_sphere,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_surface_point_cloud(
@@ -48,7 +52,7 @@ def get_surface_point_cloud(
         )
     else:
         raise ValueError(
-            "Unknown surface point sampling method: {:s}".format(surface_point_method)
+            f"Unknown surface point sampling method: {surface_point_method}"
         )
 
 
@@ -69,7 +73,7 @@ def mesh_to_sdf(
         raise ValueError("query_points must be of shape N ✕ 3.")
 
     if surface_point_method == "sample" and sign_method == "depth":
-        print(
+        logger.warning(
             "Incompatible methods for sampling points and determining sign, using sign_method='normal' instead."
         )
         sign_method = "normal"
@@ -91,7 +95,7 @@ def mesh_to_sdf(
             query_points, use_depth_buffer=True, sample_count=sample_point_count
         )
     else:
-        raise ValueError("Unknown sign determination method: {:s}".format(sign_method))
+        raise ValueError(f"Unknown sign determination method: {sign_method}")
 
 
 def mesh_to_voxels(
@@ -145,7 +149,7 @@ def sample_sdf_near_surface(
     mesh = scale_to_unit_sphere(mesh)
 
     if surface_point_method == "sample" and sign_method == "depth":
-        print(
+        logger.warning(
             "Incompatible methods for sampling points and determining sign, using sign_method='normal' instead."
         )
         sign_method = "normal"

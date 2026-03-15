@@ -331,7 +331,3 @@ class TiledWood:
         return surface.shaderfunc_to_material(shader_wood_tiled)
 
     __call__ = generate
-
-
-# def make_sphere():
-#     return new_plane()
