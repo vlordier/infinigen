@@ -85,6 +85,13 @@ def _torch_device():
     return torch.device("cpu")
 
 
+def _torch_dtype_for_device(torch, device):
+    """Use float32 on MPS (float64 unsupported), float64 elsewhere."""
+    if device is not None and getattr(device, "type", None) == "mps":
+        return torch.float32
+    return torch.float64
+
+
 # ---------------------------------------------------------------------------
 # Timing helpers
 # ---------------------------------------------------------------------------
@@ -791,9 +798,10 @@ def bench_color_sampling(upstream=False):
         torch = _get_torch()
         device = _torch_device()
         if torch is not None:
-            mean_t = torch.tensor(mean_hsv, dtype=torch.float64, device=device)
-            std_t = torch.tensor(std_mat, dtype=torch.float64, device=device)
-            noise_t = torch.from_numpy(base_noise).to(device=device, dtype=torch.float64)
+            tdtype = _torch_dtype_for_device(torch, device)
+            mean_t = torch.tensor(mean_hsv, dtype=tdtype, device=device)
+            std_t = torch.tensor(std_mat, dtype=tdtype, device=device)
+            noise_t = torch.from_numpy(base_noise).to(device=device, dtype=tdtype)
 
             def _run():
                 hsv = mean_t + noise_t @ std_t.T
@@ -804,7 +812,7 @@ def bench_color_sampling(upstream=False):
                     ((rgb + 0.055) / 1.055) ** 2.4,
                     rgb / 12.92,
                 )
-                ones = torch.ones(n_samples, 1, dtype=torch.float64, device=device)
+                ones = torch.ones(n_samples, 1, dtype=tdtype, device=device)
                 return torch.cat([srgb, ones], dim=1).cpu().numpy()
         else:
             def _run():
@@ -1069,9 +1077,10 @@ def bench_sdf_batch(upstream=False):
         if torch is not None:
             centers = np.array([c for c, _ in kernels])
             radii = np.array([r for _, r in kernels])
-            pts_t = torch.from_numpy(pts_eval).to(device)
-            cen_t = torch.from_numpy(centers).to(device)
-            rad_t = torch.from_numpy(radii).to(device)
+            tdtype = _torch_dtype_for_device(torch, device)
+            pts_t = torch.from_numpy(pts_eval).to(device=device, dtype=tdtype)
+            cen_t = torch.from_numpy(centers).to(device=device, dtype=tdtype)
+            rad_t = torch.from_numpy(radii).to(device=device, dtype=tdtype)
 
             def _run():
                 dists = torch.cdist(pts_t, cen_t)  # (N_POINTS, N_KERNELS)

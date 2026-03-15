@@ -185,6 +185,16 @@ def _canonicalize_for_benchmark(key: str, value: Any) -> Any:
     return value
 
 
+def _tolerances_for_benchmark(key: str, base_rtol: float, base_atol: float, torch_device: str) -> tuple[float, float]:
+    """Return benchmark-specific tolerances when required by device precision."""
+    rtol, atol = base_rtol, base_atol
+    if torch_device == "mps" and key in {"sdf_batch", "color_sampling"}:
+        # MPS uses float32 for these torch paths; allow small fp32 drift.
+        rtol = max(rtol, 1e-5)
+        atol = max(atol, 1e-6)
+    return rtol, atol
+
+
 def _capture_benchmark_output(runner_mod, bench_fn, upstream: bool):
     """Run one benchmark function and capture the underlying output object."""
     captured: list[Any] = []
@@ -208,17 +218,28 @@ def _capture_benchmark_output(runner_mod, bench_fn, upstream: bool):
         runner_mod._median_time = orig_median_time
 
 
-def _force_torch_cpu_if_available(runner_mod):
-    """Force CPU torch device for deterministic numeric parity on Apple Silicon."""
+def _override_torch_device(runner_mod, requested_device: str):
+    """Optionally override torch device selection in benchmark runner."""
+    if requested_device == "auto":
+        return None
+
     orig_torch_device = runner_mod._torch_device
 
-    def _cpu_device():
+    def _requested_device():
         torch = runner_mod._get_torch()
         if torch is None:
             return None
+        if requested_device == "cuda":
+            if torch.cuda.is_available():
+                return torch.device("cuda")
+            raise RuntimeError("Requested --torch-device=cuda, but CUDA is unavailable")
+        if requested_device == "mps":
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return torch.device("mps")
+            raise RuntimeError("Requested --torch-device=mps, but MPS is unavailable")
         return torch.device("cpu")
 
-    runner_mod._torch_device = _cpu_device
+    runner_mod._torch_device = _requested_device
     return orig_torch_device
 
 
@@ -238,13 +259,19 @@ def main():
         default="",
         help="Optional JSON report output path",
     )
+    parser.add_argument(
+        "--torch-device",
+        choices=["auto", "cpu", "mps", "cuda"],
+        default="cpu",
+        help="Torch device override for benchmarks that use torch (default: cpu)",
+    )
     args = parser.parse_args()
 
     os.environ["INFINIGEN_BENCH_OUTPUT_EQUIV"] = "1"
     runner = _load_runner_module()
     selected = {b.strip() for b in args.benchmarks.split(",") if b.strip()}
 
-    orig_torch_device = _force_torch_cpu_if_available(runner)
+    orig_torch_device = _override_torch_device(runner, args.torch_device)
     try:
         rows = []
         pass_count = 0
@@ -270,7 +297,8 @@ def main():
 
             out_opt = _canonicalize_for_benchmark(key, out_opt)
             out_up = _canonicalize_for_benchmark(key, out_up)
-            res = _compare_values(out_opt, out_up, rtol=args.rtol, atol=args.atol)
+            rtol, atol = _tolerances_for_benchmark(key, args.rtol, args.atol, args.torch_device)
+            res = _compare_values(out_opt, out_up, rtol=rtol, atol=atol)
             if res.ok:
                 pass_count += 1
                 rows.append(
@@ -317,7 +345,8 @@ def main():
         # Non-zero exit if any functional mismatch.
         raise SystemExit(1 if fail_count > 0 else 0)
     finally:
-        runner._torch_device = orig_torch_device
+        if orig_torch_device is not None:
+            runner._torch_device = orig_torch_device
 
 
 if __name__ == "__main__":
