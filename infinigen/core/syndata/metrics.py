@@ -17,6 +17,8 @@ import math
 from dataclasses import dataclass
 
 __all__ = ["SceneBudget"]
+
+
 @dataclass
 class SceneBudget:
     """Estimate resource usage for a planned scene.

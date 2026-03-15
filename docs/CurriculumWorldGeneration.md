@@ -37,9 +37,24 @@ The entire progression is driven by a single `complexity` parameter in `[0, 1]`.
 For the very first training steps, use `FlappyColumnConfig` to create an ultra-simple corridor with column-gap obstacles. This is even simpler than `WorldConfig(complexity=0)` — just columns with gaps.
 
 ```python
-from infinigen.core.syndata import FlappyColumnConfig, generate_flappy_obstacles
+from infinigen.core.syndata import (
+    FlappyColumnConfig, generate_flappy_obstacles, flappy_frame_metadata,
+)
 
-# Easy: wide gaps (0.6m), 5 columns
+# Use preset difficulty levels:
+easy_cfg = FlappyColumnConfig.easy()     # wide gaps, 3 columns, wide corridor
+medium_cfg = FlappyColumnConfig.medium() # moderate gaps, 5 columns
+hard_cfg = FlappyColumnConfig.hard()     # narrow gaps, 8 columns, tight corridor
+
+# Generate obstacles from any preset
+obstacles = generate_flappy_obstacles(easy_cfg, seed=42)
+# Returns list[FlappyObstacle] with .center, .half_extents, .label
+
+# Get metadata for validation / curriculum tracking
+metadata = flappy_frame_metadata(easy_cfg, seed=42)
+# Returns FrameMetadata-compatible dict with obstacles, depth_stats, etc.
+
+# Or customise directly:
 cfg = FlappyColumnConfig(
     corridor_length=8.0,
     corridor_width=2.0,
@@ -48,11 +63,15 @@ cfg = FlappyColumnConfig(
     gap_height=0.6,
 )
 obstacles = generate_flappy_obstacles(cfg, seed=42)
-# Returns list[FlappyObstacle] with .center, .half_extents, .label
-
-# Or use the default config directly:
-obstacles = generate_flappy_obstacles(FlappyColumnConfig(), seed=42)
 ```
+
+**Preset progression** (use these to gradually increase flappy difficulty):
+
+| Preset | Columns | Gap height | Corridor width | Difficulty |
+|---|---|---|---|---|
+| `FlappyColumnConfig.easy()` | 3 | 1.2 m | 3.0 m | Trivial |
+| `FlappyColumnConfig.medium()` | 5 | 0.8 m | 2.0 m | Moderate |
+| `FlappyColumnConfig.hard()` | 8 | 0.5 m | 1.5 m | Challenging |
 
 **What the agent learns:** basic flight control — fly through gaps, avoid columns.
 
@@ -251,12 +270,13 @@ print(hints.enabled_furniture)      # True
 print(hints.enabled_dynamic_objects)# True
 ```
 
-Or derive hints directly from a complexity value:
+Or derive hints directly from a complexity value (without a `WorldConfig`):
 
 ```python
-from infinigen.core.syndata import InfinigenOverlayHints
+from infinigen.core.syndata import overlay_hints_for_complexity
 
-hints = InfinigenOverlayHints.from_complexity(0.8)
+# Convenience function — no WorldConfig needed
+hints = overlay_hints_for_complexity(0.8)
 gin_hints = hints.to_gin_hints()  # dict for Infinigen pipeline
 ```
 
@@ -510,8 +530,25 @@ All generation functions return standard data types:
 
 - **`generate_world()`** → `list[BBox3D]` — each box has `.center`, `.extent`, `.label`
 - **`generate_flappy_obstacles()`** → `list[FlappyObstacle]` — each has `.center`, `.half_extents`, `.label`
+- **`flappy_frame_metadata()`** → `dict[str, Any]` — FrameMetadata-compatible dict with obstacles, depth, traversability
 - **`world_gin_overrides()`** → `dict[str, object]` — Infinigen gin parameter names → values
 - **`world_summary()`** → `dict[str, Any]` — human-readable summary for logging
+- **`overlay_hints_for_complexity()`** → `InfinigenOverlayHints` — asset category hints without building a `WorldConfig`
 - **`to_gin_bindings()`** → `list[str]` — gin-parseable binding strings
+
+## Complexity Stage Constants
+
+The named constants define the curriculum stage boundaries:
+
+```python
+from infinigen.core.syndata import (
+    COMPLEXITY_CORRIDOR,   # 0.15 — below this: flat corridor
+    COMPLEXITY_ROOMS,      # 0.35 — below this: textured corridor
+    COMPLEXITY_BRANCHES,   # 0.55 — below this: indoor rooms
+    COMPLEXITY_MAZE,       # 0.75 — below this: branching corridors
+    COMPLEXITY_DOOM,       # 0.90 — below this: multi-level maze
+    #                        ≥0.90: full photorealism
+)
+```
 
 These outputs are consumed by the Infinigen rendering pipeline or by external bridge projects (Genesis World, GenesisDroneEnv) that run the physics simulation and RL training.
