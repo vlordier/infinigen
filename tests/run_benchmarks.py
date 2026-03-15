@@ -28,6 +28,7 @@ Usage::
 import argparse
 import importlib
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -91,6 +92,11 @@ def _torch_device():
 N_REPEAT = 7  # default: enough for stable median
 N_REPEAT_SLOW = 3  # for benchmarks ~0.1–1 s each
 N_REPEAT_VERY_SLOW = 2  # for benchmarks > 1 s each
+
+
+def _output_equiv_mode() -> bool:
+    """Return True when benchmarks should prioritise output comparability."""
+    return os.getenv("INFINIGEN_BENCH_OUTPUT_EQUIV", "0") == "1"
 
 
 def _median_time(fn, n_repeat=N_REPEAT):
@@ -399,11 +405,17 @@ def bench_distance_transform(upstream=False):
             from scipy.ndimage import distance_transform_edt
         except ImportError:
             return ("distance_transform", float("nan"))
-        t = _median_time(lambda: distance_transform_edt(mask))
+        # Upstream computes distance to `mask > 0` seeds. scipy EDT computes
+        # distance-to-zero, so invert the predicate to match semantics.
+        if _output_equiv_mode():
+            # Compare against the same 64×64 subset used by upstream.
+            t = _median_time(lambda: distance_transform_edt(mask[:64, :64] == 0))
+        else:
+            t = _median_time(lambda: distance_transform_edt(mask == 0))
     else:
         # Upstream: O(N²·B) brute-force loop — use 64×64 sub-grid and extrapolate
         SUB = 64
-        mask_sub = (np.random.rand(SUB, SUB) > 0.5).astype(np.float64)
+        mask_sub = mask[:SUB, :SUB]
         seeds = np.argwhere(mask_sub > 0)
 
         def _loop():
@@ -483,14 +495,16 @@ def bench_surface_normals(upstream=False):
     grid_size = 1.0 / (N - 1)
 
     if not upstream:
-        # PR: vectorised finite differences + normalisation
+        # PR: vectorised central differences + normalisation
         def _run():
             dzdx = np.zeros_like(z)
-            dzdx[1:] = z[1:] - z[:-1]
-            dzdx[0] = dzdx[1]
+            dzdx[1:-1] = (z[2:] - z[:-2]) / 2
+            dzdx[0] = (z[1] - z[0]) / 2
+            dzdx[-1] = (z[-1] - z[-2]) / 2
             dzdy = np.zeros_like(z)
-            dzdy[:, 1:] = z[:, 1:] - z[:, :-1]
-            dzdy[:, 0] = dzdy[:, 1]
+            dzdy[:, 1:-1] = (z[:, 2:] - z[:, :-2]) / 2
+            dzdy[:, 0] = (z[:, 1] - z[:, 0]) / 2
+            dzdy[:, -1] = (z[:, -1] - z[:, -2]) / 2
             n = np.stack(
                 (-dzdy, -dzdx, grid_size * np.ones_like(z)), axis=-1
             )
@@ -680,7 +694,8 @@ def bench_rrt_neighborhood(upstream=False):
         tree = cKDTree(nodes)
 
         def _run():
-            return tree.query_ball_point(queries, radius)
+            result = tree.query_ball_point(queries, radius)
+            return [np.asarray(v, dtype=np.int64) for v in result]
 
         t = _median_time(_run)
     else:
@@ -768,6 +783,7 @@ def bench_color_sampling(upstream=False):
     n_samples = 10_000
     mean_hsv = np.array([0.3, 0.6, 0.5])
     std_mat = np.array([[0.05, 0, 0], [0, 0.1, 0], [0, 0, 0.1]])
+    base_noise = np.clip(np.random.randn(n_samples, 3), -1, 1)
 
     if not upstream:
         # PR: torch batch ops when available (GPU-accelerated sRGB gamma),
@@ -777,13 +793,10 @@ def bench_color_sampling(upstream=False):
         if torch is not None:
             mean_t = torch.tensor(mean_hsv, dtype=torch.float64, device=device)
             std_t = torch.tensor(std_mat, dtype=torch.float64, device=device)
+            noise_t = torch.from_numpy(base_noise).to(device=device, dtype=torch.float64)
 
             def _run():
-                noise = torch.clamp(
-                    torch.randn(n_samples, 3, dtype=torch.float64, device=device),
-                    -1, 1,
-                )
-                hsv = mean_t + noise @ std_t.T
+                hsv = mean_t + noise_t @ std_t.T
                 hsv[:, 2] = torch.clamp(hsv[:, 2], 0.1, 0.9)
                 rgb = torch.clamp(hsv, 0, 1)
                 srgb = torch.where(
@@ -795,8 +808,7 @@ def bench_color_sampling(upstream=False):
                 return torch.cat([srgb, ones], dim=1).cpu().numpy()
         else:
             def _run():
-                noise = np.clip(np.random.randn(n_samples, 3), -1, 1)
-                hsv = mean_hsv + noise @ std_mat.T
+                hsv = mean_hsv + base_noise @ std_mat.T
                 hsv[:, 2] = np.clip(hsv[:, 2], 0.1, 0.9)
                 rgb = np.clip(hsv, 0, 1)
                 srgb = np.where(
@@ -811,8 +823,7 @@ def bench_color_sampling(upstream=False):
         # Upstream: per-sample loop with individual matmul + clip
         def _run():
             results = []
-            for _ in range(n_samples):
-                noise = np.clip(np.random.randn(3), -1, 1)
+            for noise in base_noise:
                 color = mean_hsv + std_mat @ noise
                 color[2] = max(min(color[2], 0.9), 0.1)
                 rgb = np.clip(color, 0, 1)  # simplified
@@ -1047,6 +1058,8 @@ def bench_sdf_batch(upstream=False):
         (np.random.rand(3).astype(np.float64), float(np.random.rand()))
         for _ in range(_SDF_N_KERNELS)
     ]
+    n_sub = 10_000
+    pts_eval = points[:n_sub] if _output_equiv_mode() else points
 
     if not upstream:
         # PR: torch.cdist when available (single batched pairwise distance),
@@ -1056,7 +1069,7 @@ def bench_sdf_batch(upstream=False):
         if torch is not None:
             centers = np.array([c for c, _ in kernels])
             radii = np.array([r for _, r in kernels])
-            pts_t = torch.from_numpy(points).to(device)
+            pts_t = torch.from_numpy(pts_eval).to(device)
             cen_t = torch.from_numpy(centers).to(device)
             rad_t = torch.from_numpy(radii).to(device)
 
@@ -1066,9 +1079,9 @@ def bench_sdf_batch(upstream=False):
                 return sdfs.min(dim=1).values.cpu().numpy()
         else:
             def _run():
-                sdfs = np.empty((_SDF_N_KERNELS, _SDF_N_POINTS))
+                sdfs = np.empty((_SDF_N_KERNELS, pts_eval.shape[0]))
                 for ki, (center, radius) in enumerate(kernels):
-                    sdfs[ki] = np.linalg.norm(points - center, axis=1) - radius
+                    sdfs[ki] = np.linalg.norm(pts_eval - center, axis=1) - radius
                 return sdfs.min(axis=0)
 
         t = _median_time(_run)

@@ -29,6 +29,7 @@ import argparse
 import importlib.util
 import json
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -147,6 +148,43 @@ def _compare_values(a: Any, b: Any, rtol: float, atol: float, path: str = "root"
     return CompareResult(False, f"{path}: values differ ({type(a).__name__} vs {type(b).__name__})")
 
 
+def _canonicalize_for_benchmark(key: str, value: Any) -> Any:
+    """Normalize benchmark-specific output formats before comparing."""
+    if key == "heightmap_grid" and isinstance(value, (list, tuple)) and len(value) == 2:
+        verts, faces = value
+        verts_np = np.asarray(verts)
+        faces_np = np.asarray(faces)
+        if faces_np.ndim == 2 and faces_np.shape[1] == 3:
+            # Compare triangles as undirected sets, independent of row order.
+            faces_sorted = np.sort(faces_np, axis=1)
+            order = np.lexsort((faces_sorted[:, 2], faces_sorted[:, 1], faces_sorted[:, 0]))
+            faces_sorted = faces_sorted[order]
+            return (verts_np, faces_sorted)
+        return (verts_np, faces_np)
+
+    if key == "grid_edges" and isinstance(value, (list, tuple)) and len(value) == 2:
+        row, col = value
+        row_np = np.asarray(row, dtype=np.int64)
+        col_np = np.asarray(col, dtype=np.int64)
+        if row_np.shape == col_np.shape and row_np.ndim == 1:
+            edges = np.stack([row_np, col_np], axis=1)
+            order = np.lexsort((edges[:, 1], edges[:, 0]))
+            return edges[order]
+        return (row_np, col_np)
+
+    if key == "rrt_neighborhood" and isinstance(value, (list, tuple, np.ndarray)):
+        return [np.sort(np.asarray(v, dtype=np.int64)) for v in value]
+
+    if key == "vertex_group" and isinstance(value, (list, tuple)) and len(value) == 2:
+        i, v = value
+        return (np.asarray(i, dtype=np.int64), np.asarray(v, dtype=np.float64))
+
+    if key == "color_sampling":
+        return np.asarray(value, dtype=np.float64)
+
+    return value
+
+
 def _capture_benchmark_output(runner_mod, bench_fn, upstream: bool):
     """Run one benchmark function and capture the underlying output object."""
     captured: list[Any] = []
@@ -202,6 +240,7 @@ def main():
     )
     args = parser.parse_args()
 
+    os.environ["INFINIGEN_BENCH_OUTPUT_EQUIV"] = "1"
     runner = _load_runner_module()
     selected = {b.strip() for b in args.benchmarks.split(",") if b.strip()}
 
@@ -229,6 +268,8 @@ def main():
                 print(f"  {key:<24s} SKIP  {reason}")
                 continue
 
+            out_opt = _canonicalize_for_benchmark(key, out_opt)
+            out_up = _canonicalize_for_benchmark(key, out_up)
             res = _compare_values(out_opt, out_up, rtol=args.rtol, atol=args.atol)
             if res.ok:
                 pass_count += 1
