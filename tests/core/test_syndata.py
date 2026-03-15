@@ -34,6 +34,7 @@ from infinigen.core.syndata.observation import (
 from infinigen.core.syndata.parallel_stages import Stage, StageGraph
 from infinigen.core.syndata.pretraining import (
     FlappyColumnConfig,
+    flappy_frame_metadata,
     generate_flappy_obstacles,
 )
 from infinigen.core.syndata.quality_presets import (
@@ -1249,6 +1250,89 @@ class TestGenerateFlappyObstacles:
         for o in obs:
             for v in o.half_extents:
                 assert v > 0, f"Non-positive half_extent in {o.label}"
+
+
+class TestFlappyPresets:
+    """Tests for FlappyColumnConfig preset factory methods."""
+
+    def test_easy_preset(self):
+        cfg = FlappyColumnConfig.easy()
+        assert cfg.num_columns == 3
+        assert cfg.gap_height >= 0.5
+        assert cfg.corridor_width >= 2.5
+
+    def test_medium_preset(self):
+        cfg = FlappyColumnConfig.medium()
+        assert cfg.num_columns == 5
+        assert cfg.gap_height >= 0.5
+
+    def test_hard_preset(self):
+        cfg = FlappyColumnConfig.hard()
+        assert cfg.num_columns == 8
+        assert cfg.gap_height >= 0.2
+        assert cfg.corridor_width < 2.0
+
+    def test_presets_increasing_difficulty(self):
+        easy = FlappyColumnConfig.easy()
+        medium = FlappyColumnConfig.medium()
+        hard = FlappyColumnConfig.hard()
+        # More columns as difficulty increases
+        assert easy.num_columns < medium.num_columns < hard.num_columns
+        # Smaller gaps as difficulty increases
+        assert easy.gap_height > medium.gap_height > hard.gap_height
+
+    def test_easy_generates_obstacles(self):
+        obs = generate_flappy_obstacles(FlappyColumnConfig.easy(), seed=42)
+        assert len(obs) >= 5
+
+    def test_hard_generates_obstacles(self):
+        obs = generate_flappy_obstacles(FlappyColumnConfig.hard(), seed=42)
+        assert len(obs) >= 10
+
+
+class TestFlappyFrameMetadata:
+    """Tests for flappy_frame_metadata helper."""
+
+    def test_returns_dict(self):
+        cfg = FlappyColumnConfig(num_columns=3)
+        meta = flappy_frame_metadata(cfg, seed=42)
+        assert isinstance(meta, dict)
+
+    def test_has_required_keys(self):
+        cfg = FlappyColumnConfig(num_columns=3)
+        meta = flappy_frame_metadata(cfg, seed=42)
+        for key in ("frame_id", "camera_position", "obstacles",
+                     "depth_stats", "traversability_ratio"):
+            assert key in meta, f"Missing key: {key}"
+
+    def test_obstacles_are_dicts(self):
+        cfg = FlappyColumnConfig(num_columns=2)
+        meta = flappy_frame_metadata(cfg, seed=42)
+        assert isinstance(meta["obstacles"], list)
+        for obs in meta["obstacles"]:
+            assert isinstance(obs, dict)
+            assert "center" in obs
+
+    def test_depth_stats_valid(self):
+        cfg = FlappyColumnConfig(num_columns=3)
+        meta = flappy_frame_metadata(cfg, seed=42)
+        ds = meta["depth_stats"]
+        assert ds["min_m"] > 0
+        assert ds["max_m"] > ds["min_m"]
+
+    def test_traversability_in_range(self):
+        cfg = FlappyColumnConfig(num_columns=3)
+        meta = flappy_frame_metadata(cfg, seed=42)
+        assert 0 < meta["traversability_ratio"] <= 1.0
+
+    def test_invalid_config_type_raises(self):
+        with pytest.raises(TypeError, match="FlappyColumnConfig"):
+            flappy_frame_metadata("not a config")
+
+    def test_zero_columns(self):
+        cfg = FlappyColumnConfig(num_columns=0)
+        meta = flappy_frame_metadata(cfg, seed=42)
+        assert isinstance(meta["obstacles"], list)
 
 
 class TestVisualStyle:

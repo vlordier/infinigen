@@ -116,6 +116,71 @@ class FlappyColumnConfig:
             msg = f"max_gap_z ({self.max_gap_z}) must be >= min_gap_z ({self.min_gap_z})"
             raise ValueError(msg)
 
+    # ---- Preset factory methods ---------------------------------------------
+
+    @staticmethod
+    def easy(*, seed: int | None = None) -> FlappyColumnConfig:
+        """Wide gaps, few columns, wide corridor — for initial learning.
+
+        The agent barely needs to adjust altitude; this is the absolute
+        simplest collision-avoidance task.
+        """
+        _ = seed  # reserved for future per-preset seed forwarding
+        return FlappyColumnConfig(
+            corridor_length=10.0,
+            corridor_width=3.0,
+            corridor_height=3.0,
+            num_columns=3,
+            gap_height=1.2,
+            gap_height_variation=0.3,
+            column_width=0.3,
+            column_depth=2.5,
+            min_gap_z=0.8,
+            max_gap_z=2.2,
+        )
+
+    @staticmethod
+    def medium(*, seed: int | None = None) -> FlappyColumnConfig:
+        """Moderate gaps and more columns — for skill refinement.
+
+        The agent must make deliberate altitude adjustments and plan
+        ahead across several obstacles.
+        """
+        _ = seed  # reserved for future per-preset seed forwarding
+        return FlappyColumnConfig(
+            corridor_length=12.0,
+            corridor_width=2.0,
+            corridor_height=2.5,
+            num_columns=5,
+            gap_height=0.8,
+            gap_height_variation=0.3,
+            column_width=0.3,
+            column_depth=1.8,
+            min_gap_z=0.6,
+            max_gap_z=1.9,
+        )
+
+    @staticmethod
+    def hard(*, seed: int | None = None) -> FlappyColumnConfig:
+        """Narrow gaps, many columns, narrow corridor — approaching real-world.
+
+        Tight manoeuvring with minimal margin for error.  Agents that
+        pass this are ready for full Infinigen scenes.
+        """
+        _ = seed  # reserved for future per-preset seed forwarding
+        return FlappyColumnConfig(
+            corridor_length=15.0,
+            corridor_width=1.5,
+            corridor_height=2.0,
+            num_columns=8,
+            gap_height=0.5,
+            gap_height_variation=0.2,
+            column_width=0.4,
+            column_depth=1.3,
+            min_gap_z=0.4,
+            max_gap_z=1.6,
+        )
+
 
 # ---------------------------------------------------------------------------
 # Obstacle dataclass (lightweight, independent of FrameMetadata)
@@ -258,3 +323,84 @@ def generate_flappy_obstacles(
     ))
 
     return obstacles
+
+
+# ---------------------------------------------------------------------------
+# Frame metadata helper
+# ---------------------------------------------------------------------------
+
+
+def flappy_frame_metadata(
+    config: FlappyColumnConfig,
+    *,
+    seed: int | None = None,
+    frame_id: int = 0,
+    scene_seed: int = 0,
+) -> dict[str, Any]:
+    """Generate a FrameMetadata-compatible dict for a flappy corridor.
+
+    Combines :func:`generate_flappy_obstacles` with basic depth and
+    traversability estimates derived purely from corridor geometry.
+    Useful for pre-flight validation and curriculum tracking without
+    running a full Infinigen render.
+
+    Parameters
+    ----------
+    config : FlappyColumnConfig
+        Corridor and obstacle parameters.
+    seed : int | None
+        RNG seed for reproducible obstacle placement.
+    frame_id : int
+        Frame identifier.
+    scene_seed : int
+        Scene RNG seed.
+
+    Returns
+    -------
+    dict[str, Any]
+        FrameMetadata-compatible dict with obstacles, depth_stats,
+        traversability_ratio, and camera position.
+
+    Raises
+    ------
+    TypeError
+        If *config* is not a :class:`FlappyColumnConfig`.
+    """
+    if not isinstance(config, FlappyColumnConfig):
+        msg = f"config must be FlappyColumnConfig, got {type(config).__name__}"
+        raise TypeError(msg)
+
+    obstacles = generate_flappy_obstacles(config, seed=seed)
+
+    # Estimate depth from camera (placed near corridor start) to obstacles
+    cam_x = 0.3
+    col_obstacles = [o for o in obstacles if "column" in o.label]
+    if col_obstacles:
+        dists = [abs(o.center[0] - cam_x) for o in col_obstacles]
+        min_dist = max(0.01, min(dists))
+        max_dist = config.corridor_length
+    else:
+        min_dist = 0.5
+        max_dist = config.corridor_length
+
+    traversability = min(1.0, config.gap_height / config.corridor_height)
+
+    return {
+        "frame_id": frame_id,
+        "scene_seed": scene_seed,
+        "camera_position": (cam_x, 0.0, config.corridor_height / 2),
+        "camera_rotation_euler": (0.0, 0.0, 0.0),
+        "obstacles": [o.to_dict() for o in obstacles],
+        "depth_stats": {
+            "min_m": round(min_dist, 3),
+            "max_m": round(max_dist, 3),
+            "mean_m": round((min_dist + max_dist) / 2, 3),
+            "median_m": round((min_dist + max_dist) / 2, 3),
+            "std_m": round((max_dist - min_dist) / 4, 3),
+        },
+        "traversability_ratio": round(traversability, 3),
+        "curriculum_stage": 0,
+        "velocity": (0.0, 0.0, 0.0),
+        "nearest_obstacle_m": round(min_dist, 3),
+        "swarm_positions": [],
+    }

@@ -57,6 +57,7 @@ from infinigen.core.syndata.parallel_stages import StageGraph
 from infinigen.core.syndata.pretraining import (
     FlappyColumnConfig,
     FlappyObstacle,
+    flappy_frame_metadata,
     generate_flappy_obstacles,
 )
 from infinigen.core.syndata.quality_presets import drone_preset, to_gin_bindings
@@ -118,5 +119,6 @@ __all__ = [
     #    with column-gap obstacles for bootstrapping RL agents.
     "FlappyColumnConfig",
     "FlappyObstacle",
+    "flappy_frame_metadata",
     "generate_flappy_obstacles",
 ]
