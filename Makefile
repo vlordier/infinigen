@@ -1,4 +1,5 @@
-.PHONY: cleanpip clean_terrain terrain customgt flip_fluids default \
+.PHONY: cleanpip cleanpy clean_terrain terrain customgt flip_fluids default \
+	check-bpy-runtime setup-local-bpy-env \
        docker-build docker-build-cuda docker-build-arm64 docker-clean \
        docker-setup docker-run docker-run-no-opengl docker-run-no-gpu \
        docker-run-no-gpu-opengl
@@ -8,6 +9,9 @@
 cleanpip:
 	rm -rf *.egg-info
 	rm -rf build
+
+cleanpy:
+	find . -type d \( -name __pycache__ -o -name .pytest_cache -o -name .mypy_cache -o -name .ruff_cache \) -prune -exec rm -rf {} +
 
 clean_terrain:
 	rm -rf infinigen/terrain/*.egg-info
@@ -22,6 +26,12 @@ customgt:
 
 flip_fluids:
 	bash scripts/install/compile_flip_fluids.sh
+
+check-bpy-runtime:
+	bash scripts/install/check_bpy_runtime.sh
+
+setup-local-bpy-env:
+	bash scripts/install/setup_local_bpy_env.sh
 
 # ---- Docker configuration ----
 
