@@ -69,22 +69,38 @@ ACCOUNT_ENVVAR = "INFINIGEN_SLURMACCOUNT"
 EXCLUDE_FILE_ENVVAR = "INFINIGEN_SLURM_EXCLUDENODES_LIST"
 NUM_CONCURRENT_ENVVAR = "INFINIGEN_NUMCONCURRENT_TARGET"
 
+# Retry and timeout configuration – extracted as named constants to avoid magic numbers
+_SLURM_SUBMIT_MAX_RETRIES: int = 10
+_SLURM_SUBMIT_RETRY_INTERVAL_SECONDS: int = 60
+_SUBPROCESS_TIMEOUT_SECONDS: int = 10
+# When disk usage cannot be determined (timeout/failure), assume the disk is
+# full so new jobs are not launched into an unknown storage situation.
+_DISK_USAGE_UNKNOWN_SENTINEL: float = 1.0
+
 
 def node_from_slurm_jobid(scene_id):
     if not which("sacct"):
         return None
 
     try:
-        node_of_scene, *rest = (
+        result = (
             subprocess.check_output(
-                f"{which('sacct')} -j {scene_id} --format Node --noheader".split()
+                f"{which('sacct')} -j {scene_id} --format Node --noheader".split(),
+                timeout=_SUBPROCESS_TIMEOUT_SECONDS,
+                stderr=subprocess.PIPE,
             )
             .decode()
             .split()
         )
-        return node_of_scene
-    except Exception as e:
-        logger.warning(f"sacct threw {e}")
+        return result[0] if result else None
+    except subprocess.TimeoutExpired:
+        logger.warning(f"sacct timed out for {scene_id}")
+        return None
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"sacct failed for {scene_id}: {e}")
+        return None
+    except (ValueError, IndexError) as e:
+        logger.warning(f"sacct output could not be parsed for {scene_id}: {e}")
         return None
 
 
@@ -99,7 +115,11 @@ def get_slurm_banned_nodes(config_path=None):
         config_path = os.environ.get(EXCLUDE_FILE_ENVVAR)
     if config_path is None:
         return []
-    with Path(config_path).open("r") as f:
+    config_path = Path(config_path)
+    if not config_path.exists():
+        logger.warning(f"Slurm banned nodes config not found: {config_path}")
+        return []
+    with config_path.open("r") as f:
         return list(f.read().split())
 
 
@@ -176,14 +196,20 @@ def slurm_submit_cmd(
             "Callable with submit_cmd is deprecated, please submit a commandline string"
         )
 
-    while True:
+    for attempt in range(_SLURM_SUBMIT_MAX_RETRIES):
         try:
             render_fn = submitit.helpers.CommandFunction(cmd)
             return executor.submit(render_fn)
         except submitit.core.utils.FailedJobError as e:
             current_time_str = datetime.now().strftime("%m/%d %I:%M%p")
-            logger.info(f'[{current_time_str}] Job submission failed with error:\n{e}')
-            time.sleep(60)
+            if attempt >= _SLURM_SUBMIT_MAX_RETRIES - 1:
+                raise RuntimeError(
+                    f"SLURM job submission failed after {_SLURM_SUBMIT_MAX_RETRIES} attempts"
+                ) from e
+            logger.warning(
+                f"[{current_time_str}] Job submission failed (attempt {attempt + 1}/{_SLURM_SUBMIT_MAX_RETRIES}): {e}"
+            )
+            time.sleep(_SLURM_SUBMIT_RETRY_INTERVAL_SECONDS)
 
 
 @gin.configurable
@@ -364,10 +390,30 @@ def update_symlink(scene_folder, scenes):
 
 
 def get_disk_usage(folder):
-    out = subprocess.check_output(
-        f"df -h {folder.resolve()}".replace(" (Princeton)", "").split()
-    ).decode()
-    return int(re.compile("[\s\S]* ([0-9]+)% [\s\S]*").fullmatch(out).group(1)) / 100
+    try:
+        out = subprocess.check_output(
+            f"df -h {folder.resolve()}".replace(" (Princeton)", "").split(),
+            timeout=_SUBPROCESS_TIMEOUT_SECONDS,
+            stderr=subprocess.PIPE,
+        ).decode()
+    except subprocess.TimeoutExpired:
+        logger.warning(
+            f"df timed out for {folder}; assuming disk is full to prevent launching new jobs"
+        )
+        return _DISK_USAGE_UNKNOWN_SENTINEL
+    except subprocess.CalledProcessError as e:
+        logger.warning(
+            f"df failed for {folder}: {e}; assuming disk is full to prevent launching new jobs"
+        )
+        return _DISK_USAGE_UNKNOWN_SENTINEL
+    match = re.search(r"([0-9]+)%", out)
+    if not match:
+        logger.warning(
+            f"Could not parse disk usage from df output for {folder};"
+            f" assuming disk is full to prevent launching new jobs"
+        )
+        return _DISK_USAGE_UNKNOWN_SENTINEL
+    return int(match.group(1)) / 100
 
 
 def make_html_page(output_path, scenes, frame, camera_pair_id, **kwargs):
@@ -473,13 +519,17 @@ def record_crashed_seed(scene, taskname, f, fatal=True):
     stdout_file = args.output_folder / seed / "logs" / f"{taskname}.out"
     stderr_file = args.output_folder / seed / "logs" / f"{taskname}.err"
 
-    scene_id, *_ = stderr_file.resolve().stem.split("_")
-    node = node_from_slurm_jobid(scene_id)
+    parts = stderr_file.resolve().stem.split("_")
+    scene_id = parts[0] if parts else None
+    if not scene_id or not scene_id.isdigit():
+        logger.warning(f"Could not parse SLURM job ID from {stderr_file.stem!r}")
+        scene_id = None
+    node = node_from_slurm_jobid(scene_id) if scene_id is not None else None
     time_str = datetime.now().strftime("%m/%d %I:%M%p")
 
     reason = infer_crash_reason(stdout_file, stderr_file)
     text = f"{time_str} {str(stderr_file)} {reason=} {node=} {fatal=}\n"
-    logger.info('Crashed: ' + text)
+    logger.warning("Crashed: %s", text.rstrip())
     f.write(text)
 
     scene[f"{taskname}_crash_recorded"] = True
@@ -697,15 +747,15 @@ def manage_datagen_jobs(
 
     # Dont launch new scenes if disk is getting full
     if control_state["disk_usage"] > disk_sleep_threshold:
-        message = f"{args.output_folder} is full ({100 * control_state['disk_usage']}%). Sleeping."
-        logger.info(message)
+        message = f"{args.output_folder} is full ({100 * control_state['disk_usage']:.1f}%). Sleeping."
+        logger.warning(message)
         if wandb is not None:
             wandb.alert(
                 title=f"{args.output_folder.name} sleeping for full disk",
                 text=message,
                 wait_duration=3 * 60 * 60,
             )
-        time.sleep(60)
+        time.sleep(_SLURM_SUBMIT_RETRY_INTERVAL_SECONDS)
         return {}
 
     for scene, taskname, queue_func in new_jobs:
@@ -730,12 +780,17 @@ def print_stats_block(
         return
 
     now = datetime.now()
-
-    logger.info(f'{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}')
-    logger.info('=' * 60)
+    separator = "=" * 60
+    logger.info(
+        "%s %s -> %s",
+        output_folder,
+        start_time.strftime("%m/%d %I:%M%p"),
+        now.strftime("%m/%d %I:%M%p"),
+    )
+    logger.info(separator)
     for k, v in sorted(log_stats.items()):
-        logger.info(f'{k.ljust(30)} : {v}')
-    logger.info('-' * 60)
+        logger.info("%s : %s", k.ljust(30), v)
+    logger.info("-" * 60)
 
 
 @gin.configurable
@@ -777,7 +832,7 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
         handlers=[filehandler, streamhandler],
     )
 
-    logger.info(f'Using get_slurm_banned_nodes()={get_slurm_banned_nodes()!r}')
+    logger.info("Using banned nodes: %s", get_slurm_banned_nodes())
 
     if shuffle:
         np.random.shuffle(all_scenes)
@@ -790,7 +845,12 @@ def main(args, shuffle=True, wandb_project="render", upload_commandfile_method=N
         now = datetime.now()
 
         if args.print_stats:
-            logger.info(f'{args.output_folder} {start_time.strftime('%m/%d %I:%M%p')} -> {now.strftime('%m/%d %I:%M%p')}')
+            logger.info(
+                "%s %s -> %s",
+                args.output_folder,
+                start_time.strftime("%m/%d %I:%M%p"),
+                now.strftime("%m/%d %I:%M%p"),
+            )
 
         log_stats = manage_datagen_jobs(
             all_scenes, elapsed=time.perf_counter() - start_perf
