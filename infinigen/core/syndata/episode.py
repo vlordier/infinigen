@@ -6,7 +6,13 @@
 
 Defines temporal structure for rendering: frame range, FPS, and trajectory
 type.  These map directly to ``execute_tasks.frame_range`` and
-``execute_tasks.fps`` gin bindings.
+``execute_tasks.fps`` gin bindings for the **Infinigen pipeline**.
+
+When using **Genesis World** as the simulation backend, use
+:func:`~infinigen.core.syndata.genesis_export.episode_to_genesis` to
+convert an :class:`EpisodeConfig` to a :class:`GenesisEpisodeConfig`
+that maps to Genesis's native ``scene.step(dt)`` loop, vectorised
+environment resets, and camera video recording.
 
 All helpers are pure Python — no ``bpy`` dependency.
 """

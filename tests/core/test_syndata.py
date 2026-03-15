@@ -26,13 +26,17 @@ from infinigen.core.syndata.episode import EpisodeConfig
 from infinigen.core.syndata.genesis_export import (
     GenesisCamera,
     GenesisEntityConfig,
+    GenesisEpisodeConfig,
     GenesisLight,
+    GenesisObservationConfig,
     GenesisSceneConfig,
     GenesisSceneManifest,
     build_genesis_config,
     camera_from_syndata,
+    episode_to_genesis,
     manifest_to_entities,
     metadata_to_entities,
+    observation_to_genesis,
     observation_to_render_kwargs,
     randomisation_to_genesis_lights,
     scene_manifest_from_dir,
@@ -1460,7 +1464,7 @@ class TestToGenesisScript:
         assert "gs.morphs.Box" in script
         assert "scene.add_camera(" in script
         assert "scene.build()" in script
-        assert "scene.step()" in script
+        assert "scene.step(" in script
         assert "cam_0.render(" in script
         # The script should be parseable Python
         compile(script, "<genesis_script>", "exec")
@@ -1546,6 +1550,7 @@ class TestBuildGenesisConfig:
         )
         cam = DroneCamera(fov_deg=90.0, aspect_ratio=ASPECT_4_3)
         rig = CameraRigConfig.stereo(baseline_m=0.065, n_drones=2)
+        ep = EpisodeConfig.short_trajectory(num_frames=30, fps=10)
         obs = ObservationConfig(passes=PASSES_NAVIGATION)
         randomiser = DomainRandomiser(difficulty=0.5, seed=42)
 
@@ -1554,6 +1559,7 @@ class TestBuildGenesisConfig:
             frame_metadata=meta,
             drone_camera=cam,
             camera_rig=rig,
+            episode=ep,
             observation=obs,
             randomiser=randomiser,
             resolution=(320, 240),
@@ -1566,12 +1572,21 @@ class TestBuildGenesisConfig:
         assert len(cfg.cameras) == 4  # 2 drones × 2 (stereo)
         assert len(cfg.lights) >= 1
 
+        # Verify episode and observation mapping
+        assert cfg.episode is not None
+        assert cfg.episode.num_steps == 30
+        assert cfg.episode.fps == 10
+        assert cfg.observation is not None
+        assert cfg.observation.depth is True
+        assert cfg.observation.normal is True
+
         # Generate script
         script = to_genesis_script(cfg)
         assert "import genesis as gs" in script
+        assert "start_recording" in script  # video recording for multi-frame
         compile(script, "<genesis_full_pipeline>", "exec")
 
-        # Check observation mapping
+        # Check observation mapping (legacy helper still works)
         render_kwargs = observation_to_render_kwargs(obs)
         assert render_kwargs["depth"] is True
         assert render_kwargs["normal"] is True
@@ -1581,3 +1596,227 @@ class TestBuildGenesisConfig:
         cfg.save_json(cfg_path)
         loaded = GenesisSceneConfig.load_json(cfg_path)
         assert len(loaded.entities) == len(cfg.entities)
+        assert loaded.episode is not None
+        assert loaded.episode.num_steps == 30
+        assert loaded.observation is not None
+        assert loaded.observation.depth is True
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  20. Genesis Episode + Observation bridge (Genesis handles these natively)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestGenesisEpisodeConfig:
+    def test_defaults(self):
+        ep = GenesisEpisodeConfig()
+        assert ep.num_steps == 1000
+        assert ep.dt == 0.01
+        assert ep.fps == 24
+
+    def test_invalid_num_steps(self):
+        with pytest.raises(ValueError, match="num_steps"):
+            GenesisEpisodeConfig(num_steps=0)
+
+    def test_invalid_dt(self):
+        with pytest.raises(ValueError, match="dt"):
+            GenesisEpisodeConfig(dt=-0.01)
+
+    def test_invalid_fps(self):
+        with pytest.raises(ValueError, match="fps"):
+            GenesisEpisodeConfig(fps=0)
+
+    def test_to_dict(self):
+        ep = GenesisEpisodeConfig(num_steps=100, dt=0.005)
+        d = ep.to_dict()
+        assert d["num_steps"] == 100
+        assert d["dt"] == 0.005
+
+
+class TestGenesisObservationConfig:
+    def test_defaults(self):
+        obs = GenesisObservationConfig()
+        assert obs.rgb is True
+        assert obs.depth is True
+        assert obs.segmentation is False
+
+    def test_render_kwargs(self):
+        obs = GenesisObservationConfig(
+            rgb=True, depth=True, segmentation=True, normal=True,
+        )
+        kw = obs.render_kwargs()
+        assert kw == {"rgb": True, "depth": True, "segmentation": True, "normal": True}
+
+    def test_render_kwargs_minimal(self):
+        obs = GenesisObservationConfig(rgb=True, depth=False, segmentation=False, normal=False)
+        kw = obs.render_kwargs()
+        assert kw["depth"] is False
+
+    def test_invalid_depth_clip(self):
+        with pytest.raises(ValueError, match="depth_clip"):
+            GenesisObservationConfig(depth_clip_m=0)
+
+    def test_invalid_noise(self):
+        with pytest.raises(ValueError, match="gaussian_noise"):
+            GenesisObservationConfig(gaussian_noise_std=-0.1)
+
+    def test_to_dict(self):
+        obs = GenesisObservationConfig(depth=True, normal=True, depth_clip_m=50.0)
+        d = obs.to_dict()
+        assert d["depth"] is True
+        assert d["normal"] is True
+        assert d["depth_clip_m"] == 50.0
+
+
+class TestEpisodeToGenesis:
+    def test_static_episode(self):
+        ep = EpisodeConfig.single_frame()
+        gep = episode_to_genesis(ep)
+        assert gep.num_steps == 1
+        assert gep.fps == 24
+        assert gep.record_video is False  # single frame → no video
+
+    def test_trajectory_episode(self):
+        ep = EpisodeConfig.short_trajectory(num_frames=30, fps=10)
+        gep = episode_to_genesis(ep, dt=0.005)
+        assert gep.num_steps == 30
+        assert gep.fps == 10
+        assert gep.dt == 0.005
+        assert gep.max_episode_length == 30
+        assert gep.record_video is True  # multi-frame → video
+
+    def test_navigation_episode(self):
+        ep = EpisodeConfig.navigation_episode(num_frames=120, fps=24)
+        gep = episode_to_genesis(ep)
+        assert gep.num_steps == 120
+        assert gep.fps == 24
+        assert gep.record_video is True
+
+    def test_custom_dt(self):
+        ep = EpisodeConfig(num_frames=50, fps=30)
+        gep = episode_to_genesis(ep, dt=0.002)
+        assert gep.dt == 0.002
+
+
+class TestObservationToGenesis:
+    def test_navigation_passes(self):
+        obs = ObservationConfig(passes=PASSES_NAVIGATION, include_rgb=True)
+        gobs = observation_to_genesis(obs)
+        assert gobs.rgb is True
+        assert gobs.depth is True
+        assert gobs.segmentation is True  # PASS_OBJECT_INDEX in PASSES_NAVIGATION
+        assert gobs.normal is True
+        assert gobs.depth_clip_m == obs.depth_clip_m
+
+    def test_minimal_passes(self):
+        obs = ObservationConfig(passes=PASSES_MINIMAL, include_rgb=False)
+        gobs = observation_to_genesis(obs)
+        assert gobs.rgb is False
+        assert gobs.depth is True
+        assert gobs.segmentation is True
+        assert gobs.normal is False
+
+    def test_noise_passthrough(self):
+        from infinigen.core.syndata.observation import SensorNoiseModel
+        noise = SensorNoiseModel(gaussian_std=0.02)
+        obs = ObservationConfig(noise=noise)
+        gobs = observation_to_genesis(obs)
+        assert gobs.gaussian_noise_std == 0.02
+
+    def test_depth_clip_passthrough(self):
+        obs = ObservationConfig(depth_clip_m=50.0)
+        gobs = observation_to_genesis(obs)
+        assert gobs.depth_clip_m == 50.0
+
+
+class TestGenesisScriptWithEpisodeObservation:
+    def test_script_with_episode(self):
+        cfg = GenesisSceneConfig(
+            cameras=[GenesisCamera(name="cam_0")],
+            episode=GenesisEpisodeConfig(num_steps=50, dt=0.005, fps=10, record_video=True),
+            backend="cpu",
+        )
+        script = to_genesis_script(cfg)
+        assert "start_recording" in script
+        assert "stop_recording" in script
+        assert "range(50)" in script
+        assert "dt=0.005" in script
+        assert "fps=10" in script
+        compile(script, "<genesis_episode_script>", "exec")
+
+    def test_script_with_observation(self):
+        cfg = GenesisSceneConfig(
+            cameras=[GenesisCamera(name="cam_0")],
+            observation=GenesisObservationConfig(
+                rgb=True, depth=True, segmentation=False, normal=True,
+            ),
+            backend="cpu",
+        )
+        script = to_genesis_script(cfg)
+        assert "rgb=True" in script
+        assert "depth=True" in script
+        assert "normal=True" in script
+        assert "segmentation=True" not in script
+        compile(script, "<genesis_obs_script>", "exec")
+
+    def test_script_depth_only(self):
+        cfg = GenesisSceneConfig(
+            cameras=[GenesisCamera(name="cam_0")],
+            observation=GenesisObservationConfig(
+                rgb=False, depth=True, segmentation=False, normal=False,
+            ),
+            backend="cpu",
+        )
+        script = to_genesis_script(cfg)
+        assert "depth = cam_0.render(" in script
+        compile(script, "<genesis_depth_only>", "exec")
+
+    def test_script_no_video_when_not_recording(self):
+        cfg = GenesisSceneConfig(
+            cameras=[GenesisCamera(name="cam_0")],
+            episode=GenesisEpisodeConfig(num_steps=10, record_video=False),
+            backend="cpu",
+        )
+        script = to_genesis_script(cfg)
+        assert "start_recording" not in script
+        assert "stop_recording" not in script
+
+    def test_json_round_trip_with_episode_observation(self, tmp_path):
+        cfg = GenesisSceneConfig(
+            cameras=[GenesisCamera(name="cam_0")],
+            episode=GenesisEpisodeConfig(num_steps=50, dt=0.005, fps=10),
+            observation=GenesisObservationConfig(
+                depth=True, normal=True, depth_clip_m=50.0,
+            ),
+            backend="cpu",
+        )
+        path = tmp_path / "scene.json"
+        cfg.save_json(path)
+        loaded = GenesisSceneConfig.load_json(path)
+        assert loaded.episode is not None
+        assert loaded.episode.num_steps == 50
+        assert loaded.episode.dt == 0.005
+        assert loaded.observation is not None
+        assert loaded.observation.depth is True
+        assert loaded.observation.depth_clip_m == 50.0
+
+
+class TestBuildGenesisConfigWithEpisodeObservation:
+    def test_build_with_episode(self):
+        ep = EpisodeConfig.short_trajectory(num_frames=30, fps=10)
+        cfg = build_genesis_config(episode=ep, backend="cpu")
+        assert cfg.episode is not None
+        assert cfg.episode.num_steps == 30
+        assert cfg.episode.fps == 10
+
+    def test_build_with_observation(self):
+        obs = ObservationConfig(passes=PASSES_NAVIGATION)
+        cfg = build_genesis_config(observation=obs, backend="cpu")
+        assert cfg.observation is not None
+        assert cfg.observation.depth is True
+        assert cfg.observation.normal is True
+
+    def test_build_without_episode_observation(self):
+        cfg = build_genesis_config(backend="cpu")
+        assert cfg.episode is None
+        assert cfg.observation is None

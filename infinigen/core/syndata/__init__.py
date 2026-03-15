@@ -22,10 +22,14 @@ from infinigen.core.syndata.episode import EpisodeConfig
 from infinigen.core.syndata.genesis_export import (
     GenesisCamera,
     GenesisEntityConfig,
+    GenesisEpisodeConfig,
     GenesisLight,
+    GenesisObservationConfig,
     GenesisSceneConfig,
     GenesisSceneManifest,
     build_genesis_config,
+    episode_to_genesis,
+    observation_to_genesis,
     to_genesis_script,
 )
 from infinigen.core.syndata.metadata import FrameMetadata
@@ -47,7 +51,9 @@ __all__ = [
     "FrameMetadata",
     "GenesisCamera",
     "GenesisEntityConfig",
+    "GenesisEpisodeConfig",
     "GenesisLight",
+    "GenesisObservationConfig",
     "GenesisSceneConfig",
     "GenesisSceneManifest",
     "ObservationConfig",
@@ -58,6 +64,8 @@ __all__ = [
     "build_genesis_config",
     "curriculum_overrides",
     "drone_preset",
+    "episode_to_genesis",
+    "observation_to_genesis",
     "resolution_for_stage",
     "to_genesis_script",
     "to_gin_bindings",

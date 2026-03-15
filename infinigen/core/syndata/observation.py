@@ -6,7 +6,14 @@
 
 Defines which Blender render passes the agent receives as its observation
 and what post-processing (e.g. sensor noise) is applied.  The observation
-config maps directly to Infinigen's ``render_image`` gin bindings.
+config maps directly to Infinigen's ``render_image`` gin bindings for the
+**Infinigen pipeline**.
+
+When using **Genesis World** as the simulation backend, use
+:func:`~infinigen.core.syndata.genesis_export.observation_to_genesis` to
+convert an :class:`ObservationConfig` to a :class:`GenesisObservationConfig`
+that maps to Genesis's native ``camera.render(rgb=True, depth=True, ...)``
+multi-pass rendering and differentiable sensor noise.
 
 All helpers are pure Python — no ``bpy`` dependency.
 """

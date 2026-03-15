@@ -257,6 +257,129 @@ class GenesisLight:
 
 
 # ---------------------------------------------------------------------------
+# Episode configuration (Genesis simulation loop)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GenesisEpisodeConfig:
+    """Genesis simulation episode configuration.
+
+    Maps the RL episode structure (frame count, FPS, trajectory) from syndata
+    :class:`~infinigen.core.syndata.episode.EpisodeConfig` to Genesis's
+    native simulation loop parameters.
+
+    Genesis handles the simulation loop natively — ``scene.step()``,
+    vectorised environment resets, and camera recording are all built-in.
+    This config captures the parameters that control the loop shape.
+
+    Parameters
+    ----------
+    num_steps : int
+        Total simulation steps per episode.
+    dt : float
+        Physics timestep in seconds.  Smaller = more accurate physics but
+        slower.  Typical: 0.01 for robotics, 0.005 for drone dynamics.
+    fps : int
+        Rendering frame rate.  Genesis records at this rate via
+        ``camera.start_recording()`` / ``camera.stop_recording()``.
+    max_episode_length : int
+        Maximum episode length before forced reset (Genesis vectorised env
+        convention).
+    record_video : bool
+        Whether the generated script includes video recording calls.
+    """
+
+    num_steps: int = _DEFAULT_SIMULATION_STEPS
+    dt: float = 0.01
+    fps: int = 24
+    max_episode_length: int = 1000
+    record_video: bool = False
+
+    def __post_init__(self) -> None:
+        if self.num_steps < 1:
+            msg = f"num_steps must be >= 1, got {self.num_steps}"
+            raise ValueError(msg)
+        if self.dt <= 0:
+            msg = f"dt must be positive, got {self.dt}"
+            raise ValueError(msg)
+        if self.fps < 1 or self.fps > 120:
+            msg = f"fps must be in [1, 120], got {self.fps}"
+            raise ValueError(msg)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a JSON-compatible dict."""
+        return asdict(self)
+
+
+# ---------------------------------------------------------------------------
+# Observation configuration (Genesis render passes + noise)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GenesisObservationConfig:
+    """Genesis camera rendering configuration.
+
+    Maps the observation space from syndata
+    :class:`~infinigen.core.syndata.observation.ObservationConfig` to
+    Genesis's native ``camera.render()`` keyword arguments.
+
+    Genesis natively supports multi-pass rendering (RGB, depth,
+    segmentation, normals) and handles sensor noise through its
+    differentiable renderer.  This config bridges the syndata observation
+    specification to Genesis's API.
+
+    Parameters
+    ----------
+    rgb : bool
+        Render RGB image.
+    depth : bool
+        Render depth map.
+    segmentation : bool
+        Render instance segmentation mask.
+    normal : bool
+        Render surface normal map.
+    colorize_seg : bool
+        Colourize segmentation output for visualisation.
+    depth_clip_m : float
+        Maximum depth in metres (matching real sensor clipping).
+    gaussian_noise_std : float
+        Post-render Gaussian noise σ (applied to RGB; 0 = none).
+        Genesis's differentiable renderer can apply this natively.
+    """
+
+    rgb: bool = True
+    depth: bool = True
+    segmentation: bool = False
+    normal: bool = False
+    colorize_seg: bool = False
+    depth_clip_m: float = 100.0
+    gaussian_noise_std: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.depth_clip_m <= 0:
+            msg = f"depth_clip_m must be positive, got {self.depth_clip_m}"
+            raise ValueError(msg)
+        if self.gaussian_noise_std < 0:
+            msg = f"gaussian_noise_std must be non-negative, got {self.gaussian_noise_std}"
+            raise ValueError(msg)
+
+    def render_kwargs(self) -> dict[str, bool]:
+        """Return keyword arguments for ``camera.render()``."""
+        return {
+            "rgb": self.rgb,
+            "depth": self.depth,
+            "segmentation": self.segmentation,
+            "normal": self.normal,
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialise to a JSON-compatible dict."""
+        return asdict(self)
+
+
+# ---------------------------------------------------------------------------
 # Full scene configuration
 # ---------------------------------------------------------------------------
 
@@ -273,6 +396,12 @@ class GenesisSceneConfig:
         Camera(s) in the scene.
     lights : list[GenesisLight]
         Light sources.
+    episode : GenesisEpisodeConfig | None
+        Simulation episode configuration (loop length, dt, video recording).
+        If *None*, defaults are used.
+    observation : GenesisObservationConfig | None
+        Observation/rendering configuration (which passes to render,
+        depth clipping, sensor noise).  If *None*, defaults are used.
     renderer : str
         ``"RayTracer"`` or ``"Rasterizer"``.
     backend : str
@@ -286,6 +415,8 @@ class GenesisSceneConfig:
     entities: list[GenesisEntityConfig] = field(default_factory=list)
     cameras: list[GenesisCamera] = field(default_factory=list)
     lights: list[GenesisLight] = field(default_factory=list)
+    episode: GenesisEpisodeConfig | None = None
+    observation: GenesisObservationConfig | None = None
     renderer: str = "RayTracer"
     backend: str = "cuda"
     gravity: tuple[float, float, float] = (0.0, 0.0, -9.81)
@@ -301,7 +432,7 @@ class GenesisSceneConfig:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-compatible dict."""
-        return {
+        d: dict[str, Any] = {
             "entities": [e.to_dict() for e in self.entities],
             "cameras": [c.to_dict() for c in self.cameras],
             "lights": [l.to_dict() for l in self.lights],
@@ -310,6 +441,11 @@ class GenesisSceneConfig:
             "gravity": self.gravity,
             "dt": self.dt,
         }
+        if self.episode is not None:
+            d["episode"] = self.episode.to_dict()
+        if self.observation is not None:
+            d["observation"] = self.observation.to_dict()
+        return d
 
     def save_json(self, path: str | Path) -> None:
         """Write scene config to a JSON file."""
@@ -319,10 +455,14 @@ class GenesisSceneConfig:
     def load_json(path: str | Path) -> GenesisSceneConfig:
         """Load scene config from a JSON file."""
         data = json.loads(Path(path).read_text())
+        ep_data = data.get("episode")
+        obs_data = data.get("observation")
         return GenesisSceneConfig(
             entities=[GenesisEntityConfig(**e) for e in data.get("entities", [])],
             cameras=[GenesisCamera(**c) for c in data.get("cameras", [])],
             lights=[GenesisLight(**l) for l in data.get("lights", [])],
+            episode=GenesisEpisodeConfig(**ep_data) if ep_data else None,
+            observation=GenesisObservationConfig(**obs_data) if obs_data else None,
             renderer=data.get("renderer", "RayTracer"),
             backend=data.get("backend", "cuda"),
             gravity=tuple(data.get("gravity", (0.0, 0.0, -9.81))),
@@ -509,6 +649,69 @@ def observation_to_render_kwargs(obs: Any) -> dict[str, bool]:
         "segmentation": PASS_OBJECT_INDEX in obs.passes,
         "normal": PASS_NORMAL in obs.passes,
     }
+
+
+def episode_to_genesis(episode: Any, *, dt: float = 0.01) -> GenesisEpisodeConfig:
+    """Convert syndata :class:`EpisodeConfig` to a Genesis episode config.
+
+    Genesis natively handles the simulation loop (``scene.step(dt)``),
+    vectorised environment resets, and camera video recording — so this
+    converter maps the syndata temporal structure to Genesis's native
+    parameters.
+
+    Parameters
+    ----------
+    episode : EpisodeConfig
+        Syndata episode configuration.
+    dt : float
+        Physics timestep (seconds).
+
+    Returns
+    -------
+    GenesisEpisodeConfig
+        Genesis-native episode configuration.
+    """
+    return GenesisEpisodeConfig(
+        num_steps=episode.num_frames,
+        dt=dt,
+        fps=episode.fps,
+        max_episode_length=episode.num_frames,
+        record_video=episode.num_frames > 1,
+    )
+
+
+def observation_to_genesis(obs: Any) -> GenesisObservationConfig:
+    """Convert syndata :class:`ObservationConfig` to a Genesis observation config.
+
+    Genesis natively supports multi-pass camera rendering (RGB, depth,
+    segmentation, normals) and handles sensor noise through its
+    differentiable renderer.  This converter maps the syndata observation
+    space to Genesis's ``camera.render()`` keyword arguments.
+
+    Parameters
+    ----------
+    obs : ObservationConfig
+        Syndata observation space configuration.
+
+    Returns
+    -------
+    GenesisObservationConfig
+        Genesis-native observation configuration.
+    """
+    from infinigen.core.syndata.observation import (
+        PASS_DEPTH,
+        PASS_NORMAL,
+        PASS_OBJECT_INDEX,
+    )
+
+    return GenesisObservationConfig(
+        rgb=obs.include_rgb,
+        depth=PASS_DEPTH in obs.passes,
+        segmentation=PASS_OBJECT_INDEX in obs.passes,
+        normal=PASS_NORMAL in obs.passes,
+        depth_clip_m=obs.depth_clip_m,
+        gaussian_noise_std=obs.noise.gaussian_std,
+    )
 
 
 def randomisation_to_genesis_lights(
@@ -753,14 +956,58 @@ def to_genesis_script(config: GenesisSceneConfig) -> str:
     # ---- Build & simulate ----
     lines.append("scene.build()")
     lines.append("")
+
+    ep = config.episode or GenesisEpisodeConfig()
+    obs = config.observation or GenesisObservationConfig()
+    num_steps = ep.num_steps
+
+    # Use dt from episode config (overrides scene dt for the loop)
+    dt_val = ep.dt
+
+    # Video recording setup (Genesis native feature)
+    if ep.record_video and config.cameras:
+        first_cam = config.cameras[0].name.replace("-", "_").replace(" ", "_")
+        lines.append(f"# Video recording at {ep.fps} FPS (Genesis native)")
+        lines.append(f"{first_cam}.start_recording()")
+        lines.append("")
+
+    # Build render() kwargs from observation config
+    render_passes: list[str] = []
+    if obs.rgb:
+        render_passes.append("rgb=True")
+    if obs.depth:
+        render_passes.append("depth=True")
+    if obs.segmentation:
+        render_passes.append("segmentation=True")
+    if obs.normal:
+        render_passes.append("normal=True")
+    render_kwarg_str = ", ".join(render_passes) if render_passes else "rgb=True"
+
     lines.append("# ---- Simulation loop ----")
-    lines.append(f"for step in range({_DEFAULT_SIMULATION_STEPS}):")
-    lines.append("    scene.step()")
+    lines.append(f"for step in range({num_steps}):")
+    lines.append(f"    scene.step(dt={dt_val!r})")
     if config.cameras:
         first_cam = config.cameras[0].name.replace("-", "_").replace(" ", "_")
-        lines.append(f"    rgb, depth, seg, normal = {first_cam}.render(")
-        lines.append("        rgb=True, depth=True, segmentation=True, normal=True,")
+        # Unpack only the passes that are enabled
+        unpack_names = []
+        if obs.rgb:
+            unpack_names.append("rgb")
+        if obs.depth:
+            unpack_names.append("depth")
+        if obs.segmentation:
+            unpack_names.append("seg")
+        if obs.normal:
+            unpack_names.append("normal")
+        unpack_str = ", ".join(unpack_names) if unpack_names else "rgb"
+        lines.append(f"    {unpack_str} = {first_cam}.render(")
+        lines.append(f"        {render_kwarg_str},")
         lines.append("    )")
+
+    # Video recording stop
+    if ep.record_video and config.cameras:
+        lines.append("")
+        first_cam = config.cameras[0].name.replace("-", "_").replace(" ", "_")
+        lines.append(f'{first_cam}.stop_recording(save_to_filename="episode.mp4", fps={ep.fps})')
     lines.append("")
 
     return "\n".join(lines)
@@ -777,17 +1024,25 @@ def build_genesis_config(
     frame_metadata: Any | None = None,
     drone_camera: Any | None = None,
     camera_rig: Any | None = None,
+    episode: Any | None = None,
     observation: Any | None = None,
     randomiser: Any | None = None,
     resolution: tuple[int, int] = (640, 480),
     backend: str = "cuda",
     renderer: str = "RayTracer",
+    dt: float = 0.01,
 ) -> GenesisSceneConfig:
     """Assemble a complete :class:`GenesisSceneConfig` from syndata components.
 
     This is the main entry-point for converting an Infinigen scene
     (export directory + syndata metadata/config) into a Genesis-ready
     configuration.
+
+    Genesis natively handles episode management (simulation loop, resets,
+    vectorised envs) and observation rendering (multi-pass camera, sensor
+    noise).  The *episode* and *observation* parameters are mapped to
+    Genesis's native APIs via :func:`episode_to_genesis` and
+    :func:`observation_to_genesis`.
 
     Parameters
     ----------
@@ -799,8 +1054,12 @@ def build_genesis_config(
         Camera optics.
     camera_rig : CameraRigConfig | None
         Camera rig layout.
+    episode : EpisodeConfig | None
+        Episode timing config — mapped to Genesis simulation loop
+        parameters via :func:`episode_to_genesis`.
     observation : ObservationConfig | None
-        Observation space config.
+        Observation space config — mapped to Genesis ``cam.render()``
+        parameters via :func:`observation_to_genesis`.
     randomiser : DomainRandomiser | None
         Domain randomisation source for lighting.
     resolution : tuple[int, int]
@@ -809,6 +1068,8 @@ def build_genesis_config(
         Genesis compute backend.
     renderer : str
         Renderer type.
+    dt : float
+        Physics timestep (seconds).
 
     Returns
     -------
@@ -818,6 +1079,8 @@ def build_genesis_config(
     entities: list[GenesisEntityConfig] = []
     cameras: list[GenesisCamera] = []
     lights: list[GenesisLight] = []
+    genesis_episode: GenesisEpisodeConfig | None = None
+    genesis_observation: GenesisObservationConfig | None = None
 
     # ---- Discover assets from export directory ----
     if export_dir is not None:
@@ -848,10 +1111,21 @@ def build_genesis_config(
     else:
         lights = [GenesisLight()]  # default overhead light
 
+    # ---- Episode → Genesis simulation loop ----
+    if episode is not None:
+        genesis_episode = episode_to_genesis(episode, dt=dt)
+
+    # ---- Observation → Genesis render passes ----
+    if observation is not None:
+        genesis_observation = observation_to_genesis(observation)
+
     return GenesisSceneConfig(
         entities=entities,
         cameras=cameras,
         lights=lights,
+        episode=genesis_episode,
+        observation=genesis_observation,
         renderer=renderer,
         backend=backend,
+        dt=dt,
     )
