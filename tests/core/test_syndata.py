@@ -74,6 +74,7 @@ from infinigen.core.syndata.randomisation import DomainRandomiser
 from infinigen.core.syndata.resolution import resolution_for_stage
 from infinigen.core.syndata.validation import SceneValidator
 from infinigen.core.syndata.world_gen import (
+    InfinigenOverlayHints,
     VisualStyle,
     WorldConfig,
     generate_world,
@@ -3229,3 +3230,153 @@ class TestEndToEndWorldGenPipeline:
         # Genesis entities are a separate conversion step
         entities = world_to_genesis_entities(boxes)
         assert all(e["morph_type"] == "Box" for e in entities)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  InfinigenOverlayHints — asset category & render quality per stage
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestInfinigenOverlayHints:
+    """Tests for InfinigenOverlayHints — what Infinigen renders at each stage."""
+
+    def test_from_complexity_low(self):
+        """Very low complexity → flat corridor, no assets."""
+        h = InfinigenOverlayHints.from_complexity(0.0)
+        assert h.environment_type == "corridor"
+        assert h.material_complexity == "flat"
+        assert not h.enabled_vegetation
+        assert not h.enabled_furniture
+        assert not h.enabled_vehicles
+        assert not h.enabled_dynamic_objects
+        assert h.texture_resolution == 256
+
+    def test_from_complexity_mid_low(self):
+        """Low-mid complexity → basic PBR, still corridor."""
+        h = InfinigenOverlayHints.from_complexity(0.25)
+        assert h.environment_type == "corridor"
+        assert h.material_complexity == "basic_pbr"
+        assert h.lighting_complexity == "single_sun"
+        assert h.texture_resolution == 512
+
+    def test_from_complexity_mid(self):
+        """Mid complexity → indoor with furniture."""
+        h = InfinigenOverlayHints.from_complexity(0.45)
+        assert h.environment_type == "indoor"
+        assert h.enabled_furniture
+        assert h.lighting_complexity == "multi_light"
+        assert h.texture_resolution == 1024
+
+    def test_from_complexity_mid_high(self):
+        """Mid-high → mixed, vegetation, dynamic objects, weather."""
+        h = InfinigenOverlayHints.from_complexity(0.65)
+        assert h.environment_type == "mixed"
+        assert h.enabled_vegetation
+        assert h.enabled_dynamic_objects
+        assert h.enabled_weather
+        assert h.material_complexity == "full_pbr"
+
+    def test_from_complexity_high(self):
+        """High → outdoor, vehicles, pedestrians, HDR."""
+        h = InfinigenOverlayHints.from_complexity(0.85)
+        assert h.environment_type == "outdoor_street"
+        assert h.enabled_vehicles
+        assert h.enabled_pedestrians
+        assert h.lighting_complexity == "hdr_environment"
+        assert h.texture_resolution == 2048
+
+    def test_from_complexity_max(self):
+        """Maximum → full photorealism, subsurface, 4K textures."""
+        h = InfinigenOverlayHints.from_complexity(1.0)
+        assert h.material_complexity == "subsurface"
+        assert h.texture_resolution == 4096
+        assert h.subdiv_level == 3
+        assert h.enabled_vegetation
+        assert h.enabled_vehicles
+        assert h.enabled_dynamic_objects
+        assert h.enabled_weather
+        assert h.enabled_pedestrians
+
+    def test_progressive_texture_resolution(self):
+        """Texture resolution increases monotonically with complexity."""
+        prev = 0
+        for c in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
+            h = InfinigenOverlayHints.from_complexity(c)
+            assert h.texture_resolution >= prev
+            prev = h.texture_resolution
+
+    def test_progressive_subdiv_level(self):
+        """Subdiv level increases monotonically with complexity."""
+        prev = 0
+        for c in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
+            h = InfinigenOverlayHints.from_complexity(c)
+            assert h.subdiv_level >= prev
+            prev = h.subdiv_level
+
+    def test_to_gin_hints(self):
+        """to_gin_hints() returns a dict with all overlay keys."""
+        h = InfinigenOverlayHints.from_complexity(0.5)
+        gin = h.to_gin_hints()
+        assert "environment_type" in gin
+        assert "texture_resolution" in gin
+        assert "enable_vegetation" in gin
+        assert "enable_furniture" in gin
+        assert "material_complexity" in gin
+
+    def test_worldconfig_overlay_hints_property(self):
+        """WorldConfig.overlay_hints matches from_complexity(c)."""
+        cfg = WorldConfig(complexity=0.7, seed=42)
+        h = cfg.overlay_hints
+        expected = InfinigenOverlayHints.from_complexity(0.7)
+        assert h.environment_type == expected.environment_type
+        assert h.texture_resolution == expected.texture_resolution
+        assert h.enabled_vegetation == expected.enabled_vegetation
+
+    def test_gin_overrides_include_overlay(self):
+        """world_gin_overrides() includes overlay hints."""
+        cfg = WorldConfig(complexity=0.8, seed=42)
+        overrides = world_gin_overrides(cfg)
+        assert "environment_type" in overrides
+        assert "texture_resolution" in overrides
+        assert "enable_vegetation" in overrides
+        assert overrides["enable_vegetation"] is True
+
+    def test_world_summary_includes_overlay(self):
+        """world_summary() includes overlay section."""
+        cfg = WorldConfig.doom(seed=42)
+        s = world_summary(cfg)
+        assert "overlay" in s
+        assert "stage_description" in s["overlay"]
+        assert "environment_type" in s["overlay"]
+
+    def test_validation_invalid_env_type(self):
+        """Invalid environment_type raises ValueError."""
+        with pytest.raises(ValueError, match="environment_type"):
+            InfinigenOverlayHints(environment_type="spaceship")
+
+    def test_validation_invalid_material(self):
+        """Invalid material_complexity raises ValueError."""
+        with pytest.raises(ValueError, match="material_complexity"):
+            InfinigenOverlayHints(material_complexity="raytraced")
+
+    def test_validation_invalid_lighting(self):
+        """Invalid lighting_complexity raises ValueError."""
+        with pytest.raises(ValueError, match="lighting_complexity"):
+            InfinigenOverlayHints(lighting_complexity="neon")
+
+    def test_validation_negative_texture_res(self):
+        """Negative texture_resolution raises ValueError."""
+        with pytest.raises(ValueError, match="texture_resolution"):
+            InfinigenOverlayHints(texture_resolution=0)
+
+    def test_validation_negative_subdiv(self):
+        """Negative subdiv_level raises ValueError."""
+        with pytest.raises(ValueError, match="subdiv_level"):
+            InfinigenOverlayHints(subdiv_level=-1)
+
+    def test_clamp_complexity_bounds(self):
+        """from_complexity clamps values outside [0, 1]."""
+        h_low = InfinigenOverlayHints.from_complexity(-0.5)
+        assert h_low.environment_type == "corridor"
+        h_high = InfinigenOverlayHints.from_complexity(1.5)
+        assert h_high.material_complexity == "subsurface"

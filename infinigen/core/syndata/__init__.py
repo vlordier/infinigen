@@ -86,6 +86,7 @@ from infinigen.core.syndata.randomisation import DomainRandomiser
 from infinigen.core.syndata.resolution import resolution_for_stage
 from infinigen.core.syndata.validation import SceneValidator
 from infinigen.core.syndata.world_gen import (
+    InfinigenOverlayHints,
     VisualStyle,
     WorldConfig,
     generate_world,
@@ -117,6 +118,7 @@ __all__ = [
     # ── 2. Procedural world generation (Infinigen geometry) ──
     #    WorldConfig → generate_world() → list[BBox3D]
     #    Pure 3D layout, no Genesis/RL types.
+    "InfinigenOverlayHints",
     "VisualStyle",
     "WorldConfig",
     "generate_world",

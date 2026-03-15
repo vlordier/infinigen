@@ -88,6 +88,224 @@ _WALL_THICKNESS: float = 0.1  # Wall / floor / ceiling thickness
 _DEBRIS_SIZE_RANGE: tuple[float, float] = (0.05, 0.3)
 
 # ---------------------------------------------------------------------------
+# Infinigen overlay hints
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class InfinigenOverlayHints:
+    """Hints describing what Infinigen should render at a given complexity.
+
+    The box layout from :func:`generate_world` is the **coarse 3D skeleton**.
+    Infinigen overlays it with photorealistic assets — the *kind* of assets
+    depends on the curriculum stage.  This dataclass communicates those
+    intentions to the Infinigen pipeline (or to a human configuring gin).
+
+    These hints are purely informational.  They do **not** run Blender or
+    generate any assets themselves.  They describe *what category* of
+    Infinigen assets should be used, letting the pipeline (or a curriculum
+    controller) select the right gin configs.
+
+    The ``enabled_*`` booleans indicate which asset categories to activate.
+    ``texture_resolution`` and ``subdiv_level`` control render quality.
+
+    Parameters
+    ----------
+    stage_description : str
+        Human-readable description of the curriculum stage.
+    environment_type : str
+        One of ``"corridor"``, ``"indoor"``, ``"outdoor_street"``,
+        ``"outdoor_forest"``, ``"mixed"``.
+    texture_resolution : int
+        Target texture resolution (pixels, power-of-2).
+    subdiv_level : int
+        Mesh subdivision level (0 = coarse, 3 = very fine).
+    enabled_vegetation : bool
+        If True, scatter vegetation (trees, bushes, grass).
+    enabled_furniture : bool
+        If True, place indoor furniture assets.
+    enabled_vehicles : bool
+        If True, add parked/moving vehicles.
+    enabled_dynamic_objects : bool
+        If True, add moving elements (swinging doors, tree branches,
+        wind-blown debris).
+    enabled_weather : bool
+        If True, add weather effects (rain, snow, dust particles).
+    enabled_pedestrians : bool
+        If True, add pedestrian/human assets.
+    material_complexity : str
+        One of ``"flat"``, ``"basic_pbr"``, ``"full_pbr"``,
+        ``"subsurface"`` — controls shader complexity.
+    lighting_complexity : str
+        One of ``"uniform"``, ``"single_sun"``, ``"multi_light"``,
+        ``"hdr_environment"`` — controls lighting setup.
+    """
+
+    stage_description: str = "flat corridor"
+    environment_type: str = "corridor"
+    texture_resolution: int = 256
+    subdiv_level: int = 0
+    enabled_vegetation: bool = False
+    enabled_furniture: bool = False
+    enabled_vehicles: bool = False
+    enabled_dynamic_objects: bool = False
+    enabled_weather: bool = False
+    enabled_pedestrians: bool = False
+    material_complexity: str = "flat"
+    lighting_complexity: str = "uniform"
+
+    _VALID_ENV_TYPES: tuple[str, ...] = (
+        "corridor", "indoor", "outdoor_street", "outdoor_forest", "mixed",
+    )
+    _VALID_MATERIALS: tuple[str, ...] = (
+        "flat", "basic_pbr", "full_pbr", "subsurface",
+    )
+    _VALID_LIGHTING: tuple[str, ...] = (
+        "uniform", "single_sun", "multi_light", "hdr_environment",
+    )
+
+    def __post_init__(self) -> None:
+        if self.environment_type not in self._VALID_ENV_TYPES:
+            msg = (
+                f"environment_type must be one of {self._VALID_ENV_TYPES}, "
+                f"got {self.environment_type!r}"
+            )
+            raise ValueError(msg)
+        if self.material_complexity not in self._VALID_MATERIALS:
+            msg = (
+                f"material_complexity must be one of {self._VALID_MATERIALS}, "
+                f"got {self.material_complexity!r}"
+            )
+            raise ValueError(msg)
+        if self.lighting_complexity not in self._VALID_LIGHTING:
+            msg = (
+                f"lighting_complexity must be one of {self._VALID_LIGHTING}, "
+                f"got {self.lighting_complexity!r}"
+            )
+            raise ValueError(msg)
+        if self.texture_resolution < 1:
+            msg = f"texture_resolution must be >= 1, got {self.texture_resolution}"
+            raise ValueError(msg)
+        if self.subdiv_level < 0:
+            msg = f"subdiv_level must be >= 0, got {self.subdiv_level}"
+            raise ValueError(msg)
+
+    @staticmethod
+    def from_complexity(complexity: float) -> InfinigenOverlayHints:
+        """Derive overlay hints from a complexity value in [0, 1].
+
+        Progression (approximate thresholds):
+
+        * **c < 0.15**: Flat-shaded corridor.  No assets.  For learning
+          basic obstacle avoidance (up/down/left/right/forward).
+        * **c 0.15–0.35**: Basic PBR materials, single directional light.
+          Coloured walls, varied floor textures.
+        * **c 0.35–0.55**: Indoor environment with furniture.  Multi-light
+          setup.  Teaches room-to-room navigation.
+        * **c 0.55–0.75**: Mixed indoor/outdoor.  Vegetation begins
+          (potted plants → trees).  Dynamic objects (swinging doors).
+          Fog, basic weather.
+        * **c 0.75–0.90**: Outdoor streets/forest.  Vehicles, pedestrians,
+          full PBR materials, HDR environment lighting.
+        * **c 0.90–1.00**: Full complexity — subsurface materials, dense
+          vegetation, weather particles, moving tree branches, vehicles.
+          Photorealistic Infinigen rendering at high resolution.
+        """
+        c = max(0.0, min(1.0, complexity))
+
+        if c < 0.15:
+            return InfinigenOverlayHints(
+                stage_description="Flat corridor — basic avoidance training",
+                environment_type="corridor",
+                texture_resolution=256,
+                subdiv_level=0,
+                material_complexity="flat",
+                lighting_complexity="uniform",
+            )
+        if c < 0.35:
+            return InfinigenOverlayHints(
+                stage_description="Textured corridor — visual robustness",
+                environment_type="corridor",
+                texture_resolution=512,
+                subdiv_level=1,
+                material_complexity="basic_pbr",
+                lighting_complexity="single_sun",
+            )
+        if c < 0.55:
+            return InfinigenOverlayHints(
+                stage_description="Indoor rooms — furniture, doors, multi-light",
+                environment_type="indoor",
+                texture_resolution=1024,
+                subdiv_level=1,
+                enabled_furniture=True,
+                material_complexity="basic_pbr",
+                lighting_complexity="multi_light",
+            )
+        if c < 0.75:
+            return InfinigenOverlayHints(
+                stage_description="Mixed indoor/outdoor — vegetation, dynamic objects, fog",
+                environment_type="mixed",
+                texture_resolution=1024,
+                subdiv_level=2,
+                enabled_vegetation=True,
+                enabled_furniture=True,
+                enabled_dynamic_objects=True,
+                enabled_weather=True,
+                material_complexity="full_pbr",
+                lighting_complexity="multi_light",
+            )
+        if c < 0.90:
+            return InfinigenOverlayHints(
+                stage_description="Outdoor streets/forest — vehicles, HDR, high-res",
+                environment_type="outdoor_street",
+                texture_resolution=2048,
+                subdiv_level=2,
+                enabled_vegetation=True,
+                enabled_furniture=True,
+                enabled_vehicles=True,
+                enabled_dynamic_objects=True,
+                enabled_weather=True,
+                enabled_pedestrians=True,
+                material_complexity="full_pbr",
+                lighting_complexity="hdr_environment",
+            )
+        return InfinigenOverlayHints(
+            stage_description="Full photorealism — all Infinigen assets, max quality",
+            environment_type="mixed",
+            texture_resolution=4096,
+            subdiv_level=3,
+            enabled_vegetation=True,
+            enabled_furniture=True,
+            enabled_vehicles=True,
+            enabled_dynamic_objects=True,
+            enabled_weather=True,
+            enabled_pedestrians=True,
+            material_complexity="subsurface",
+            lighting_complexity="hdr_environment",
+        )
+
+    def to_gin_hints(self) -> dict[str, object]:
+        """Return Infinigen gin-compatible hints for the overlay.
+
+        These are suggestions for the Infinigen pipeline — the actual
+        gin bindings depend on the specific scene recipe.
+        """
+        return {
+            "environment_type": self.environment_type,
+            "texture_resolution": self.texture_resolution,
+            "subdiv_level": self.subdiv_level,
+            "enable_vegetation": self.enabled_vegetation,
+            "enable_furniture": self.enabled_furniture,
+            "enable_vehicles": self.enabled_vehicles,
+            "enable_dynamic_objects": self.enabled_dynamic_objects,
+            "enable_weather": self.enabled_weather,
+            "enable_pedestrians": self.enabled_pedestrians,
+            "material_complexity": self.material_complexity,
+            "lighting_complexity": self.lighting_complexity,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Visual style config
 # ---------------------------------------------------------------------------
 
@@ -370,6 +588,17 @@ class WorldConfig:
     def effective_style(self) -> VisualStyle:
         """Visual style after applying complexity defaults."""
         return self._effective["style"]
+
+    @property
+    def overlay_hints(self) -> InfinigenOverlayHints:
+        """Infinigen asset overlay hints derived from complexity.
+
+        Describes which categories of Infinigen assets (vegetation,
+        furniture, vehicles, weather, etc.) and what render quality
+        (texture resolution, subdivision level, material complexity)
+        should be used at this complexity level.
+        """
+        return InfinigenOverlayHints.from_complexity(self.complexity)
 
     # ---- Preset factories ---------------------------------------------------
 
@@ -855,6 +1084,7 @@ def world_summary(config: WorldConfig) -> dict[str, Any]:
     All values are the *effective* parameters after complexity derivation.
     """
     style = config.effective_style
+    hints = config.overlay_hints
     return {
         "complexity": config.complexity,
         "seed": config.seed,
@@ -871,6 +1101,20 @@ def world_summary(config: WorldConfig) -> dict[str, Any]:
         "cloud_density": round(style.cloud_density, 3),
         "point_light_count": style.point_light_count,
         "wall_color_saturation": round(style.wall_color_saturation, 3),
+        "overlay": {
+            "stage_description": hints.stage_description,
+            "environment_type": hints.environment_type,
+            "texture_resolution": hints.texture_resolution,
+            "subdiv_level": hints.subdiv_level,
+            "material_complexity": hints.material_complexity,
+            "lighting_complexity": hints.lighting_complexity,
+            "enabled_vegetation": hints.enabled_vegetation,
+            "enabled_furniture": hints.enabled_furniture,
+            "enabled_vehicles": hints.enabled_vehicles,
+            "enabled_dynamic_objects": hints.enabled_dynamic_objects,
+            "enabled_weather": hints.enabled_weather,
+            "enabled_pedestrians": hints.enabled_pedestrians,
+        },
     }
 
 
@@ -1117,7 +1361,8 @@ def world_gin_overrides(config: WorldConfig) -> dict[str, object]:
         gin bindings (e.g. ``"grid_coarsen"``, ``"scatter_density_multiplier"``).
     """
     style = config.effective_style
-    return {
+    hints = config.overlay_hints
+    overrides: dict[str, object] = {
         "grid_coarsen": max(1, round(4 - 3 * config.complexity)),
         "object_count": config.effective_num_columns + config.effective_num_rooms * 3,
         "scatter_density_multiplier": round(0.1 + 0.9 * config.complexity, 4),
@@ -1130,3 +1375,7 @@ def world_gin_overrides(config: WorldConfig) -> dict[str, object]:
             0.5 * style.ambient_intensity, 4
         ),
     }
+    # Merge overlay hints so the Infinigen pipeline knows which asset
+    # categories and render quality to use at this complexity level.
+    overrides.update(hints.to_gin_hints())
+    return overrides
