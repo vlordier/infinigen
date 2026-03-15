@@ -701,15 +701,22 @@ class WorldConfig:
 
         Uses a gentle sqrt curve so early stages ramp slowly, giving the
         agent more time on simple environments before complexity increases.
+        This is the recommended entry-point for automatic curriculum
+        scheduling.
 
-        Examples (approximate, seed-dependent)::
+        Typical progression (approximate, seed-dependent)::
 
-            progress=0.00 → c≈0.00  flappy corridor        (~10 boxes)
-            progress=0.05 → c≈0.22  textured corridor       (~16 boxes)
-            progress=0.20 → c≈0.45  rooms with furniture    (~50 boxes)
-            progress=0.50 → c≈0.71  branching paths + fog   (~100 boxes)
-            progress=0.80 → c≈0.89  multi-level maze        (~180 boxes)
-            progress=1.00 → c≈1.00  dense Doom-like maze    (~300 boxes)
+            progress=0.00 → c≈0.00  trivial corridor     (~10 boxes, flat)
+            progress=0.05 → c≈0.22  textured corridor     (~16 boxes, PBR)
+            progress=0.20 → c≈0.45  rooms with furniture  (~50 boxes)
+            progress=0.50 → c≈0.71  branching + fog       (~100 boxes)
+            progress=0.80 → c≈0.89  multi-level maze      (~180 boxes)
+            progress=1.00 → c≈1.00  full photorealism     (~300 boxes)
+
+        The output ``list[BBox3D]`` from :func:`generate_world` describes
+        pure 3D geometry for Infinigen.  Use :func:`world_to_genesis_entities`
+        to convert to Genesis entities, or :func:`world_to_drone_env_config`
+        to configure the GenesisDroneEnv RL gym.
         """
         c = math.sqrt(max(0.0, min(1.0, progress)))
         return WorldConfig(complexity=c, seed=seed)

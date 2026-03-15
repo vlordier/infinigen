@@ -940,9 +940,18 @@ def _format_tuple(t: tuple) -> str:
 def to_genesis_script(config: GenesisSceneConfig) -> str:
     """Generate a self-contained Python script that builds a Genesis scene.
 
-    The generated script imports ``genesis``, initialises the backend,
+    **Bridge layer: Infinigen → Genesis World.**
+
+    The generated script ``import genesis``, initialises the backend,
     creates a scene with all entities/cameras/lights, builds it, and
-    runs a basic simulation loop.
+    runs a simulation loop.  Genesis handles the physics, rendering,
+    and episode management natively — this script is the entry-point.
+
+    Usage::
+
+        script = to_genesis_script(config)
+        Path("genesis_scene.py").write_text(script)
+        # Then run: python genesis_scene.py
 
     Parameters
     ----------

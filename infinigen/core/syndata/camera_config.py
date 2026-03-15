@@ -2,10 +2,16 @@
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Drone camera configuration for UAV swarm RL.
+"""Drone camera configuration for the Infinigen rendering pipeline.
 
-Configures camera rigs matching Infinigen's ``spawn_camera_rigs`` gin
-structure, including stereo baselines and multi-camera setups.
+Configures camera optics (FoV, focal length, aspect ratio) and rig
+layouts (stereo baseline, multi-drone positions) matching Infinigen's
+``spawn_camera_rigs`` gin structure.
+
+**Infinigen pipeline config** — these define how Infinigen renders
+the scene.  When using Genesis World, convert via
+:func:`~infinigen.core.syndata.genesis_export.camera_from_syndata`
+to Genesis camera parameters (``gs.Camera``).
 
 All helpers are pure Python — no ``bpy`` dependency.
 """
