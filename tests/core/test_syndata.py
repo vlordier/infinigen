@@ -1915,7 +1915,7 @@ class TestDroneEnvConfig:
         assert loaded.map_size == (5.0, 5.0)
 
     def test_json_round_trip_tuple_normalisation(self, tmp_path):
-        """Ensure tuples survive JSON round-trip (JSON has only arrays)."""
+        """Ensure tuples survive JSON round-trip (JSON only has arrays)."""
         cfg = DroneEnvConfig(
             init_pos_range={"x": (-1.0, 1.0), "y": (-0.5, 0.5), "z": (0.3, 0.7)},
             command_ranges={"x": (-2.0, 2.0), "y": (-2.0, 2.0), "z": (0.5, 1.5)},

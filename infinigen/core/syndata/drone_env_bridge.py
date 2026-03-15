@@ -268,11 +268,11 @@ class DroneEnvConfig:
     def load_json(path: str | Path) -> DroneEnvConfig:
         """Load config from a JSON file."""
         data = json.loads(Path(path).read_text())
-        # Normalize tuple fields from lists
+        # Normalise tuple fields from lists
         for key in ("cam_res", "cam_quat", "cam_pos", "drone_init_pos", "map_size"):
             if key in data and isinstance(data[key], list):
                 data[key] = tuple(data[key])
-        # Normalize nested tuple dicts
+        # Normalise nested tuple dicts
         for key in ("init_pos_range", "command_ranges"):
             if key in data:
                 data[key] = {
