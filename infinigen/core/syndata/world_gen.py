@@ -409,9 +409,8 @@ class WorldConfig:
 
     **Separation of concerns**: this config describes **3D geometry only**
     (Infinigen's job).  The RL simulation parameters (rewards, episode
-    length, termination, drone dynamics) belong to GenesisDroneEnv and
-    are derived from this config via :func:`world_to_drone_env_config`
-    (a separate conversion step).
+    length, termination, drone dynamics) belong to the separate
+    orchestration project that consumes this package's outputs.
 
     Parameters
     ----------
@@ -720,9 +719,8 @@ class WorldConfig:
             progress=1.00 → c≈1.00  full photorealism     (~300 boxes)
 
         The output ``list[BBox3D]`` from :func:`generate_world` describes
-        pure 3D geometry for Infinigen.  Use :func:`world_to_genesis_entities`
-        to convert to Genesis entities, or :func:`world_to_drone_env_config`
-        to configure the GenesisDroneEnv RL gym.
+        pure 3D geometry for Infinigen.  Downstream consumers (Genesis
+        World, GenesisDroneEnv) convert these via separate bridge projects.
         """
         c = math.sqrt(max(0.0, min(1.0, progress)))
         return WorldConfig(complexity=c, seed=seed)
@@ -960,14 +958,13 @@ def generate_world(config: WorldConfig) -> list[BBox3D]:
     furniture, rooms, corridors, vertical shafts, and scattered debris.
     Box counts scale with complexity: ~10 at c=0.05, ~300 at c=0.98.
 
-    **Downstream consumers** (all separate conversion steps):
+    **Downstream consumers** (all separate projects):
 
     * **Infinigen pipeline**: reads :func:`world_gin_overrides` to
       configure scene generation (textures, materials, lighting, fog).
-    * **Genesis World**: receives geometry via
-      :func:`world_to_genesis_entities` for physics collision.
-    * **GenesisDroneEnv**: receives simulation params via
-      :func:`world_to_drone_env_config` for RL environment setup.
+    * **Genesis World / GenesisDroneEnv**: consume the ``list[BBox3D]``
+      output via separate bridge projects for physics simulation and
+      RL environment setup.
 
     Parameters
     ----------
