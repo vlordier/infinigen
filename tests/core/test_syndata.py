@@ -2836,6 +2836,8 @@ class TestVisualStyle:
     def test_cloud_bounds(self):
         with pytest.raises(ValueError, match="cloud_density"):
             VisualStyle(cloud_density=-0.1)
+        with pytest.raises(ValueError, match="cloud_density"):
+            VisualStyle(cloud_density=1.1)
 
     def test_negative_ambient(self):
         with pytest.raises(ValueError, match="ambient_intensity"):
@@ -3002,6 +3004,8 @@ class TestGenerateWorld:
         # At minimum floor/ceiling labels exist
         assert any("floor" in l for l in labels)
         assert any("ceiling" in l for l in labels)
+        # Most labels should be unique (allow ~30% duplicates for floor/ceiling/wall)
+        assert len(set(labels)) >= len(labels) * 0.7
 
     def test_rooms_at_moderate_complexity(self):
         cfg = WorldConfig(complexity=0.5, seed=42)

@@ -794,9 +794,15 @@ def world_to_frame_metadata(
     cor_h = config.corridor_height
 
     # Compute basic depth stats from corridor geometry
+    cam_pos = np.array([0.3, 0.0, cor_h / 2])
     obstacle_boxes = [b for b in boxes if "col_" in b.label or "furniture" in b.label or "debris" in b.label]
     if obstacle_boxes:
-        min_dist = min(b.extent[0] for b in obstacle_boxes)
+        # Distance from camera to nearest obstacle surface (approximate)
+        dists = [
+            max(0.01, np.linalg.norm(np.array(b.center) - cam_pos) - np.linalg.norm(b.extent))
+            for b in obstacle_boxes
+        ]
+        min_dist = float(min(dists))
         max_dist = cor_len
     else:
         min_dist = 0.5
