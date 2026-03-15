@@ -14,13 +14,15 @@ No ``bpy`` import — everything is a plain dict.
 
 from __future__ import annotations
 
-from typing import Any
-
 __all__ = [
     "VALID_PRESETS",
     "drone_preset",
     "to_gin_bindings",
 ]
+
+# Precise type for gin override values — covers all value types produced
+# by _make_preset and consumed by to_gin_bindings.
+GinValue = int | float | str | bool | tuple[int, int]
 
 # ---------------------------------------------------------------------------
 # Preset definitions
@@ -37,7 +39,7 @@ def _make_preset(
     exposure: float,
     motion_blur: bool,
     volume_scatter: bool,
-) -> dict[str, Any]:
+) -> dict[str, GinValue]:
     """Build a preset dict with resolution *and* camera-intrinsics sync.
 
     Infinigen's ``get_sensor_coords`` has its own ``H`` / ``W`` gin
@@ -61,7 +63,7 @@ def _make_preset(
     }
 
 
-_PRESETS: dict[str, dict[str, Any]] = {
+_PRESETS: dict[str, dict[str, GinValue]] = {
     "preview": _make_preset(
         width=128, height=128, num_samples=16, min_samples=4,
         adaptive_threshold=0.1, time_limit=5,
@@ -95,7 +97,7 @@ def drone_preset(
     name: str,
     *,
     resolution_override: tuple[int, int] | None = None,
-) -> dict[str, Any]:
+) -> dict[str, GinValue]:
     """Return Gin-compatible overrides for the named quality preset.
 
     Parameters
@@ -107,7 +109,7 @@ def drone_preset(
 
     Returns
     -------
-    dict[str, Any]
+    dict[str, GinValue]
         Keys are Gin scope/function.param strings; values are Python literals.
 
     Raises
@@ -134,7 +136,7 @@ def drone_preset(
     return overrides
 
 
-def to_gin_bindings(overrides: dict[str, Any]) -> list[str]:
+def to_gin_bindings(overrides: dict[str, object]) -> list[str]:
     """Convert an overrides dict to a list of gin-parseable binding strings.
 
     Each returned string is a valid gin binding such as
@@ -143,7 +145,7 @@ def to_gin_bindings(overrides: dict[str, Any]) -> list[str]:
 
     Parameters
     ----------
-    overrides : dict[str, Any]
+    overrides : dict[str, object]
         Dict of ``"scope/function.param"`` → value pairs, as returned by
         :func:`drone_preset`, :meth:`DomainRandomiser.gin_overrides`, etc.
 
@@ -158,7 +160,7 @@ def to_gin_bindings(overrides: dict[str, Any]) -> list[str]:
     return lines
 
 
-def _gin_repr(value: Any) -> str:
+def _gin_repr(value: object) -> str:
     """Format a Python value as a gin-compatible literal."""
     if isinstance(value, bool):
         return "True" if value else "False"

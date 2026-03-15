@@ -13,10 +13,15 @@ All helpers are pure Python / NumPy — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 __all__ = ["SceneValidator", "ValidationResult"]
+
+# Type alias for custom validation check callables.
+# Each callable receives the metadata dict and returns (passed, message).
+CheckFn = Callable[[dict[str, Any]], tuple[bool, str]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +76,7 @@ class SceneValidator:
     max_traversability: float = 0.95
     min_poly_count: int = 1000
     max_poly_count: int = 10_000_000
-    custom_checks: list[tuple[str, Any]] = field(default_factory=list)
+    custom_checks: list[tuple[str, CheckFn]] = field(default_factory=list)
 
     def validate(self, metadata: dict[str, Any], *, fail_fast: bool = False) -> list[ValidationResult]:
         """Run all checks against the supplied metadata dict.
