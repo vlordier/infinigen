@@ -37,7 +37,7 @@ dependencies = [
     "opencv-python<4.9.0", # e.g. 4.8.0.74
     "pandas",
     "psutil",
-    "scikit-image<0.20.0", # e.g 0.19.3
+    "scikit-image>=0.25.2,<0.26.0", # newer line has cp311/macOS arm64 wheels
     "scikit-learn<1.4.0",  # e.g 1.3.0
     "scipy",
     "shapely<=2.0.5",
