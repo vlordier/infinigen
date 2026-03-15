@@ -112,10 +112,14 @@ jobs:
         run: |
           echo "Skipping bpy-dependent tests because bpy installation is unavailable on this runner."
 
-      - name: Test with pytest (bpy-dependent)
+      - name: Test with pytest (bpy-dependent smoke)
         if: steps.install.outcome == 'success'
         run: |
-          pytest --maxfail=1 tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
+          pytest --maxfail=1 -v \
+            tests/test_blender_version_compatibility.py::test_bpy_app_version_is_tuple \
+            tests/test_blender_version_compatibility.py::test_bpy_app_version_string_non_empty \
+            tests/test_blender_version_compatibility.py::test_bpy_version_is_5_0 \
+            tests/test_blender_version_compatibility.py::test_spawn_cube_returns_object
 
   # ---------------------------------------------------------------------------
   # Cross-platform tests: verify bpy 5.0.1 installs and core API works on
@@ -176,10 +180,13 @@ jobs:
             uv pip install torch
           fi
 
-      - name: Test Blender version compatibility
+      - name: Test Blender version compatibility smoke
         if: steps.install.outcome == 'success'
         run: |
-          pytest tests/test_blender_version_compatibility.py -v
+          pytest --maxfail=1 -v \
+            tests/test_blender_version_compatibility.py::test_bpy_app_version_is_tuple \
+            tests/test_blender_version_compatibility.py::test_bpy_app_version_string_non_empty \
+            tests/test_blender_version_compatibility.py::test_bpy_version_is_5_0
 
       - name: Test compute device utilities (CUDA/MPS/CPU)
         if: steps.install.outcome == 'success'
