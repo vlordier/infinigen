@@ -53,7 +53,9 @@ class GeonodePartFactory:
 
         if "Skeleton Curve" in objs:
             skeleton_obj = objs.pop("Skeleton Curve")
-            skeleton = np.array([v.co for v in skeleton_obj.data.vertices])
+            co = np.empty(len(skeleton_obj.data.vertices) * 3)
+            skeleton_obj.data.vertices.foreach_get("co", co)
+            skeleton = co.reshape(-1, 3)
             if len(skeleton) == 0:
                 raise ValueError(
                     f"Skeleton export failed for {self}, {skeleton_obj}, got {skeleton.shape=}"

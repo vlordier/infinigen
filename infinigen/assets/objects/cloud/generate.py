@@ -94,7 +94,9 @@ class CloudFactory(AssetFactory):
             ],
         )
 
-        locations = np.array([obj.matrix_world @ v.co for v in obj.data.vertices])
+        co = np.empty(len(obj.data.vertices) * 3)
+        obj.data.vertices.foreach_get("co", co)
+        locations = butil.apply_matrix_world(obj, co.reshape(-1, 3))
         butil.delete(obj)
         return locations
 

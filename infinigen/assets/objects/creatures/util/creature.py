@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 def infer_skeleton_from_mesh(obj):
-    vs = np.array([v.co for v in obj.data.vertices]).reshape(-1, 3)
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    vs = co.reshape(-1, 3)
     try:
         v_xmin = vs[vs[:, 0].argmin()]
         v_xmax = vs[vs[:, 0].argmax()]
@@ -196,7 +198,9 @@ def write_local_attributes(part, idx, tags):
 
 def write_global_attributes(part):
     skeleton = part.skeleton_global()
-    verts = np.array([part.obj.matrix_world @ v.co for v in part.obj.data.vertices])
+    co = np.empty(len(part.obj.data.vertices) * 3)
+    part.obj.data.vertices.foreach_get("co", co)
+    verts = butil.apply_matrix_world(part.obj, co.reshape(-1, 3))
 
     dists = np.linalg.norm(
         skeleton.reshape(1, -1, 3) - verts.reshape(-1, 1, 3), axis=-1

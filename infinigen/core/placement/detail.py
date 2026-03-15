@@ -39,10 +39,13 @@ def target_face_size(
             logger.warn(
                 f"target_face_size({obj.name=}) is using the cameras location which is unsafe for {IS_COARSE=}"
             )
-        bbox = np.array([obj.matrix_world @ mathutils.Vector(v) for v in obj.bound_box])
-        dists = np.linalg.norm(bbox - np.array(camera.location), axis=-1)
-        eval_point = bbox[dists.argmin()]
-        dist = np.linalg.norm(eval_point - camera.location)
+        bbox = np.array([v[:] for v in obj.bound_box])
+        mat = np.array(obj.matrix_world)
+        bbox_h = np.c_[bbox, np.ones(len(bbox))]
+        bbox = (bbox_h @ mat.T)[:, :3]
+        cam_loc = np.array(camera.location)
+        dists = np.linalg.norm(bbox - cam_loc, axis=-1)
+        dist = float(dists.min())
     elif hasattr(obj, "__len__") and len(obj) == 3:
         if IS_COARSE:
             logger.warn(

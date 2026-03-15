@@ -75,13 +75,16 @@ def compute_hair_placement_vertgroup(obj, root, avoid_features_dist):
     extras = [o for o in butil.iter_object_tree(root) if "extra" in o.name]
     avoid_extras = [o for o in extras if any(n in o.name for n in avoid_types)]
 
-    avoid_verts = []
+    avoid_verts_list = []
     for o in avoid_extras:
-        for v in o.data.vertices:
-            avoid_verts.append(o.matrix_world @ v.co)
-    avoid_verts = np.array(avoid_verts).reshape(-1, 3)
+        co = np.empty(len(o.data.vertices) * 3)
+        o.data.vertices.foreach_get("co", co)
+        avoid_verts_list.append(butil.apply_matrix_world(o, co.reshape(-1, 3)))
+    avoid_verts = np.concatenate(avoid_verts_list).reshape(-1, 3) if avoid_verts_list else np.empty((0, 3))
 
-    verts = np.array([obj.matrix_world @ v.co for v in obj.data.vertices])
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    verts = butil.apply_matrix_world(obj, co.reshape(-1, 3))
     if len(avoid_verts):
         kd = KDTree(avoid_verts)
         dists, _ = kd.query(verts, k=1)

@@ -17,8 +17,12 @@ from infinigen.core.util import blender as butil
 
 def to_trimesh(obj: bpy.types.Object):
     bpy.context.view_layer.update()
-    verts = np.array([obj.matrix_world @ v.co for v in obj.data.vertices])
-    faces = np.array([p.vertices for p in obj.data.polygons])
+    verts = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", verts)
+    verts = butil.apply_matrix_world(obj, verts.reshape(-1, 3))
+    faces = np.empty(len(obj.data.polygons) * 3, dtype=int)
+    obj.data.polygons.foreach_get("vertices", faces)
+    faces = faces.reshape(-1, 3)
     mesh = trimesh.Trimesh(vertices=verts, faces=faces, process=False)
     mesh.current_transform = trimesh.transformations.identity_matrix()
     return mesh

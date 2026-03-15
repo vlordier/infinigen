@@ -166,7 +166,9 @@ def clean_name(name: str):
 
 def is_2d(obj: bpy.types.Object):
     """Check if an asset is very thin or 2D."""
-    verts = np.array([obj.matrix_world @ v.co for v in obj.data.vertices])
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    verts = butil.apply_matrix_world(obj, co.reshape(-1, 3))
     spread = verts.ptp(axis=0)  # max - min per axis
     return np.any(spread < 1e-4)
 

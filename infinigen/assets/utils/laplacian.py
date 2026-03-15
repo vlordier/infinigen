@@ -126,8 +126,15 @@ def build_laplacian_2d(
     bm.from_mesh(mesh)
     vertices_to_remove = [v for v in bm.verts if v.co[-1] > 0]
     bmesh.ops.delete(bm, geom=vertices_to_remove)
-    for v in bm.verts:
-        x, y, z = v.co
-        v.co *= np.maximum(np.abs(x), np.abs(y)) / (np.sqrt(x**2 + y**2) + 1e-6)
+    bm.verts.ensure_lookup_table()
+    n_v = len(bm.verts)
+    co = np.empty((n_v, 3))
+    for i, v in enumerate(bm.verts):
+        co[i] = v.co
+    x, y, z = co.T
+    scale = np.maximum(np.abs(x), np.abs(y)) / (np.sqrt(x**2 + y**2) + 1e-6)
+    co *= scale[:, None]
+    for i, v in enumerate(bm.verts):
+        v.co[:] = co[i]
     bm.to_mesh(mesh)
     return data2mesh(vertices, [], faces)

@@ -85,19 +85,26 @@ def get_sensor_coords(cam, H, W, sparse=False):
     coords_z = np.full(coords_x.shape, -f_in_m)
     relative_cam_coords = np.stack((coords_x, coords_y, coords_z), axis=-1)
 
-    cam_coords_vectors = np.empty((H, W), dtype=Vector)
     pixel_locs = np.stack((np.meshgrid(np.arange(W), np.arange(H))), axis=-1).reshape(
         (W * H, 2)
-    )  # np.array(list(product(range(H), range(W))))
+    )
     if sparse:
         ii = np.random.choice(H * W, size=1000)
         pixel_locs = pixel_locs[ii]
 
-    for x, y in tqdm(pixel_locs, desc="Building Camera Vectors", disable=True):
-        pixelVector = Vector(relative_cam_coords[y, x])
-        cam_coords_vectors[y, x] = cam.matrix_world @ pixelVector
+    # Vectorized camera coordinate transform: single matmul for all pixels
+    mat = np.array(cam.matrix_world)
+    flat_rel = relative_cam_coords.reshape(-1, 3)
+    if sparse:
+        flat_rel = flat_rel[pixel_locs[:, 1] * W + pixel_locs[:, 0]]
+    ones = np.ones((len(flat_rel), 1))
+    homo = np.concatenate([flat_rel, ones], axis=1)
+    world = (homo @ mat.T)[:, :3]
 
-    return cam_coords_vectors, pixel_locs
+    cam_coords_world = np.empty((H, W, 3))
+    cam_coords_world[pixel_locs[:, 1], pixel_locs[:, 0]] = world
+
+    return cam_coords_world, pixel_locs
 
 
 def adjust_camera_sensor(cam):
@@ -200,9 +207,14 @@ def terrain_camera_query(
     dists = []
     sensor_coords, pix_it = get_sensor_coords(cam, sparse=True)
     terrain_tags_queries_counts = {q: 0 for q in terrain_tags_queries}
+    cam_translation = np.array(cam.matrix_world.translation)
 
     for x, y in pix_it:
-        direction = (sensor_coords[y, x] - cam.matrix_world.translation).normalized()
+        dir_vec = sensor_coords[y, x] - cam_translation
+        norm = np.linalg.norm(dir_vec)
+        if norm < 1e-12:
+            continue
+        direction = Vector(dir_vec / norm)
         _, _, index, dist = scene_bvh.ray_cast(cam.matrix_world.translation, direction)
         if dist is None:
             continue
@@ -895,18 +907,23 @@ if __name__ == "__main__":
     to_obj_coords = target_obj.matrix_world.inverted()
     sensor_coords, pix_it = get_sensor_coords(cam, sparse=False)
 
-    H, W = sensor_coords.shape
+    H, W, _ = sensor_coords.shape
     depth_output = np.zeros((H, W), dtype=np.float64)
+    cam_loc = np.array(cam.location)
 
     for x, y in tqdm(pix_it):
-        destination = sensor_coords[y, x]
-        direction = (destination - cam.location).normalized()
+        dest = sensor_coords[y, x]
+        dir_vec = dest - cam_loc
+        norm = np.linalg.norm(dir_vec)
+        if norm < 1e-12:
+            continue
+        direction = Vector(dir_vec / norm)
         location, normal, index, dist = bvhtree.ray_cast(cam.location, direction)
         if dist is not None:
-            dist_diff = (destination - cam.location).length
-            assert dist > (location - destination).length, (
+            dist_diff = float(norm)
+            assert dist > (location - Vector(dest)).length, (
                 dist,
-                (location - destination).length,
+                (location - Vector(dest)).length,
             )
             assert dist > dist_diff
             depth_output[H - y - 1, x] = dist - dist_diff

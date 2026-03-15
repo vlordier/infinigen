@@ -263,13 +263,15 @@ def select_vertices(obj, to_select):
         x, y, z = read_co(obj).T
         to_select = to_select(x, y, z)
     to_select = np.nonzero(to_select)[0]
+    sel_mask = np.zeros(len(obj.data.vertices), dtype=bool)
+    sel_mask[to_select] = True
     with butil.ViewportMode(obj, "EDIT"):
         bpy.ops.mesh.select_mode(type="VERT")
         bpy.ops.mesh.select_all(action="DESELECT")
         bm = bmesh.from_edit_mesh(obj.data)
         bm.verts.ensure_lookup_table()
-        for i in to_select:
-            bm.verts[i].select_set(True)
+        for v in bm.verts:
+            v.select = sel_mask[v.index]
         bm.select_flush(False)
         bmesh.update_edit_mesh(obj.data)
     return obj
@@ -280,13 +282,15 @@ def select_edges(obj, to_select):
         x, y, z = read_edge_center(obj).T
         to_select = to_select(x, y, z)
     to_select = np.nonzero(to_select)[0]
+    sel_mask = np.zeros(len(obj.data.edges), dtype=bool)
+    sel_mask[to_select] = True
     with butil.ViewportMode(obj, "EDIT"):
         bpy.ops.mesh.select_mode(type="EDGE")
         bpy.ops.mesh.select_all(action="DESELECT")
         bm = bmesh.from_edit_mesh(obj.data)
         bm.edges.ensure_lookup_table()
-        for i in to_select:
-            bm.edges[i].select_set(True)
+        for e in bm.edges:
+            e.select = sel_mask[e.index]
         bm.select_flush(False)
         bmesh.update_edit_mesh(obj.data)
     return obj
@@ -297,13 +301,15 @@ def select_faces(obj, to_select):
         x, y, z = read_center(obj).T
         to_select = to_select(x, y, z)
     to_select = np.nonzero(to_select)[0]
+    sel_mask = np.zeros(len(obj.data.polygons), dtype=bool)
+    sel_mask[to_select] = True
     with butil.ViewportMode(obj, "EDIT"):
         bpy.ops.mesh.select_mode(type="FACE")
         bpy.ops.mesh.select_all(action="DESELECT")
         bm = bmesh.from_edit_mesh(obj.data)
         bm.faces.ensure_lookup_table()
-        for i in to_select:
-            bm.faces[i].select_set(True)
+        for f in bm.faces:
+            f.select = sel_mask[f.index]
         bm.select_flush(False)
         bmesh.update_edit_mesh(obj.data)
     return obj
@@ -329,23 +335,29 @@ def distance2boundary(obj):
     with butil.ViewportMode(obj, "EDIT"):
         bpy.ops.mesh.select_all(action="SELECT")
         bpy.ops.mesh.region_to_loop()
+    n_verts = len(obj.data.vertices)
+    edges = read_edges(obj)
+    sel = read_selected(obj, "VERT")
     with butil.ViewportMode(obj, "EDIT"):
         bm = bmesh.from_edit_mesh(obj.data)
         bm.verts.ensure_lookup_table()
-        distance = np.full(len(obj.data.vertices), -100.0)
-        queue = set(v.index for v in bm.verts if v.select)
-        d = 0
-        while True:
-            distance[list(queue)] = d
-            next_queue = set()
-            for i in queue:
-                v = bm.verts[i]
-                for e in v.link_edges:
-                    next_queue.add(e.other_vert(v).index)
-            queue = set(i for i in next_queue if distance[i] < 0)
-            if not queue:
-                break
-            d += 1
+        boundary = np.nonzero(sel)[0]
+    # Build adjacency via edge arrays for vectorized BFS
+    adj_from = np.concatenate([edges[:, 0], edges[:, 1]])
+    adj_to = np.concatenate([edges[:, 1], edges[:, 0]])
+    distance = np.full(n_verts, -100.0)
+    frontier_mask = np.zeros(n_verts, dtype=bool)
+    frontier_mask[boundary] = True
+    d = 0
+    while frontier_mask.any():
+        distance[frontier_mask] = d
+        # Gather neighbors of frontier via edge adjacency
+        src_in_frontier = frontier_mask[adj_from]
+        neighbor_mask = np.zeros(n_verts, dtype=bool)
+        neighbor_mask[adj_to[src_in_frontier]] = True
+        # Keep only unvisited
+        frontier_mask = neighbor_mask & (distance < 0)
+        d += 1
     distance[distance < 0] = 0
     distance /= max(d, 1)
     write_attr_data(obj, "distance", distance)
@@ -419,13 +431,8 @@ def decimate(points, n):
 
 def remove_duplicate_edges(obj):
     remove_faces(obj, np.ones_like(len(obj.data.polygons)), remove_loose=False)
-    with butil.ViewportMode(obj, "EDIT"):
-        bm = bmesh.from_edit_mesh(obj.data)
-        bm.verts.ensure_lookup_table()
-        counts = []
-        for v in bm.verts:
-            counts.append(len(v.link_edges))
-    counts = np.array(counts)
-    u, v = read_edges(obj).T
+    edge_arr = read_edges(obj)
+    counts = np.bincount(edge_arr.ravel(), minlength=len(obj.data.vertices))
+    u, v = edge_arr.T
     to_delete = (counts[u] > 2) & (counts[v] > 2)
     remove_edges(obj, to_delete)

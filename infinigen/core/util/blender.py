@@ -963,11 +963,9 @@ def apply_matrix_world(obj, verts: np.array):
 
 
 def surface_area(obj: bpy.types.Object):
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    area = sum(f.calc_area() for f in bm.faces)
-    bm.free()
-    return area
+    areas = np.empty(len(obj.data.polygons))
+    obj.data.polygons.foreach_get("area", areas)
+    return float(areas.sum())
 
 
 def approve_all_drivers():

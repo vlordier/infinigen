@@ -8,7 +8,7 @@ import logging
 
 import bpy
 import numpy as np
-from mathutils import Matrix
+from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 from tqdm import trange
 
@@ -42,13 +42,16 @@ def raycast_visiblity_mask(
         invworld = obj.matrix_world.inverted()
         for cam in cameras:
             sensor_coords, pix_it = get_sensor_coords(cam)
+            cam_origin = cam.matrix_world.translation
+            cam_origin_np = np.array(cam_origin)
             for x, y in pix_it:
-                direction = (
-                    sensor_coords[y, x] - cam.matrix_world.translation
-                ).normalized()
-                origin = cam.matrix_world.translation
+                dir_vec = sensor_coords[y, x] - cam_origin_np
+                norm = np.linalg.norm(dir_vec)
+                if norm < 1e-12:
+                    continue
+                direction = Vector(dir_vec / norm)
                 _, _, index, dist = bvh.ray_cast(
-                    invworld @ origin, invworld.to_3x3() @ direction
+                    invworld @ cam_origin, invworld.to_3x3() @ direction
                 )
                 if dist is None:
                     continue
@@ -59,10 +62,18 @@ def raycast_visiblity_mask(
 
 
 def select_vertmask(obj, mask):
-    for i, v in enumerate(obj.data.vertices):
-        v.select = mask[i]
-    for f in obj.data.polygons:
-        f.select = any(mask[vi] for vi in f.vertices)
+    obj.data.vertices.foreach_set("select", mask.astype(bool))
+    n_polys = len(obj.data.polygons)
+    if n_polys == 0:
+        return
+    loop_verts = np.empty(len(obj.data.loops), dtype=int)
+    obj.data.loops.foreach_get("vertex_index", loop_verts)
+    loop_totals = np.empty(n_polys, dtype=int)
+    obj.data.polygons.foreach_get("loop_total", loop_totals)
+    face_idx = np.repeat(np.arange(n_polys), loop_totals)
+    face_sel = np.zeros(n_polys, dtype=bool)
+    np.maximum.at(face_sel, face_idx, mask[loop_verts].astype(bool))
+    obj.data.polygons.foreach_set("select", face_sel)
 
 
 def duplicate_mask(obj, mask, dilate=0, invert=False):
@@ -93,10 +104,11 @@ def compute_vis_dists(points: np.array, cam: bpy.types.Object):
     clamped_uv = np.clip(uv, [0, 0], butil.get_camera_res())
     clamped_d = np.maximum(d, 0)
 
-    RT_4x4_inv = np.array(Matrix(RT).to_4x4().inverted())
+    K_inv_T = np.linalg.inv(K).T
+    RT_4x4_inv_T = np.array(Matrix(RT).to_4x4().inverted()).T
     clipped_pos = (
-        homogenize((homogenize(clamped_uv) * clamped_d[:, None]) @ np.linalg.inv(K).T)
-        @ RT_4x4_inv.T
+        homogenize((homogenize(clamped_uv) * clamped_d[:, None]) @ K_inv_T)
+        @ RT_4x4_inv_T
     )
 
     vis_dist = np.linalg.norm(points[:, :-1] - clipped_pos[:, :-1], axis=-1)
@@ -150,20 +162,24 @@ def compute_inview_distances(
         for cam in cameras:
             dists, vis_dists = compute_vis_dists(points, cam)
 
-            frame_cam_mask = np.ones(len(points), dtype=bool)
+            frame_cam_mask = True
 
             if dist_max is not None:
-                frame_cam_mask &= dists < dist_max
+                frame_cam_mask = dists < dist_max
             if vis_margin is not None:
-                frame_cam_mask &= vis_dists < vis_margin
+                if frame_cam_mask is True:
+                    frame_cam_mask = vis_dists < vis_margin
+                else:
+                    frame_cam_mask &= vis_dists < vis_margin
+
+            if frame_cam_mask is True:
+                frame_cam_mask = np.ones(len(points), dtype=bool)
 
             if frame_cam_mask.any():
-                min_vis_dists[frame_cam_mask] = np.minimum(
-                    vis_dists[frame_cam_mask], min_vis_dists[frame_cam_mask]
+                np.minimum(
+                    vis_dists, min_vis_dists, where=frame_cam_mask, out=min_vis_dists
                 )
-                min_dists[frame_cam_mask] = np.minimum(
-                    dists[frame_cam_mask], min_dists[frame_cam_mask]
-                )
+                np.minimum(dists, min_dists, where=frame_cam_mask, out=min_dists)
 
             mask |= frame_cam_mask
 

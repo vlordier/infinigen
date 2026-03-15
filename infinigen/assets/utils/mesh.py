@@ -10,7 +10,6 @@ import bpy
 import numpy as np
 import shapely
 import trimesh
-from mathutils import Vector
 from numpy.random import normal, uniform
 from shapely import LineString
 
@@ -131,25 +130,27 @@ def polygon_angles(n, min_angle=np.pi / 6, max_angle=np.pi * 2 / 3):
 
 
 def face_area(obj):
-    with butil.ViewportMode(obj, "EDIT"):
-        bm = bmesh.from_edit_mesh(obj.data)
-        return sum(f.calc_area() for f in bm.faces)
+    areas = np.empty(len(obj.data.polygons))
+    obj.data.polygons.foreach_get("area", areas)
+    return float(areas.sum())
 
 
 def centroid(obj):
-    with butil.ViewportMode(obj, "EDIT"):
-        bm = bmesh.from_edit_mesh(obj.data)
-        s = sum(
-            (f.calc_area() * f.calc_center_median() for f in bm.faces),
-            Vector((0, 0, 0)),
-        )
-        area = sum(f.calc_area() for f in bm.faces)
-        return np.array(s / area)
+    n_polys = len(obj.data.polygons)
+    areas = np.empty(n_polys)
+    obj.data.polygons.foreach_get("area", areas)
+    centers = np.empty(n_polys * 3)
+    obj.data.polygons.foreach_get("center", centers)
+    centers = centers.reshape(-1, 3)
+    total_area = areas.sum()
+    if total_area == 0:
+        return np.zeros(3)
+    return (areas[:, None] * centers).sum(axis=0) / total_area
 
 
 def longest_ray(obj, obj_, direction):
     co = read_co(obj_)
-    directions = np.array([direction] * len(co))
+    directions = np.broadcast_to(np.asarray(direction), co.shape)
     mesh = obj2trimesh(obj)
     signed_distance = trimesh.proximity.longest_ray(mesh, co, directions)
     return signed_distance
@@ -164,21 +165,23 @@ def treeify(obj):
         bm = bmesh.from_edit_mesh(obj.data)
         bm.verts.ensure_lookup_table()
         bm.edges.ensure_lookup_table()
-        included = np.zeros(len(bm.verts))
-        i = min((v.co[-1], i) for i, v in enumerate(bm.verts))[1]
+        n = len(bm.verts)
+        included = np.zeros(n, dtype=bool)
+        co_z = np.array([v.co[-1] for v in bm.verts])
+        i = int(np.argmin(co_z))
         queue = [bm.verts[i]]
-        included[i] = 1
-        to_keep = []
+        included[i] = True
+        to_keep = set()
         while queue:
             v = queue.pop()
             for e in v.link_edges:
                 o = e.other_vert(v)
                 if not included[o.index]:
-                    included[o.index] = 1
-                    to_keep.append(e)
+                    included[o.index] = True
+                    to_keep.add(e)
                     queue.append(o)
         bmesh.ops.delete(
-            bm, geom=list(set(bm.edges).difference(to_keep)), context="EDGES"
+            bm, geom=[e for e in bm.edges if e not in to_keep], context="EDGES"
         )
         bmesh.update_edit_mesh(obj.data)
     return obj

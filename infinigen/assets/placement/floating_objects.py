@@ -10,6 +10,7 @@ import logging
 import bmesh
 import bpy
 import numpy as np
+from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 from infinigen.core.placement.factory import AssetFactory
@@ -42,7 +43,11 @@ def raycast_sample(min_dist, sensor_coords, pix_it, camera, bvhtree):
         x = pix_it[np.random.randint(0, pix_it.shape[0])][0]
         y = pix_it[np.random.randint(0, pix_it.shape[0])][1]
 
-        direction = (sensor_coords[y, x] - camera.matrix_world.translation).normalized()
+        dir_vec = sensor_coords[y, x] - np.array(camera.matrix_world.translation)
+        norm = np.linalg.norm(dir_vec)
+        if norm < 1e-12:
+            continue
+        direction = Vector(dir_vec / norm)
 
         location, normal, index, distance = bvhtree.ray_cast(cam_location, direction)
 

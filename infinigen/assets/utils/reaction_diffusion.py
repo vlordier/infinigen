@@ -31,25 +31,27 @@ def reaction_diffusion(
     bm.verts.ensure_lookup_table()
     n = len(bm.verts)
     a = np.ones(n)
-    b = weight_fn(np.stack([v.co for v in bm.verts]))
+    coords = np.empty((n, 3))
+    for i, v in enumerate(bm.verts):
+        coords[i] = v.co
+    b = weight_fn(coords)
     edge_from = np.array([e.verts[0].index for e in bm.edges])
     edge_to = np.array([e.verts[1].index for e in bm.edges])
-    size = max(len(v.link_edges) for v in bm.verts)
+    bm.free()
+    kill_feed = kill_rate + feed_rate
     for _ in range(steps):
         a_msg = a[edge_to] - a[edge_from]
         b_msg = b[edge_to] - b[edge_from]
-        lap_a = np.bincount(edge_from, a_msg, size) - np.bincount(edge_to, a_msg, size)
-        lap_b = np.bincount(edge_from, b_msg, size) - np.bincount(edge_to, b_msg, size)
-        ab2 = a * b**2
-        new_a = a + (diff_a * lap_a - ab2 + feed_rate * (1 - a)) * dt
-        new_b = b + (diff_b * lap_b + ab2 - (kill_rate + feed_rate) * b) * dt
-        a = new_a
-        b = new_b
+        lap_a = np.bincount(edge_from, a_msg, n) - np.bincount(edge_to, a_msg, n)
+        lap_b = np.bincount(edge_from, b_msg, n) - np.bincount(edge_to, b_msg, n)
+        ab2 = a * b * b
+        a += (diff_a * lap_a - ab2 + feed_rate * (1 - a)) * dt
+        b += (diff_b * lap_b + ab2 - kill_feed * b) * dt
 
     a_msg = a[edge_to] - a[edge_from]
     b_msg = b[edge_to] - b[edge_from]
-    lap_a = np.bincount(edge_from, a_msg, size) - np.bincount(edge_to, a_msg, size)
-    lap_b = np.bincount(edge_from, b_msg, size) - np.bincount(edge_to, b_msg, size)
+    lap_a = np.bincount(edge_from, a_msg, n) - np.bincount(edge_to, a_msg, n)
+    lap_b = np.bincount(edge_from, b_msg, n) - np.bincount(edge_to, b_msg, n)
 
     a *= 1 + normal(0, perturb, n)
     b *= 1 + normal(0, perturb, n)
@@ -60,12 +62,16 @@ def reaction_diffusion(
     vg_b = obj.vertex_groups.new(name="B")
     vg_la = obj.vertex_groups.new(name="LA")
     vg_lb = obj.vertex_groups.new(name="LB")
-    for i in range(n):
-        vg_la.add([i], lap_a[i], "REPLACE")
-        vg_lb.add([i], lap_b[i], "REPLACE")
-        vg_a.add([i], a[i], "REPLACE")
-        vg_b.add([i], b[i], "REPLACE")
-    obj.vertex_groups.update()
+    deform_bm = bmesh.new()
+    deform_bm.from_mesh(obj.data)
+    deform_bm.verts.ensure_lookup_table()
+    deform_layer = deform_bm.verts.layers.deform.verify()
+    for vg, vals in ((vg_la, lap_a), (vg_lb, lap_b), (vg_a, a), (vg_b, b)):
+        gi = vg.index
+        for i in range(n):
+            deform_bm.verts[i][deform_layer][gi] = float(vals[i])
+    deform_bm.to_mesh(obj.data)
+    deform_bm.free()
     obj.data.update()
 
 
