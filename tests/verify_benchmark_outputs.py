@@ -132,8 +132,16 @@ def _compare_values(a: Any, b: Any, rtol: float, atol: float, path: str = "root"
             return CompareResult(True, "scalars close", max_abs_diff=abs(av - bv))
         return CompareResult(False, f"{path}: scalar mismatch {av} != {bv}", max_abs_diff=abs(av - bv))
 
-    # Fallback exact match
-    if a == b:
+    # Fallback exact match for opaque objects; guard against array-like `==` behavior.
+    try:
+        eq = a == b
+    except Exception:
+        eq = False
+
+    if isinstance(eq, np.ndarray):
+        if eq.shape == () and bool(eq):
+            return CompareResult(True, "exact match")
+    elif isinstance(eq, (bool, np.bool_)) and bool(eq):
         return CompareResult(True, "exact match")
 
     return CompareResult(False, f"{path}: values differ ({type(a).__name__} vs {type(b).__name__})")
