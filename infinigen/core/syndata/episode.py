@@ -2,17 +2,20 @@
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Episode configuration for RL training sequences.
+"""Episode configuration for Infinigen rendering pipeline.
 
 Defines temporal structure for rendering: frame range, FPS, and trajectory
 type.  These map directly to ``execute_tasks.frame_range`` and
 ``execute_tasks.fps`` gin bindings for the **Infinigen pipeline**.
 
-When using **Genesis World** as the simulation backend, use
+**Separation of concerns**: this module configures how Infinigen *renders*
+frames.  The actual simulation loop, drone dynamics, reward computation,
+and episode management are handled by **Genesis World** and
+**GenesisDroneEnv**.  Use
 :func:`~infinigen.core.syndata.genesis_export.episode_to_genesis` to
-convert an :class:`EpisodeConfig` to a :class:`GenesisEpisodeConfig`
-that maps to Genesis's native ``scene.step(dt)`` loop, vectorised
-environment resets, and camera video recording.
+convert an :class:`EpisodeConfig` to Genesis-native parameters
+(:class:`GenesisEpisodeConfig`) — Genesis handles ``scene.step(dt)``,
+vectorised env resets, and video recording natively.
 
 All helpers are pure Python — no ``bpy`` dependency.
 """

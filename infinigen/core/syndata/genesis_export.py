@@ -2,30 +2,40 @@
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Genesis World integration — bridge Infinigen scene data to Genesis physics engine.
+"""Genesis World integration — bridge Infinigen assets to Genesis physics engine.
+
+**Bridge layer: Infinigen → Genesis World.**
 
 Provides pure-Python converters and configuration helpers to load
 Infinigen-generated 3D scenes into `Genesis World
 <https://genesis-world.readthedocs.io/>`_ for physical simulation,
 differentiable rendering, and RL agent training.
 
-Supported import paths:
+**What this module does:**
 
-* **OBJ / PLY / STL** meshes → ``gs.morphs.Mesh``
-* **MJCF** articulated assets → ``gs.morphs.MJCF``
-* **URDF** robot descriptions → ``gs.morphs.URDF``
+- Discovers Infinigen export assets (OBJ/PLY/STL → ``gs.morphs.Mesh``,
+  MJCF → ``gs.morphs.MJCF``, URDF → ``gs.morphs.URDF``)
+- Converts syndata config types (DroneCamera, ObservationConfig,
+  DomainRandomiser, FrameMetadata) to Genesis-native equivalents
+- Assembles complete :class:`GenesisSceneConfig` from Infinigen exports
+- Generates self-contained Python scripts that ``import genesis``
 
-Key features:
+**What this module does NOT do:**
 
-* :func:`scene_manifest_from_dir` discovers all importable assets in an
-  Infinigen export directory and produces a :class:`GenesisSceneManifest`.
-* :class:`GenesisSceneConfig` aggregates entities, cameras, lights, and
-  renderer settings into a single configuration object.
-* :func:`to_genesis_script` generates a self-contained Python script that
-  reconstructs the Infinigen scene inside Genesis for physics simulation.
+- It does not import or depend on ``genesis`` (pure Python, bpy-free)
+- It does not run physics simulation (Genesis does that)
+- It does not manage RL episodes (GenesisDroneEnv does that)
+- It does not implement curriculum control (separate project)
 
-All helpers are pure Python — no ``bpy`` or ``genesis`` dependency at import
-time, so CI and pre-flight tooling stay lightweight.
+Genesis handles natively:
+
+- Physics simulation: ``scene.step(dt)``
+- Episode management: vectorised env resets, episode length
+- Observation rendering: ``cam.render(rgb=True, depth=True, ...)``
+- Video recording: ``cam.start_recording()`` / ``cam.stop_recording()``
+
+This module provides the *configuration* that Genesis consumes, not the
+simulation logic itself.
 """
 
 from __future__ import annotations
@@ -1101,17 +1111,24 @@ def build_genesis_config(
     renderer: str = "RayTracer",
     dt: float = 0.01,
 ) -> GenesisSceneConfig:
-    """Assemble a complete :class:`GenesisSceneConfig` from syndata components.
+    """Assemble a complete :class:`GenesisSceneConfig` from Infinigen outputs.
 
-    This is the main entry-point for converting an Infinigen scene
+    **Bridge layer: Infinigen → Genesis World.**
+
+    This is the main entry-point for converting Infinigen scene data
     (export directory + syndata metadata/config) into a Genesis-ready
-    configuration.
+    configuration.  The resulting config can be:
 
-    Genesis natively handles episode management (simulation loop, resets,
-    vectorised envs) and observation rendering (multi-pass camera, sensor
-    noise).  The *episode* and *observation* parameters are mapped to
-    Genesis's native APIs via :func:`episode_to_genesis` and
-    :func:`observation_to_genesis`.
+    1. Serialised to JSON for offline transfer
+    2. Fed to :func:`to_genesis_script` to generate a runnable Python script
+    3. Used directly to construct a Genesis scene programmatically
+
+    **What Genesis handles natively** (not configured here):
+
+    - Physics simulation: ``scene.step(dt)`` loop
+    - Drone dynamics: rigid-body, attitude control
+    - RL environment: obs/reward/done/info (GenesisDroneEnv)
+    - Episode resets: vectorised environment management
 
     Parameters
     ----------

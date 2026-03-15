@@ -2,18 +2,19 @@
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Observation-space configuration for vision-based RL agents.
+"""Observation-space configuration for the Infinigen rendering pipeline.
 
-Defines which Blender render passes the agent receives as its observation
-and what post-processing (e.g. sensor noise) is applied.  The observation
-config maps directly to Infinigen's ``render_image`` gin bindings for the
-**Infinigen pipeline**.
+Defines which Blender render passes the agent's observation includes
+and what post-processing (sensor noise) is applied.  Maps directly to
+Infinigen's ``render_image`` gin bindings.
 
-When using **Genesis World** as the simulation backend, use
-:func:`~infinigen.core.syndata.genesis_export.observation_to_genesis` to
-convert an :class:`ObservationConfig` to a :class:`GenesisObservationConfig`
-that maps to Genesis's native ``camera.render(rgb=True, depth=True, ...)``
-multi-pass rendering and differentiable sensor noise.
+**Separation of concerns**: this module configures what Infinigen
+*renders* (which passes, what noise model).  The actual multi-pass
+camera rendering in the physics simulation is handled by **Genesis
+World** natively via ``camera.render(rgb=True, depth=True, ...)``.
+Use :func:`~infinigen.core.syndata.genesis_export.observation_to_genesis`
+to convert an :class:`ObservationConfig` to Genesis-native parameters.
+Genesis also handles sensor noise through its differentiable renderer.
 
 All helpers are pure Python — no ``bpy`` dependency.
 """

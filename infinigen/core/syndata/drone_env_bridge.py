@@ -2,35 +2,43 @@
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
 # of this source tree.
 
-"""Bidirectional bridge between Infinigen syndata and GenesisDroneEnv.
+"""Bidirectional bridge between Infinigen and GenesisDroneEnv.
 
-Provides two-way data exchange for RL training in Infinigen-generated 3D
-environments loaded into `Genesis World <https://genesis-world.readthedocs.io/>`_
-via the `GenesisDroneEnv <https://github.com/KafuuChikai/GenesisDroneEnv>`_
-framework.
+**Bridge layer: Infinigen ↔ GenesisDroneEnv (bidirectional).**
 
-**Infinigen → Genesis (export):**
+Provides two-way data exchange for RL training of drone swarms in
+Infinigen-generated 3D environments running on `Genesis World
+<https://genesis-world.readthedocs.io/>`_ via the `GenesisDroneEnv
+<https://github.com/KafuuChikai/GenesisDroneEnv>`_ RL gym.
 
-* :func:`syndata_to_drone_env_config` converts Infinigen scene configuration
-  (curriculum stage, camera, obstacles, randomisation) into GenesisDroneEnv-
-  compatible YAML config dicts for the three config files:
-  ``genesis_env.yaml``, ``flight.yaml``, and ``rl_env.yaml``.
+**Infinigen → GenesisDroneEnv (export):**
 
-* :func:`scene_to_drone_entities` converts :class:`GenesisSceneConfig` to
-  GenesisDroneEnv entity add code lines for non-drone, non-plane entities.
+* :func:`syndata_to_drone_env_config` — converts Infinigen scene
+  configuration (curriculum stage, camera, obstacles, randomisation)
+  into GenesisDroneEnv-compatible YAML config dicts matching the three
+  config files: ``genesis_env.yaml``, ``flight.yaml``, ``rl_env.yaml``.
 
-**Genesis → Infinigen (feedback):**
+* :func:`scene_to_drone_entities` — converts :class:`GenesisSceneConfig`
+  entities to ``scene.add_entity()`` code for GenesisDroneEnv integration.
 
-* :class:`TrainingOutcome` structures the feedback from a GenesisDroneEnv
-  training run: success rate, mean reward, crash rate, failure modes, and
-  per-metric breakdowns.
+**GenesisDroneEnv → Infinigen (feedback):**
 
-* :func:`outcome_to_curriculum_params` maps training outcomes to
-  recommended :class:`CurriculumConfig` adjustments — raising difficulty
-  when the agent succeeds, lowering it (or holding) when it crashes.
+* :class:`TrainingOutcome` — structured feedback from a training run:
+  success rate, crash rate, failure modes, reward breakdown.
 
-All helpers are pure Python / NumPy — no ``bpy`` or ``genesis`` dependency
-at import time.
+* :func:`outcome_to_curriculum_params` — maps training outcomes to
+  curriculum adjustment hints (advance / hold / regress).  The actual
+  curriculum *controller* lives in a separate project — this module
+  only provides the data contracts.
+
+**Separation of concerns:**
+
+- Infinigen generates 3D worlds and assets (geometry, textures, materials)
+- Genesis World runs the physics simulation (scene.step, collision, rigid-body)
+- GenesisDroneEnv provides the RL gym (obs/reward/done/info)
+- This module provides structured data exchange between them
+
+All helpers are pure Python / NumPy — no ``bpy`` or ``genesis`` dependency.
 """
 
 from __future__ import annotations
