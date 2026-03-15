@@ -14,9 +14,12 @@ All helpers are pure Python — no ``bpy`` dependency.
 from __future__ import annotations
 
 import enum
+import logging
 import math
 from dataclasses import dataclass
 from typing import ClassVar
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["DensityScaler", "InterpolationCurve"]
 

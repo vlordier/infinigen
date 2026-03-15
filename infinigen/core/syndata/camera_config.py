@@ -13,8 +13,11 @@ All helpers are pure Python — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ASPECT_1_1",

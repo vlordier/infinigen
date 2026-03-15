@@ -14,6 +14,10 @@ No ``bpy`` import — everything is a plain dict.
 
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "VALID_PRESETS",
     "drone_preset",

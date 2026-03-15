@@ -29,11 +29,14 @@ Usage
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
 
 from infinigen.core.syndata.metadata import BBox3D
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "FlappyColumnConfig",
@@ -304,6 +307,7 @@ def generate_flappy_obstacles(
         label="ceiling",
     ))
 
+    logger.debug("generate_flappy_obstacles: %d columns → %d obstacles", config.num_columns, len(obstacles))
     return obstacles
 
 

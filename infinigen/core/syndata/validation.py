@@ -13,9 +13,12 @@ All helpers are pure Python / NumPy — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["SceneValidator", "ValidationResult"]
 
@@ -107,7 +110,10 @@ class SceneValidator:
         def _append(result: ValidationResult) -> bool:
             """Append a result; return True if fail_fast should stop."""
             results.append(result)
-            return fail_fast and not result.passed
+            if fail_fast and not result.passed:
+                logger.debug("validate: fail_fast triggered on check %r", results[-1].name)
+                return True
+            return False
 
         # ---- obstacle count -------------------------------------------------
         obstacles = metadata.get("obstacles")

@@ -14,10 +14,13 @@ All helpers are pure Python / NumPy — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field, fields
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["DomainRandomiser"]
 

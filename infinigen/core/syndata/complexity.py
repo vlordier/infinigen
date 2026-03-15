@@ -14,8 +14,11 @@ All public helpers are pure Python / NumPy — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "CurriculumConfig",
@@ -113,6 +116,11 @@ class CurriculumConfig:
         object.__setattr__(
             self, "_scatter_density",
             max(self.min_scatter_density, p),
+        )
+        logger.debug(
+            "CurriculumConfig: stage=%d/%d progress=%.3f subdiv=%d tex=%d objs=%d",
+            self.stage, self.total_stages, self._progress,
+            self._subdiv_level, self._texture_resolution, self._object_count,
         )
 
     # ---- derived properties -------------------------------------------------

@@ -13,7 +13,10 @@ All helpers are pure Python — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+import logging
 import math
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["resolution_for_stage"]
 

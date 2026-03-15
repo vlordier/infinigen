@@ -14,12 +14,15 @@ All helpers are pure Python / NumPy — no ``bpy`` dependency.
 from __future__ import annotations
 
 import json
+import logging
 import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["BBox3D", "DepthStats", "FrameMetadata"]
 
@@ -74,6 +77,7 @@ class DepthStats:
         # Exclude invalid (inf / nan) values
         valid = flat[np.isfinite(flat)]
         if valid.size == 0:
+            logger.warning("from_depth_array: all depth values are inf/nan; returning defaults")
             return DepthStats()
         valid = np.clip(valid, clip_min, clip_max)
         return DepthStats(

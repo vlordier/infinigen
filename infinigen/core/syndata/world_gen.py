@@ -66,6 +66,7 @@ selective filtering.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -73,6 +74,8 @@ from typing import Any, ClassVar
 import numpy as np
 
 from infinigen.core.syndata.metadata import BBox3D
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "COMPLEXITY_BRANCHES",
@@ -1199,6 +1202,7 @@ def generate_world(config: WorldConfig) -> list[BBox3D]:
         )
         boxes.extend(debris)
 
+    logger.debug("generate_world: complexity=%.2f → %d boxes", config.complexity, len(boxes))
     return boxes
 
 
@@ -1332,6 +1336,7 @@ def world_to_frame_metadata(
     gap_h = config.effective_gap_height
     traversability = min(1.0, gap_h / cor_h)
 
+    logger.debug("world_to_frame_metadata: %d obstacle boxes, min_dist=%.3f", len(obstacle_boxes), min_dist)
     return {
         "frame_id": frame_id,
         "scene_seed": scene_seed,
