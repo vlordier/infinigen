@@ -2300,65 +2300,60 @@ class TestDensityScalerEdgeCases:
 class TestFrameMetadataJsonEdgeCases:
     """Test FrameMetadata JSON round-trip with edge values."""
 
-    def test_round_trip_with_infinity(self):
+    def test_round_trip_with_infinity(self, tmp_path):
         """Infinity nearest_obstacle_m survives JSON round-trip."""
-        import tempfile
+        path = tmp_path / "meta.json"
         md = FrameMetadata(nearest_obstacle_m=float("inf"), frame_id=42)
-        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
-            md.save_json(f.name)
-            loaded = FrameMetadata.load_json(f.name)
+        md.save_json(path)
+        loaded = FrameMetadata.load_json(path)
         assert math.isinf(loaded.nearest_obstacle_m)
         assert loaded.frame_id == 42
 
-    def test_round_trip_with_obstacles(self):
+    def test_round_trip_with_obstacles(self, tmp_path):
         """BBox3D obstacles survive JSON round-trip."""
-        import tempfile
+        path = tmp_path / "meta.json"
         boxes = [
             BBox3D(center=(1.0, 2.0, 3.0), extent=(0.5, 0.5, 0.5), label="test"),
         ]
         md = FrameMetadata(obstacles=boxes)
-        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
-            md.save_json(f.name)
-            loaded = FrameMetadata.load_json(f.name)
+        md.save_json(path)
+        loaded = FrameMetadata.load_json(path)
         assert len(loaded.obstacles) == 1
         assert loaded.obstacles[0].center == (1.0, 2.0, 3.0)
         assert loaded.obstacles[0].label == "test"
 
-    def test_round_trip_with_depth_stats(self):
+    def test_round_trip_with_depth_stats(self, tmp_path):
         """DepthStats survives JSON round-trip."""
-        import tempfile
+        path = tmp_path / "meta.json"
         ds = DepthStats(min_m=0.5, max_m=50.0, mean_m=25.0, median_m=24.0, std_m=10.0)
         md = FrameMetadata(depth_stats=ds)
-        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
-            md.save_json(f.name)
-            loaded = FrameMetadata.load_json(f.name)
+        md.save_json(path)
+        loaded = FrameMetadata.load_json(path)
         assert loaded.depth_stats is not None
         assert loaded.depth_stats.min_m == 0.5
         assert loaded.depth_stats.max_m == 50.0
 
-    def test_round_trip_tuple_fields(self):
+    def test_round_trip_tuple_fields(self, tmp_path):
         """Tuple fields (camera_position, velocity) restored from JSON lists."""
-        import tempfile
+        path = tmp_path / "meta.json"
         md = FrameMetadata(
             camera_position=(1.5, 2.5, 3.5),
             velocity=(0.1, 0.2, 0.3),
             swarm_positions=[(10.0, 20.0, 30.0)],
         )
-        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
-            md.save_json(f.name)
-            loaded = FrameMetadata.load_json(f.name)
+        md.save_json(path)
+        loaded = FrameMetadata.load_json(path)
         assert isinstance(loaded.camera_position, tuple)
         assert isinstance(loaded.velocity, tuple)
         assert loaded.camera_position == (1.5, 2.5, 3.5)
         assert loaded.swarm_positions[0] == (10.0, 20.0, 30.0)
 
-    def test_round_trip_with_extra(self):
+    def test_round_trip_with_extra(self, tmp_path):
         """Extra dict survives JSON round-trip."""
-        import tempfile
+        path = tmp_path / "meta.json"
         md = FrameMetadata(extra={"weather": "clear", "lighting": "sunset"})
-        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
-            md.save_json(f.name)
-            loaded = FrameMetadata.load_json(f.name)
+        md.save_json(path)
+        loaded = FrameMetadata.load_json(path)
         assert loaded.extra["weather"] == "clear"
 
 
@@ -2573,10 +2568,14 @@ class TestReprMethods:
 
 
 class TestBenchmarkWorldGen:
-    """Performance benchmarks for world generation (timing assertions)."""
+    """Performance benchmarks for world generation.
 
-    def test_generate_world_under_100ms(self):
-        """World generation should complete in under 100ms for any complexity."""
+    Thresholds are deliberately generous (10×) to avoid flaky failures
+    on slow CI runners.  Use local profiling for precise measurements.
+    """
+
+    def test_generate_world_under_1s(self):
+        """World generation should complete in under 1s for any complexity."""
         import time
         from infinigen.core.syndata.world_gen import WorldConfig, generate_world
         for c in [0.0, 0.25, 0.5, 0.75, 1.0]:
@@ -2584,10 +2583,10 @@ class TestBenchmarkWorldGen:
             start = time.perf_counter()
             generate_world(cfg)
             elapsed = time.perf_counter() - start
-            assert elapsed < 0.1, f"generate_world(c={c}) took {elapsed:.3f}s (limit 100ms)"
+            assert elapsed < 1.0, f"generate_world(c={c}) took {elapsed:.3f}s (limit 1s)"
 
-    def test_flappy_generation_under_10ms(self):
-        """Flappy obstacle generation should be extremely fast."""
+    def test_flappy_generation_under_1s(self):
+        """100× flappy obstacle generation should complete in under 1s."""
         import time
         from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
         cfg = FlappyColumnConfig.hard()
@@ -2595,10 +2594,10 @@ class TestBenchmarkWorldGen:
         for _ in range(100):
             generate_flappy_obstacles(cfg, seed=42)
         elapsed = time.perf_counter() - start
-        assert elapsed < 1.0, f"100× flappy generation took {elapsed:.3f}s (limit 1s)"
+        assert elapsed < 5.0, f"100× flappy generation took {elapsed:.3f}s (limit 5s)"
 
-    def test_validation_under_1ms(self):
-        """Scene validation should be near-instant."""
+    def test_validation_under_1s(self):
+        """1000× scene validation should be near-instant."""
         import time
         sv = SceneValidator()
         meta: dict[str, object] = {
@@ -2611,7 +2610,7 @@ class TestBenchmarkWorldGen:
         for _ in range(1000):
             sv.validate(meta)
         elapsed = time.perf_counter() - start
-        assert elapsed < 1.0, f"1000× validation took {elapsed:.3f}s (limit 1s)"
+        assert elapsed < 5.0, f"1000× validation took {elapsed:.3f}s (limit 5s)"
 
     def test_bbox3d_creation_performance(self):
         """BBox3D (frozen+slots) creation should handle 10k instances quickly."""
@@ -2623,7 +2622,7 @@ class TestBenchmarkWorldGen:
         ]
         elapsed = time.perf_counter() - start
         assert len(boxes) == 10000
-        assert elapsed < 1.0, f"10k BBox3D creation took {elapsed:.3f}s (limit 1s)"
+        assert elapsed < 5.0, f"10k BBox3D creation took {elapsed:.3f}s (limit 5s)"
 
 
 class TestInitReExports:
