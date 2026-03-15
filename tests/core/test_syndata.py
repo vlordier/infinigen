@@ -539,6 +539,34 @@ class TestSceneValidator:
         assert len(results) == 0
         assert v.is_valid({})
 
+    def test_fail_fast_stops_early(self):
+        """fail_fast=True should return only one result on first failure."""
+        v = SceneValidator(min_obstacles=5, min_depth_range_m=10.0)
+        meta = {
+            "obstacles": [],  # fails (0 < 5)
+            "depth_stats": {"min_m": 1.0, "max_m": 5.0},  # also fails
+            "traversability_ratio": 0.5,
+            "poly_count": 50_000,
+        }
+        results_full = v.validate(meta)
+        results_fast = v.validate(meta, fail_fast=True)
+        assert len(results_fast) == 1
+        assert not results_fast[0].passed
+        assert len(results_full) > len(results_fast)
+
+    def test_fail_fast_all_pass(self):
+        """fail_fast=True should return all results when everything passes."""
+        v = SceneValidator(min_obstacles=1, max_obstacles=10)
+        meta = {
+            "obstacles": [{"center": (0, 0, 0)}] * 3,
+            "depth_stats": {"min_m": 0.5, "max_m": 50.0},
+            "traversability_ratio": 0.5,
+            "poly_count": 50_000,
+        }
+        results = v.validate(meta, fail_fast=True)
+        assert all(r.passed for r in results)
+        assert len(results) == 4
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  10. Integration: end-to-end curriculum pipeline

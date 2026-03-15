@@ -73,7 +73,7 @@ class SceneValidator:
     max_poly_count: int = 10_000_000
     custom_checks: list[tuple[str, Any]] = field(default_factory=list)
 
-    def validate(self, metadata: dict[str, Any]) -> list[ValidationResult]:
+    def validate(self, metadata: dict[str, Any], *, fail_fast: bool = False) -> list[ValidationResult]:
         """Run all checks against the supplied metadata dict.
 
         Expected keys (all optional — missing keys skip their check):
@@ -83,24 +83,39 @@ class SceneValidator:
         * ``"traversability_ratio"`` — float in [0, 1]
         * ``"poly_count"`` — int
 
+        Parameters
+        ----------
+        metadata : dict[str, Any]
+            Scene metadata to validate.
+        fail_fast : bool
+            If *True*, stop after the first failed check.  Useful in
+            hot loops where only pass/fail matters and detailed
+            diagnostics are not needed.
+
         Returns
         -------
         list[ValidationResult]
-            One result per check.
+            One result per check (or fewer if *fail_fast* triggered).
         """
         results: list[ValidationResult] = []
+
+        def _append(result: ValidationResult) -> bool:
+            """Append a result; return True if fail_fast should stop."""
+            results.append(result)
+            return fail_fast and not result.passed
 
         # ---- obstacle count -------------------------------------------------
         obstacles = metadata.get("obstacles")
         if obstacles is not None:
             n = len(obstacles)
-            results.append(
+            if _append(
                 ValidationResult(
                     name="obstacle_count",
                     passed=self.min_obstacles <= n <= self.max_obstacles,
                     message=f"{n} obstacles (need {self.min_obstacles}–{self.max_obstacles})",
                 )
-            )
+            ):
+                return results
 
         # ---- depth range ----------------------------------------------------
         ds = metadata.get("depth_stats")
@@ -109,31 +124,33 @@ class SceneValidator:
             has_max = "max_m" in ds
             if has_min and has_max:
                 depth_range = ds["max_m"] - ds["min_m"]
-                results.append(
+                if _append(
                     ValidationResult(
                         name="depth_range",
                         passed=depth_range >= self.min_depth_range_m,
                         message=f"depth range {depth_range:.1f} m (need >= {self.min_depth_range_m})",
                     )
-                )
+                ):
+                    return results
             else:
                 missing = []
                 if not has_min:
                     missing.append("min_m")
                 if not has_max:
                     missing.append("max_m")
-                results.append(
+                if _append(
                     ValidationResult(
                         name="depth_range",
                         passed=False,
                         message=f"depth_stats missing required key(s): {', '.join(missing)}",
                     )
-                )
+                ):
+                    return results
 
         # ---- traversability -------------------------------------------------
         trav = metadata.get("traversability_ratio")
         if trav is not None:
-            results.append(
+            if _append(
                 ValidationResult(
                     name="traversability",
                     passed=self.min_traversability <= trav <= self.max_traversability,
@@ -142,23 +159,26 @@ class SceneValidator:
                         f"(need {self.min_traversability}–{self.max_traversability})"
                     ),
                 )
-            )
+            ):
+                return results
 
         # ---- poly count -----------------------------------------------------
         polys = metadata.get("poly_count")
         if polys is not None:
-            results.append(
+            if _append(
                 ValidationResult(
                     name="poly_count",
                     passed=self.min_poly_count <= polys <= self.max_poly_count,
                     message=f"{polys} tris (need {self.min_poly_count}–{self.max_poly_count})",
                 )
-            )
+            ):
+                return results
 
         # ---- custom checks --------------------------------------------------
         for name, fn in self.custom_checks:
             passed, msg = fn(metadata)
-            results.append(ValidationResult(name=name, passed=passed, message=msg))
+            if _append(ValidationResult(name=name, passed=passed, message=msg)):
+                return results
 
         return results
 
