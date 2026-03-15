@@ -1870,3 +1870,120 @@ class TestOverlayHintsForComplexity:
         h = overlay_hints_for_complexity(0.95)
         assert h.material_complexity == "subsurface"
         assert h.texture_resolution == 4096
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  World generation edge cases
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestWorldGenSeedDeterminism:
+    """Same seed produces identical world geometry."""
+
+    def test_same_seed_same_boxes(self):
+        cfg = WorldConfig(complexity=0.5, seed=12345)
+        b1 = generate_world(cfg)
+        b2 = generate_world(cfg)
+        assert len(b1) == len(b2)
+        for a, b in zip(b1, b2):
+            assert a.center == b.center
+            assert a.extent == b.extent
+            assert a.label == b.label
+
+    def test_different_seed_different_boxes(self):
+        c1 = WorldConfig(complexity=0.5, seed=111)
+        c2 = WorldConfig(complexity=0.5, seed=222)
+        b1 = generate_world(c1)
+        b2 = generate_world(c2)
+        # Same complexity → same count, but different positions
+        centers1 = [b.center for b in b1]
+        centers2 = [b.center for b in b2]
+        assert centers1 != centers2
+
+
+class TestWorldGenBoundaryComplexity:
+    """Test generation at extreme complexity values."""
+
+    def test_complexity_zero(self):
+        cfg = WorldConfig(complexity=0.0, seed=42)
+        boxes = generate_world(cfg)
+        assert len(boxes) > 0
+        # At c=0, should have corridor shell + columns
+        labels = [b.label for b in boxes]
+        assert any("floor" in l for l in labels)
+        assert any("ceiling" in l for l in labels)
+
+    def test_complexity_one(self):
+        cfg = WorldConfig(complexity=1.0, seed=42)
+        boxes = generate_world(cfg)
+        # At c=1.0, should have many boxes (rooms, branches, levels, debris)
+        assert len(boxes) > 50
+
+    def test_complexity_at_each_threshold(self):
+        """Generate at exact threshold values without errors."""
+        from infinigen.core.syndata.world_gen import (
+            COMPLEXITY_BRANCHES,
+            COMPLEXITY_CORRIDOR,
+            COMPLEXITY_DOOM,
+            COMPLEXITY_MAZE,
+            COMPLEXITY_ROOMS,
+        )
+        for c in [COMPLEXITY_CORRIDOR, COMPLEXITY_ROOMS, COMPLEXITY_BRANCHES,
+                   COMPLEXITY_MAZE, COMPLEXITY_DOOM]:
+            cfg = WorldConfig(complexity=c, seed=42)
+            boxes = generate_world(cfg)
+            assert len(boxes) > 0
+
+
+class TestWorldConfigPresets:
+    """Test all WorldConfig preset factory methods."""
+
+    @pytest.mark.parametrize("preset_name,method", [
+        ("flappy", WorldConfig.flappy),
+        ("corridor", WorldConfig.corridor),
+        ("rooms", WorldConfig.rooms),
+        ("branches", WorldConfig.branches),
+        ("maze", WorldConfig.maze),
+        ("doom", WorldConfig.doom),
+    ])
+    def test_preset_creates_valid_config(self, preset_name, method):
+        cfg = method(seed=42)
+        assert isinstance(cfg, WorldConfig)
+        assert 0.0 <= cfg.complexity <= 1.0
+        boxes = generate_world(cfg)
+        assert len(boxes) > 0
+
+    def test_preset_complexity_ordering(self):
+        """Presets should have monotonically increasing complexity."""
+        presets = [
+            WorldConfig.flappy(),
+            WorldConfig.corridor(),
+            WorldConfig.rooms(),
+            WorldConfig.branches(),
+            WorldConfig.maze(),
+            WorldConfig.doom(),
+        ]
+        complexities = [p.complexity for p in presets]
+        assert complexities == sorted(complexities)
+
+    def test_preset_box_count_increases(self):
+        """Higher complexity presets should produce more boxes."""
+        presets = [
+            WorldConfig.flappy(seed=42),
+            WorldConfig.corridor(seed=42),
+            WorldConfig.rooms(seed=42),
+            WorldConfig.branches(seed=42),
+            WorldConfig.maze(seed=42),
+            WorldConfig.doom(seed=42),
+        ]
+        counts = [len(generate_world(p)) for p in presets]
+        # Allow non-strict monotonicity (seed variation), but overall trend
+        assert counts[-1] > counts[0]
+
+    def test_from_curriculum_progress_range(self):
+        """from_curriculum_progress maps [0, 1] → valid WorldConfig."""
+        for p in [0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0]:
+            cfg = WorldConfig.from_curriculum_progress(p, seed=42)
+            assert 0.0 <= cfg.complexity <= 1.0
+            boxes = generate_world(cfg)
+            assert len(boxes) > 0
