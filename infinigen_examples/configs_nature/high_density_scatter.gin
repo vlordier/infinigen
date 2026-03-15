@@ -1,0 +1,19 @@
+# High-density scatter preset for Infinigen (Blender 5.0+)
+#
+# Blender 5.0 significantly enlarged geometry buffer limits, enabling stable
+# scenes with millions of vertices and dense foliage without the LOD hacks
+# previously required to stay under Blender 4.x mesh limits.
+#
+# This preset raises the scatter density multiplier and the per-call maximum
+# density cap.  It is intended for high-end GPU runs at the "maze" or "doom"
+# quality tiers from syndata/world_gen.py where photorealistic density is
+# critical for training data diversity.
+#
+# Usage:
+#   python -m infinigen.launch ... --configs base high_density_scatter
+#
+# Pairs well with denoised_render.gin (fewer samples to offset added geometry
+# rendering cost) and eevee_annotations.gin (faster GT annotation rendering).
+
+scatter_instances.density_scale = 2.0
+scatter_instances.max_density = 20000

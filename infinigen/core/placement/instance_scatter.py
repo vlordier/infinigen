@@ -8,6 +8,7 @@ import logging
 from math import prod
 
 import bpy
+import gin
 import numpy as np
 from mathutils import Vector
 
@@ -18,6 +19,12 @@ from infinigen.core.placement.camera import nodegroup_active_cam_info
 from infinigen.core.util import blender as butil
 
 logger = logging.getLogger(__name__)
+
+# Default max density cap.  Blender 5.0 significantly enlarged geometry buffer
+# limits, so this default can be safely raised from the Blender 4.x value of
+# 5000 without risking out-of-memory crashes on typical hardware.  Override via
+# gin (e.g. in high_density_scatter.gin) to raise it further for high-end runs.
+SCATTER_MAX_DENSITY_DEFAULT = 10000
 
 
 def _less(a, b, nw):
@@ -314,17 +321,43 @@ def geo_instance_scatter(
     nw.new_node(Nodes.GroupOutput, input_kwargs={"Geometry": instances})
 
 
+@gin.configurable
 def scatter_instances(
     collection,
     density=None,
     vol_density=None,
-    max_density=5000,
+    max_density=SCATTER_MAX_DENSITY_DEFAULT,
+    density_scale: float = 1.0,
     scale=None,
     scale_rand=0,
     scale_rand_axi=0,
     apply_geo=False,
     **kwargs,
 ):
+    """Scatter a collection of instances over a mesh surface.
+
+    Parameters
+    ----------
+    collection:
+        Blender object collection to instance.
+    density:
+        Explicit surface density in instances/m².  Mutually exclusive with
+        ``vol_density``.
+    vol_density:
+        Volumetric density in instances/m³.  Converted to surface density using
+        the average object volume and scale.  Mutually exclusive with ``density``.
+    max_density:
+        Hard cap on the resolved surface density (instances/m²).  Blender 5.0
+        enlarged geometry buffer limits so this defaults to
+        ``SCATTER_MAX_DENSITY_DEFAULT`` (10 000) rather than the legacy 5 000.
+        Increase via ``high_density_scatter.gin`` for high-end runs.
+    density_scale:
+        Gin-configurable multiplier applied to the resolved density **after**
+        the ``vol_density → density`` conversion and **before** the
+        ``max_density`` cap.  Default 1.0 (no change).  Set to values > 1 in
+        the ``high_density_scatter.gin`` preset to produce denser foliage,
+        pebbles, and grass without touching individual scatter files.
+    """
     if np.sum([density is None, vol_density is None]) != 1:
         raise ValueError(
             f"Scatter instances got {density=} and {vol_density=} expected only one of the three"
@@ -346,11 +379,18 @@ def scatter_instances(
         avg_vol = np.mean([prod(list(o.dimensions)) for o in collection.objects])
         density = vol_density / (avg_vol * avg_scale**2)  # TODO cube power?
 
-        if density > max_density:
-            logger.warning(
-                f"scatter_instances with {collection.name=} {vol_density=} {avg_scale=:.4f} {avg_vol=:.4f} attempted {density=:.4f}, clamping to {max_density=}"
-            )
-            density = max_density
+    # Apply the gin-configurable density multiplier.  This allows global
+    # density scaling (e.g. for high-fidelity doom-tier runs) without
+    # modifying individual scatter files.
+    density = density * density_scale
+
+    if density > max_density:
+        density_source = f"{vol_density=}" if vol_density is not None else f"direct {density / density_scale:.4f}"
+        logger.warning(
+            f"scatter_instances with {collection.name=} {density_source} {avg_scale=:.4f} "
+            f"attempted {density=:.4f}, clamping to {max_density=}"
+        )
+        density = max_density
 
     if scale is not None:
         assert "scaling" not in kwargs

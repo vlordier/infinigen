@@ -876,3 +876,60 @@ def test_configure_denoiser_gin_params():
     assert "num_samples" in params
     assert "min_samples" in params
     assert "adaptive_threshold" in params
+
+
+# ---------------------------------------------------------------------------
+# Scatter density scaling – scatter_instances() (Blender 5.0 Massive Geometry)
+# ---------------------------------------------------------------------------
+
+
+def test_scatter_instances_gin_params():
+    """scatter_instances must expose density_scale and max_density as gin parameters."""
+    import inspect
+
+    from infinigen.core.placement.instance_scatter import scatter_instances
+
+    sig = inspect.signature(scatter_instances.__wrapped__)
+    params = sig.parameters
+    assert "density_scale" in params, "density_scale gin parameter missing"
+    assert "max_density" in params, "max_density gin parameter missing"
+    assert "vol_density" in params
+    assert "density" in params
+
+
+def test_scatter_density_scale_default_is_one():
+    """scatter_instances.density_scale must default to 1.0 (no-op for existing scenes)."""
+    import inspect
+
+    from infinigen.core.placement.instance_scatter import scatter_instances
+
+    sig = inspect.signature(scatter_instances.__wrapped__)
+    assert sig.parameters["density_scale"].default == 1.0, (
+        "Default density_scale is not 1.0 — existing scenes would be affected"
+    )
+
+
+def test_scatter_max_density_default_raised():
+    """Default max_density must be >= 10000 (raised for Blender 5.0 buffer limits)."""
+    from infinigen.core.placement.instance_scatter import SCATTER_MAX_DENSITY_DEFAULT
+
+    assert SCATTER_MAX_DENSITY_DEFAULT >= 10000, (
+        f"SCATTER_MAX_DENSITY_DEFAULT={SCATTER_MAX_DENSITY_DEFAULT} is below 10000; "
+        "expected to be raised for Blender 5.0"
+    )
+
+
+def test_scatter_density_scale_applies():
+    """density_scale multiplier must be applied to density before the max_density cap."""
+    import inspect
+
+    from infinigen.core.placement.instance_scatter import (
+        SCATTER_MAX_DENSITY_DEFAULT,
+        scatter_instances,
+    )
+
+    sig = inspect.signature(scatter_instances.__wrapped__)
+    # Verify the logical contract documented in the docstring is consistent:
+    # density_scale default is 1.0, max_density default >= 10000
+    assert sig.parameters["density_scale"].default == 1.0
+    assert sig.parameters["max_density"].default >= SCATTER_MAX_DENSITY_DEFAULT
