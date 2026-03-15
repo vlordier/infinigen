@@ -22,7 +22,7 @@ import numpy as np
 __all__ = ["DomainRandomiser"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class _Range:
     """A single randomisation range that grows with difficulty."""
 

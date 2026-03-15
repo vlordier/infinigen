@@ -66,7 +66,7 @@ PASSES_FULL: frozenset[str] = frozenset({
 })
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SensorNoiseModel:
     """Simple parametric sensor noise for sim-to-real transfer.
 

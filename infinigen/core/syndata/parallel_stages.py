@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 __all__ = ["Stage", "StageGraph"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Stage:
     """A single pipeline stage with explicit dependencies.
 
