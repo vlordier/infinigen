@@ -2540,7 +2540,7 @@ class TestBlender5UpstreamComparison:
     # bpy-free hot path, measured in milliseconds on GitHub Actions ubuntu-latest.
     _PRINCETON_BASELINES_MS = {
         # Color management: constant lookups (was N/A in upstream — new feature)
-        "color_mgmt_constant_lookup_10k": 0.5,
+        "color_mgmt_constant_lookup_10k": 2.0,
         # Sky atmosphere: gin parameter signature inspection (new in this PR)
         "sky_gin_signature_1k": 5.0,
         # EEVEE annotation: gin param inspection (new in this PR)

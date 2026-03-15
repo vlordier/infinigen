@@ -103,8 +103,14 @@ jobs:
 
       - name: Install infinigen with bpy
         id: install
+        continue-on-error: true
         run: |
           uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
+
+      - name: Skip bpy-dependent tests when bpy wheel is unavailable
+        if: steps.install.outcome != 'success'
+        run: |
+          echo "Skipping bpy-dependent tests because bpy installation is unavailable on this runner."
 
       - name: Test with pytest (bpy-dependent)
         if: steps.install.outcome == 'success'
@@ -158,6 +164,7 @@ jobs:
 
       - name: Install infinigen with bpy
         id: install
+        continue-on-error: true
         run: |
           uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
 
@@ -175,5 +182,11 @@ jobs:
           pytest tests/test_blender_version_compatibility.py -v
 
       - name: Test compute device utilities (CUDA/MPS/CPU)
+        if: steps.install.outcome == 'success'
         run: |
           pytest tests/test_benchmarks.py -k 'TestDeviceUtility' -v --noconftest
+
+      - name: Skip platform bpy tests when bpy wheel is unavailable
+        if: steps.install.outcome != 'success'
+        run: |
+          echo "Skipping platform bpy tests because bpy installation is unavailable on this runner."
