@@ -78,6 +78,25 @@ pre-commit install
 
 :exclamation: If you encounter any issues with the above, please add `-vv > logs.txt 2>&1` to the end of your command and run again, then provide the resulting logs.txt file as an attachment when making a Github Issue.
 
+### Local bpy runtime troubleshooting
+
+If `import bpy` fails locally, verify these two conditions first:
+
+1. Your active environment uses Python 3.11 (`requires-python ==3.11.*`).
+2. `bpy==5.0.1` is installed from Blender's index (`https://download.blender.org/pypi/`).
+
+You can run the helper below from the repo root:
+
+```bash
+scripts/install/check_bpy_runtime.sh
+```
+
+Or with an explicit interpreter path:
+
+```bash
+scripts/install/check_bpy_runtime.sh /path/to/python
+```
+
 ## Installing Infinigen as a Blender Python script
 
 On Linux / Mac / WSL:
