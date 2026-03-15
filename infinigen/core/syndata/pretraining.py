@@ -34,9 +34,10 @@ from typing import Any
 
 import numpy as np
 
+from infinigen.core.syndata.metadata import BBox3D
+
 __all__ = [
     "FlappyColumnConfig",
-    "FlappyObstacle",
     "flappy_frame_metadata",
     "generate_flappy_obstacles",
 ]
@@ -190,38 +191,6 @@ class FlappyColumnConfig:
 
 
 # ---------------------------------------------------------------------------
-# Obstacle dataclass (lightweight, independent of FrameMetadata)
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class FlappyObstacle:
-    """A single box obstacle in the flappy corridor.
-
-    Parameters
-    ----------
-    center : tuple[float, float, float]
-        Centre position ``(x, y, z)`` in world coordinates.
-    half_extents : tuple[float, float, float]
-        Half-size ``(dx, dy, dz)`` in each axis.
-    label : str
-        Semantic label (e.g. ``"column_upper_0"``).
-    """
-
-    center: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    half_extents: tuple[float, float, float] = (0.1, 0.1, 0.1)
-    label: str = "obstacle"
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialise to a JSON-compatible dict."""
-        return {
-            "center": list(self.center),
-            "half_extents": list(self.half_extents),
-            "label": self.label,
-        }
-
-
-# ---------------------------------------------------------------------------
 # Procedural obstacle generation
 # ---------------------------------------------------------------------------
 
@@ -230,7 +199,7 @@ def generate_flappy_obstacles(
     config: FlappyColumnConfig,
     *,
     seed: int | None = None,
-) -> list[FlappyObstacle]:
+) -> list[BBox3D]:
     """Generate column-gap obstacles for a flappy-bird corridor.
 
     Each column consists of an upper and lower box with a gap between
@@ -246,7 +215,7 @@ def generate_flappy_obstacles(
 
     Returns
     -------
-    list[FlappyObstacle]
+    list[BBox3D]
         Upper and lower box obstacles for each column (2 × num_columns),
         plus floor and ceiling bounding boxes.
 
@@ -260,7 +229,7 @@ def generate_flappy_obstacles(
         raise TypeError(msg)
 
     rng = np.random.default_rng(seed)
-    obstacles: list[FlappyObstacle] = []
+    obstacles: list[BBox3D] = []
 
     # Column spacing along the corridor
     if config.num_columns > 0:
@@ -298,9 +267,9 @@ def generate_flappy_obstacles(
         lower_top = gap_z - half_gap
         if lower_top > 0.01:
             lower_half_h = lower_top / 2
-            obstacles.append(FlappyObstacle(
+            obstacles.append(BBox3D(
                 center=(col_x, col_y, lower_half_h),
-                half_extents=(half_cw, half_cd, lower_half_h),
+                extent=(half_cw, half_cd, lower_half_h),
                 label=f"column_lower_{i}",
             ))
 
@@ -310,22 +279,22 @@ def generate_flappy_obstacles(
         if upper_height > 0.01:
             upper_half_h = upper_height / 2
             upper_z = upper_bottom + upper_half_h
-            obstacles.append(FlappyObstacle(
+            obstacles.append(BBox3D(
                 center=(col_x, col_y, upper_z),
-                half_extents=(half_cw, half_cd, upper_half_h),
+                extent=(half_cw, half_cd, upper_half_h),
                 label=f"column_upper_{i}",
             ))
 
     # Floor and ceiling
     floor_half_thick = 0.05
-    obstacles.append(FlappyObstacle(
+    obstacles.append(BBox3D(
         center=(config.corridor_length / 2, 0.0, -floor_half_thick),
-        half_extents=(config.corridor_length / 2, config.corridor_width / 2, floor_half_thick),
+        extent=(config.corridor_length / 2, config.corridor_width / 2, floor_half_thick),
         label="floor",
     ))
-    obstacles.append(FlappyObstacle(
+    obstacles.append(BBox3D(
         center=(config.corridor_length / 2, 0.0, config.corridor_height + floor_half_thick),
-        half_extents=(config.corridor_length / 2, config.corridor_width / 2, floor_half_thick),
+        extent=(config.corridor_length / 2, config.corridor_width / 2, floor_half_thick),
         label="ceiling",
     ))
 
@@ -397,7 +366,10 @@ def flappy_frame_metadata(
         "scene_seed": scene_seed,
         "camera_position": (cam_x, 0.0, config.corridor_height / 2),
         "camera_rotation_euler": (0.0, 0.0, 0.0),
-        "obstacles": [o.to_dict() for o in obstacles],
+        "obstacles": [
+            {"center": list(o.center), "extent": list(o.extent), "label": o.label}
+            for o in obstacles
+        ],
         "depth_stats": {
             "min_m": round(min_dist, 3),
             "max_m": round(max_dist, 3),

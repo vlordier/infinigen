@@ -56,7 +56,6 @@ from infinigen.core.syndata.observation import ObservationConfig, SensorNoiseMod
 from infinigen.core.syndata.parallel_stages import StageGraph
 from infinigen.core.syndata.pretraining import (
     FlappyColumnConfig,
-    FlappyObstacle,
     flappy_frame_metadata,
     generate_flappy_obstacles,
 )
@@ -120,7 +119,6 @@ __all__ = [
     #    Even simpler than WorldConfig(complexity=0) — a straight corridor
     #    with column-gap obstacles for bootstrapping RL agents.
     "FlappyColumnConfig",
-    "FlappyObstacle",
     "flappy_frame_metadata",
     "generate_flappy_obstacles",
 ]

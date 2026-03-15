@@ -1208,7 +1208,7 @@ class TestGenerateFlappyObstacles:
         assert len(obs1) == len(obs2)
         for a, b in zip(obs1, obs2):
             assert a.center == b.center
-            assert a.half_extents == b.half_extents
+            assert a.extent == b.extent
 
     def test_different_seeds_differ(self):
         cfg = FlappyColumnConfig(num_columns=5)
@@ -1240,17 +1240,15 @@ class TestGenerateFlappyObstacles:
         obs = generate_flappy_obstacles(cfg, seed=0)
         for o in obs:
             assert hasattr(o, "center")
-            assert hasattr(o, "half_extents")
+            assert hasattr(o, "extent")
             assert hasattr(o, "label")
-            d = o.to_dict()
-            assert "center" in d
 
-    def test_half_extents_positive(self):
+    def test_extent_positive(self):
         cfg = FlappyColumnConfig(num_columns=5, corridor_height=3.0)
         obs = generate_flappy_obstacles(cfg, seed=42)
         for o in obs:
-            for v in o.half_extents:
-                assert v > 0, f"Non-positive half_extent in {o.label}"
+            for v in o.extent:
+                assert v > 0, f"Non-positive extent in {o.label}"
 
 
 class TestFlappyPresets:

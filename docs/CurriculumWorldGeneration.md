@@ -48,7 +48,7 @@ hard_cfg = FlappyColumnConfig.hard()     # narrow gaps, 8 columns, tight corrido
 
 # Generate obstacles from any preset
 obstacles = generate_flappy_obstacles(easy_cfg, seed=42)
-# Returns list[FlappyObstacle] with .center, .half_extents, .label
+# Returns list[BBox3D] with .center, .extent, .label
 
 # Get metadata for validation / curriculum tracking
 metadata = flappy_frame_metadata(easy_cfg, seed=42)
@@ -529,7 +529,7 @@ boxes = generate_world(cfg)
 All generation functions return standard data types:
 
 - **`generate_world()`** → `list[BBox3D]` — each box has `.center`, `.extent`, `.label`
-- **`generate_flappy_obstacles()`** → `list[FlappyObstacle]` — each has `.center`, `.half_extents`, `.label`
+- **`generate_flappy_obstacles()`** → `list[BBox3D]` — each has `.center`, `.extent`, `.label`
 - **`flappy_frame_metadata()`** → `dict[str, Any]` — FrameMetadata-compatible dict with obstacles, depth, traversability
 - **`world_gin_overrides()`** → `dict[str, object]` — Infinigen gin parameter names → values
 - **`world_summary()`** → `dict[str, Any]` — human-readable summary for logging
