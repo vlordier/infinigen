@@ -314,8 +314,9 @@ addressed by the bpy 5.0.1 upgrade in this PR.
 | **Version guard** | `bpy.app.version_string in ["4.5.0"]` | `bpy.app.version == (5, 0, 1)` | ✅ Done | `core/execute_tasks.py:372` |
 | **Addon IDs** | `bl_ext.blender_org.*` module names | Same (already 3.3+ style) | ✅ Done | `core/init.py:310` |
 | **Node group sockets** | `.interface.items_tree` | Same | ✅ Done | `core/nodes/node_wrangler.py:35` |
-| **EEVEE name** | `BLENDER_EEVEE` | `BLENDER_EEVEE_NEXT` | ⚠️ Pending | `assets/objects/trees/utils/helper.py` |
-| **Color space** | Filmic/sRGB | ACES 2.0 available | 📋 Optional | `core/init.py` |
+| **EEVEE name** | `BLENDER_EEVEE` | `BLENDER_EEVEE_NEXT` | ✅ Done | `assets/objects/trees/utils/helper.py` |
+| **Color space** | No configuration | `configure_color_management()` with ACES 2.0 | ✅ Done | `core/init.py` |
+| **Sky ozone/altitude** | Hardcoded `clip_gaussian(...)` | Gin-configurable parameters | ✅ Done | `assets/lighting/sky_lighting.py` |
 | **Volume nodes** | Manual CUDA kernels | Native SDF Grid nodes | 📋 Optional | `terrain/` |
 | **Intel Mac wheel** | Available | Dropped in 5.0.x | ✅ Handled | `uv.lock` |
 
@@ -342,9 +343,9 @@ C.scene.render.engine = "BLENDER_EEVEE_NEXT"  # Blender 5.0+
 | Feature | Impact on Data Quality | Implementation Effort | Priority |
 |---|---|---|---|
 | EEVEE Next for annotation passes | ⭐⭐⭐ High (10–50× speed) | 🟡 Medium | **P1** |
-| ACES 2.0 color pipeline | ⭐⭐⭐ High (colour fidelity) | 🟢 Low | **P1** |
-| Fix `BLENDER_EEVEE` → `BLENDER_EEVEE_NEXT` | ⭐⭐ Breaking fix | 🟢 Low | **P1** |
-| Improved sky (Nishita multi-scatter) | ⭐⭐⭐ High (free improvement) | 🟢 Low | **P1** |
+| ACES 2.0 color pipeline | ⭐⭐⭐ High (colour fidelity) | 🟢 Low | **P1 ✅ Implemented** |
+| Fix `BLENDER_EEVEE` → `BLENDER_EEVEE_NEXT` | ⭐⭐ Breaking fix | 🟢 Low | **P1 ✅ Done** |
+| Improved sky (Nishita multi-scatter) | ⭐⭐⭐ High (free improvement) | 🟢 Low | **P1 ✅ Implemented** |
 | Cycles sample reduction (improved denoiser) | ⭐⭐ Medium (throughput) | 🟢 Low | **P2** |
 | Repeat Zones for material octaves | ⭐⭐ Medium (compile speed) | 🟡 Medium | **P2** |
 | Switch Menu for material variants | ⭐⭐ Medium (diversity) | 🟡 Medium | **P2** |

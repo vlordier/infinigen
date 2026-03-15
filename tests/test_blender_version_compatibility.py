@@ -614,3 +614,89 @@ def test_merge_by_distance():
     # Threshold smaller than cube edge length – no merging expected on a clean cube
     butil.merge_by_distance(obj, face_size=0.001)
     assert len(obj.data.vertices) == initial_verts
+
+
+# ---------------------------------------------------------------------------
+# Color management – configure_color_management() (new in Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_color_management_default():
+    """configure_color_management() with defaults must set AgX and sRGB display."""
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    configure_color_management()
+    scene = bpy.context.scene
+    assert scene.view_settings.view_transform == "AgX"
+    assert scene.display_settings.display_device == "sRGB"
+    assert scene.view_settings.look == "None"
+
+
+def test_configure_color_management_aces2():
+    """configure_color_management() with ACES 2.0 must apply the ACES view transform."""
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    try:
+        configure_color_management(view_transform="ACES 2.0", display_device="sRGB")
+        assert bpy.context.scene.view_settings.view_transform == "ACES 2.0"
+    except (TypeError, AttributeError):
+        pytest.skip(
+            "ACES 2.0 view transform not available in this Blender build – "
+            "requires a complete Blender 5.0.x installation with OCIO config."
+        )
+
+
+def test_configure_color_management_exposure():
+    """configure_color_management() must propagate the exposure parameter."""
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    configure_color_management(exposure=1.5)
+    assert abs(bpy.context.scene.view_settings.exposure - 1.5) < 1e-5
+
+
+def test_configure_color_management_warns_unknown_transform(caplog):
+    """configure_color_management() must log a warning for an unknown view_transform."""
+    import logging
+
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    with caplog.at_level(logging.WARNING, logger="infinigen.core.init"):
+        try:
+            configure_color_management(view_transform="NotARealTransform_XYZ")
+        except Exception:
+            pass
+    assert any("NotARealTransform_XYZ" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Nishita sky atmosphere – gin-configurable ozone/altitude (Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_nishita_lighting_gin_params_ozone_altitude():
+    """nishita_lighting must expose ozone_density and altitude as gin parameters."""
+    import inspect
+
+    from infinigen.assets.lighting.sky_lighting import nishita_lighting
+
+    sig = inspect.signature(nishita_lighting.__wrapped__)
+    params = sig.parameters
+    assert "ozone_density" in params, "ozone_density must be a gin-configurable parameter"
+    assert "altitude" in params, "altitude must be a gin-configurable parameter"
+
+
+def test_nishita_lighting_gin_params_have_defaults():
+    """ozone_density and altitude parameters must have non-empty default distributions."""
+    import inspect
+
+    from infinigen.assets.lighting.sky_lighting import nishita_lighting
+
+    sig = inspect.signature(nishita_lighting.__wrapped__)
+    ozone_default = sig.parameters["ozone_density"].default
+    altitude_default = sig.parameters["altitude"].default
+    assert ozone_default is not inspect.Parameter.empty
+    assert altitude_default is not inspect.Parameter.empty

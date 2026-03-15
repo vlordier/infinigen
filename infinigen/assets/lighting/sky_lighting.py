@@ -22,6 +22,8 @@ def nishita_lighting(
     cam,
     dust_density=("clip_gaussian", 1, 1, 0.1, 2),
     air_density=("clip_gaussian", 1, 0.2, 0.7, 1.3),
+    ozone_density=("clip_gaussian", 1, 1, 0.1, 10),
+    altitude=("clip_gaussian", 100, 400, 0, 2000),
     strength=("uniform", 0.18, 0.22),
     sun_intensity=("uniform", 0.8, 1),
     sun_elevation=("spherical_sample", 10, None),
@@ -70,10 +72,10 @@ def nishita_lighting(
             data_path="sun_elevation", frame=bpy.context.scene.frame_start + 10
         )
 
-    sky_texture.altitude = clip_gaussian(100, 400, 0, 2000)
+    sky_texture.altitude = rg(altitude)
     sky_texture.air_density = rg(air_density)
     sky_texture.dust_density = rg(dust_density)
-    sky_texture.ozone_density = clip_gaussian(1, 1, 0.1, 10)
+    sky_texture.ozone_density = rg(ozone_density)
 
     strength = rg(strength)
     return nw.new_node(

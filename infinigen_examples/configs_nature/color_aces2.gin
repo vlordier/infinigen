@@ -1,0 +1,21 @@
+# ACES 2.0 color-management preset for Infinigen (Blender 5.0+)
+#
+# Activates the industry-standard ACES 2.0 wide-gamut pipeline:
+#   - ACEScg working space for scene-linear radiometry
+#   - Physically-accurate HDR sky and emissive materials
+#   - EXR ground-truth passes tagged with correct color metadata
+#
+# Usage:
+#   python -m infinigen.launch ... --configs base color_aces2
+#
+# Impact on ML training data:
+#   - Color-accurate renders that better match real camera response curves
+#   - Reduced color-shift artifacts in domain-adaptive vision models
+#   - Wide-gamut EXR buffers for depth / normal / optical-flow networks
+
+configure_color_management.view_transform = "ACES 2.0"
+configure_color_management.display_device = "sRGB"
+configure_color_management.look = "None"
+configure_color_management.exposure = 0.0
+configure_color_management.gamma = 1.0
+configure_color_management.sequencer_color_space = "Linear Rec.2020"

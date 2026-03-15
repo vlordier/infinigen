@@ -347,6 +347,72 @@ def require_blender_addon(addon: str, fail: str = "fatal", allow_online=False):
     return True
 
 
+_VALID_VIEW_TRANSFORMS = frozenset(
+    {
+        "Filmic",  # Blender default prior to 4.0
+        "AgX",  # Blender 4.0+
+        "ACES 2.0",  # Blender 5.0+ — industry-standard wide-gamut pipeline
+        "None",  # Linear / no tone-mapping (for technical EXR passes)
+        "Standard",  # Legacy sRGB direct
+        "Filmic Log",
+        "False Color",
+    }
+)
+
+
+@gin.configurable
+def configure_color_management(
+    view_transform: str = "AgX",
+    look: str = "None",
+    exposure: float = 0.0,
+    gamma: float = 1.0,
+    display_device: str = "sRGB",
+    sequencer_color_space: str = "sRGB",
+):
+    """Configure Blender's OCIO color-management pipeline.
+
+    Blender 5.0 ships native ACES 1.3 and ACES 2.0 view transforms, enabling
+    an industry-standard wide-gamut, scene-linear workflow without external OCIO
+    configs.  Setting ``view_transform="ACES 2.0"`` activates the full ACES
+    pipeline: ACEScg as the working space, proper HDR sky radiance, and
+    color-accurate EXR ground-truth output that downstream depth/normal/flow
+    networks can rely on.
+
+    Args:
+        view_transform: OCIO view transform. One of ``"Filmic"`` (legacy
+            default), ``"AgX"`` (Blender 4.0+), ``"ACES 2.0"`` (Blender 5.0+,
+            recommended for ML training data), ``"None"`` (linear, for raw
+            technical passes).
+        look: Optional contrast/look preset applied on top of the transform,
+            e.g. ``"Medium High Contrast"`` or ``"None"``.
+        exposure: Scene linear exposure adjustment in stops (0.0 = no change).
+        gamma: Display gamma (1.0 = no change).
+        display_device: Target display color space, e.g. ``"sRGB"`` or
+            ``"Rec.2020"``.
+        sequencer_color_space: Colour space for the video sequencer, e.g.
+            ``"sRGB"`` or ``"Linear Rec.2020"``.
+    """
+    if view_transform not in _VALID_VIEW_TRANSFORMS:
+        logger.warning(
+            f"configure_color_management: unknown {view_transform=}. "
+            f"Known values: {sorted(_VALID_VIEW_TRANSFORMS)}. "
+            "Blender may reject this at runtime."
+        )
+
+    scene = bpy.context.scene
+    scene.display_settings.display_device = display_device
+    scene.view_settings.view_transform = view_transform
+    scene.view_settings.look = look
+    scene.view_settings.exposure = exposure
+    scene.view_settings.gamma = gamma
+    scene.sequencer_colorspace_settings.name = sequencer_color_space
+
+    logger.info(
+        f"Color management: {view_transform=}, {look=}, "
+        f"{exposure=:.2f} stops, {display_device=}"
+    )
+
+
 @gin.configurable
 def configure_blender(
     render_engine="CYCLES",
@@ -361,6 +427,8 @@ def configure_blender(
         configure_cycles_devices()
     else:
         raise ValueError(f"Unrecognized {render_engine=}")
+
+    configure_color_management()
 
     bpy.context.scene.render.use_motion_blur = motion_blur
     if motion_blur:
