@@ -22,10 +22,8 @@ from infinigen.core import tagging
 from infinigen.core.constraints import constraint_language as cl
 from infinigen.core.constraints.constraint_language import util as iu
 from infinigen.core.constraints.example_solver import state_def
-
 from infinigen.core.constraints.example_solver.geometry import planes as planes
 from infinigen.core.util import blender as butil
-
 
 logger = logging.getLogger(__name__)
 

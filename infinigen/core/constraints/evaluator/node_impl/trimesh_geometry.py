@@ -33,7 +33,6 @@ from infinigen.core.constraints.example_solver.geometry.parse_scene import add_t
 from infinigen.core.util import blender as butil
 from infinigen.core.util.logging import lazydebug
 
-
 logger = logging.getLogger(__name__)
 
 

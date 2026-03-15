@@ -1,3 +1,7 @@
+# ⚠️  DEPRECATED — this file is a development snapshot and is NOT maintained.
+# The single source of truth for dependencies is pyproject.toml (+ uv.lock).
+# Use `uv sync` or `pip install -e ".[dev]"` instead.
+
 absl-py==2.3.0
 bpy==4.5.0
 certifi==2025.6.15

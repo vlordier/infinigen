@@ -24,7 +24,6 @@ from infinigen.assets.objects.tables.table_utils import (
 from infinigen.core import surface, tagging
 from infinigen.core import tags as t
 from infinigen.core.nodes import node_utils
-
 from infinigen.core.nodes.node_wrangler import Nodes, NodeWrangler
 from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.surface import NoApply
