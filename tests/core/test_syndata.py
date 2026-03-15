@@ -2387,3 +2387,112 @@ class TestDepthStatsEdgeCases:
         ds = DepthStats.from_depth_array(arr, clip_min=0.0, clip_max=100.0)
         assert ds.min_m == 0.0
         assert ds.max_m == 100.0
+
+
+# ── Commit 5: Determinism and reproducibility tests ────────────────────────
+
+
+class TestFlappyPresetDeterminism:
+    """Test that flappy presets produce identical results with same seed."""
+
+    def test_easy_determinism(self):
+        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        cfg = FlappyColumnConfig.easy()
+        boxes1 = generate_flappy_obstacles(cfg, seed=123)
+        boxes2 = generate_flappy_obstacles(cfg, seed=123)
+        assert len(boxes1) == len(boxes2)
+        for b1, b2 in zip(boxes1, boxes2):
+            assert b1.center == b2.center
+            assert b1.extent == b2.extent
+
+    def test_medium_determinism(self):
+        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        cfg = FlappyColumnConfig.medium()
+        boxes1 = generate_flappy_obstacles(cfg, seed=456)
+        boxes2 = generate_flappy_obstacles(cfg, seed=456)
+        assert len(boxes1) == len(boxes2)
+        for b1, b2 in zip(boxes1, boxes2):
+            assert b1.center == b2.center
+
+    def test_hard_determinism(self):
+        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        cfg = FlappyColumnConfig.hard()
+        boxes1 = generate_flappy_obstacles(cfg, seed=789)
+        boxes2 = generate_flappy_obstacles(cfg, seed=789)
+        assert len(boxes1) == len(boxes2)
+        for b1, b2 in zip(boxes1, boxes2):
+            assert b1.center == b2.center
+
+    def test_different_seeds_produce_different_results(self):
+        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        cfg = FlappyColumnConfig.easy()
+        boxes1 = generate_flappy_obstacles(cfg, seed=1)
+        boxes2 = generate_flappy_obstacles(cfg, seed=2)
+        # With different seeds, at least some obstacle positions should differ
+        centers1 = [b.center for b in boxes1 if "column" in b.label]
+        centers2 = [b.center for b in boxes2 if "column" in b.label]
+        if centers1 and centers2:
+            assert centers1 != centers2
+
+
+class TestDomainRandomiserDeterminism:
+    """Test DomainRandomiser seeded sampling determinism."""
+
+    def test_same_seed_same_samples(self):
+        from infinigen.core.syndata.randomisation import DomainRandomiser
+        r1 = DomainRandomiser(difficulty=0.5, seed=42)
+        r2 = DomainRandomiser(difficulty=0.5, seed=42)
+        assert r1.sample() == r2.sample()
+
+    def test_different_seed_different_samples(self):
+        from infinigen.core.syndata.randomisation import DomainRandomiser
+        r1 = DomainRandomiser(difficulty=0.5, seed=1)
+        r2 = DomainRandomiser(difficulty=0.5, seed=2)
+        s1 = r1.sample()
+        s2 = r2.sample()
+        assert s1 != s2
+
+    def test_difficulty_zero_minimal_ranges(self):
+        from infinigen.core.syndata.randomisation import DomainRandomiser
+        r = DomainRandomiser(difficulty=0.0, seed=99)
+        ranges = r.ranges()
+        # At difficulty 0, fog density range should be (0, 0) (no fog)
+        assert ranges["fog_density"] == (0.0, 0.0)
+
+    def test_from_curriculum_progress_determinism(self):
+        from infinigen.core.syndata.randomisation import DomainRandomiser
+        r1 = DomainRandomiser.from_curriculum_progress(0.5, seed=42)
+        r2 = DomainRandomiser.from_curriculum_progress(0.5, seed=42)
+        assert r1.sample() == r2.sample()
+
+
+class TestResolutionEdgeCases:
+    """Test resolution_for_stage edge cases."""
+
+    def test_single_stage(self):
+        from infinigen.core.syndata.resolution import resolution_for_stage
+        w, h = resolution_for_stage(0, 1)
+        assert w > 0 and h > 0
+
+    def test_first_stage_minimum(self):
+        from infinigen.core.syndata.resolution import resolution_for_stage
+        w1, h1 = resolution_for_stage(0, 10)
+        w2, h2 = resolution_for_stage(9, 10)
+        assert w1 <= w2 and h1 <= h2
+
+    def test_aspect_ratio_16_9(self):
+        from infinigen.core.syndata.resolution import resolution_for_stage
+        w, h = resolution_for_stage(5, 10, aspect_ratio=16/9)
+        assert w > h  # Wide aspect
+
+    def test_aspect_ratio_portrait(self):
+        from infinigen.core.syndata.resolution import resolution_for_stage
+        w, h = resolution_for_stage(5, 10, aspect_ratio=0.5)
+        assert w < h  # Portrait
+
+    def test_invalid_aspect_ratio(self):
+        from infinigen.core.syndata.resolution import resolution_for_stage
+        with pytest.raises(ValueError, match="aspect_ratio"):
+            resolution_for_stage(0, 5, aspect_ratio=0.1)
+        with pytest.raises(ValueError, match="aspect_ratio"):
+            resolution_for_stage(0, 5, aspect_ratio=5.0)
