@@ -73,8 +73,8 @@ NUM_CONCURRENT_ENVVAR = "INFINIGEN_NUMCONCURRENT_TARGET"
 _SLURM_SUBMIT_MAX_RETRIES: int = 10
 _SLURM_SUBMIT_RETRY_INTERVAL_SECONDS: int = 60
 _SUBPROCESS_TIMEOUT_SECONDS: int = 10
-# When disk usage cannot be determined, assume the disk is full so new jobs are
-# not launched into an unknown storage situation.
+# When disk usage cannot be determined (timeout/failure), assume the disk is
+# full so new jobs are not launched into an unknown storage situation.
 _DISK_USAGE_UNKNOWN_SENTINEL: float = 1.0
 
 
