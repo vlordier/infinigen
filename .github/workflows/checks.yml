@@ -105,7 +105,7 @@ jobs:
         id: install
         continue-on-error: true
         run: |
-          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
+          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/
 
       - name: Skip bpy-dependent tests when bpy wheel is unavailable
         if: steps.install.outcome != 'success'
@@ -166,7 +166,7 @@ jobs:
         id: install
         continue-on-error: true
         run: |
-          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
+          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/
 
       - name: Install torch (CPU wheel on Linux, default on macOS)
         run: |

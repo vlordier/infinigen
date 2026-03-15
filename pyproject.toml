@@ -101,7 +101,7 @@ Documentation = "https://infinigen.org/docs"
 # (requires access to download.blender.org)
 [[tool.uv.index]]
 name = "blender-pypi"
-url = "https://download.blender.org/pypi/bpy/"
+url = "https://download.blender.org/pypi/"
 explicit = true
 
 [tool.uv.sources]
