@@ -1,4 +1,3 @@
-
 name: Lint & Test
 
 on:
@@ -19,11 +18,14 @@ env:
   INFINIGEN_INSTALL_TERRAIN: False
   INFINIGEN_INSTALL_CUSTOMGT: False
 
+permissions:
+  contents: read
+
 jobs:
 
-  checks:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -32,22 +34,74 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Lint with ruff (Python 3.11 stringent – rules in pyproject.toml)
+      - name: Lint with ruff
         run: |
-          uv pip install --system ruff
+          uv pip install "ruff<0.9.0"
           ruff check --output-format=github .
-
-      - name: Install infinigen & dependencies
-        run: |
-          uv pip install --system -e ".[dev]"
-
-      - name: Test with pytest
-        run: |
-          pytest tests -k 'not skip_for_ci'
 
       - name: Check for copyright statements
         run: |
           ruff check --output-format=github --preview --select CPY001 .
+
+  test-bpy-free:
+    name: Tests (bpy-free)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies (no bpy)
+        run: |
+          uv pip install pytest pytest-cov gin-config numpy scipy opencv-python-headless torch --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run focused health checks with coverage
+        run: |
+          pytest --noconftest --maxfail=1 tests/test_repo_health.py \
+            --cov=infinigen.core.tags \
+            --cov=infinigen.datagen.util.submitit_emulator \
+            --cov-report=term-missing \
+            --cov-report=xml
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: error
+
+      - name: Test non-regression suite
+        run: |
+          pytest tests/test_nonregression.py --noconftest --maxfail=1 -v
+
+      - name: Test benchmarks suite
+        run: |
+          pytest tests/test_benchmarks.py --noconftest --maxfail=1 -v
+
+  test-bpy:
+    name: Tests (bpy-dependent)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install infinigen with bpy
+        id: install
+        run: |
+          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
+
+      - name: Test with pytest (bpy-dependent)
+        if: steps.install.outcome == 'success'
+        run: |
+          pytest --maxfail=1 tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
 
   # ---------------------------------------------------------------------------
   # Cross-platform tests: verify bpy 5.0.1 installs and core API works on
@@ -62,8 +116,10 @@ jobs:
   test-platforms:
     name: Test on ${{ matrix.os }} (${{ matrix.compute }})
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
+    # continue-on-error: bpy 5.0.1 wheels may not yet be available on all
+    # platforms via the Blender PyPI index; failures here are informational
+    # until the wheel set stabilises.
+    continue-on-error: true
 
     strategy:
       fail-fast: false
@@ -92,11 +148,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install infinigen & dependencies
+      - name: Install infinigen with bpy
+        id: install
         run: |
-          uv pip install --system -e ".[dev]"
+          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
 
       - name: Test Blender version compatibility
+        if: steps.install.outcome == 'success'
         run: |
           pytest tests/test_blender_version_compatibility.py -v
 

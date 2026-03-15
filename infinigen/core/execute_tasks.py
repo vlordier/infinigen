@@ -248,7 +248,16 @@ def execute_tasks(
 
     camera_rigs = cam_util.get_camera_rigs()
     camrig_id, subcam_id = camera_id
-    active_camera = camera_rigs[camrig_id].children[subcam_id]
+    if camrig_id < 0 or camrig_id >= len(camera_rigs):
+        raise ValueError(
+            f"Invalid camrig_id={camrig_id}: only {len(camera_rigs)} camera rig(s) exist"
+        )
+    rig_children = camera_rigs[camrig_id].children
+    if subcam_id < 0 or subcam_id >= len(rig_children):
+        raise ValueError(
+            f"Invalid subcam_id={subcam_id}: rig {camrig_id} has only {len(rig_children)} child camera(s)"
+        )
+    active_camera = rig_children[subcam_id]
     cam_util.set_active_camera(active_camera)
 
     group_collections()
@@ -259,8 +268,21 @@ def execute_tasks(
     need_terrain_processing = "atmosphere" in bpy.data.objects
 
     if Task.FineTerrain in task and need_terrain_processing:
-        with open(output_folder / "assets" / "info.pickle", "rb") as f:
-            info = pickle.load(f)
+        pickle_path = output_folder / "assets" / "info.pickle"
+        if not pickle_path.exists():
+            raise FileNotFoundError(
+                f"Required {pickle_path} not found. Coarse task may have failed."
+            )
+        try:
+            with open(pickle_path, "rb") as f:
+                info = pickle.load(f)
+        except (pickle.UnpicklingError, EOFError) as e:
+            raise ValueError(f"Corrupted pickle file {pickle_path}: {e}") from e
+        for key in ("height_offset", "whole_bbox"):
+            if key not in info:
+                raise KeyError(
+                    f"Required key {key!r} missing from {pickle_path}"
+                )
         terrain = Terrain(
             scene_seed,
             task=task,
@@ -305,8 +327,11 @@ def execute_tasks(
         with (output_folder / "polycounts.txt").open("w") as f:
             save_polycounts(f)
 
-    for col in bpy.data.collections["unique_assets"].children:
-        col.hide_viewport = False
+    if "unique_assets" in bpy.data.collections:
+        for col in bpy.data.collections["unique_assets"].children:
+            col.hide_viewport = False
+    else:
+        logger.warning("'unique_assets' collection not found; skipping viewport unhide")
 
     if need_terrain_processing and (
         Task.Render in task
