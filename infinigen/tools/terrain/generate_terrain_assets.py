@@ -5,6 +5,7 @@
 
 
 import argparse
+import logging
 from pathlib import Path
 
 import bpy
@@ -16,6 +17,8 @@ from infinigen.core.util.organization import AssetFile, Assets, LandTile
 from infinigen.terrain.assets.caves import caves_asset
 from infinigen.terrain.assets.landtiles import landtile_asset
 from infinigen.terrain.assets.upsidedown_mountains import upsidedown_mountains_asset
+
+logger = logging.getLogger(__name__)
 
 
 def asset_generation(
@@ -40,7 +43,7 @@ def asset_generation(
                 LandTile.Coast,
             ]:
                 if not (output_folder / asset / f"{i}" / AssetFile.Finish).exists():
-                    print(asset, i)
+                    logger.info("%s %s", asset, i)
                     if not check_only:
                         with FixedSeed(int_hash([asset, seed, i])):
                             landtile_asset(
@@ -48,7 +51,7 @@ def asset_generation(
                             )
             if asset == Assets.UpsidedownMountains:
                 if not (output_folder / asset / f"{i}" / AssetFile.Finish).exists():
-                    print(asset, i)
+                    logger.info("%s %s", asset, i)
                     if not check_only:
                         with FixedSeed(int_hash([asset, seed, i])):
                             upsidedown_mountains_asset(
@@ -57,7 +60,7 @@ def asset_generation(
                             )
             if asset == Assets.Caves:
                 if not (output_folder / asset / f"{i}" / AssetFile.Finish).exists():
-                    print(asset, i)
+                    logger.info("%s %s", asset, i)
                     if not check_only:
                         with FixedSeed(int_hash([asset, seed, i])):
                             caves_asset(output_folder / Assets.Caves / f"{i}")

@@ -30,7 +30,7 @@ def bvh_caching_config(enabled=True):
 
 @functools.cache
 def group(scene, x):
-    if isinstance(x, (list, set)):
+    if isinstance(x, list | set):
         x = tuple(x)
     return subset(scene, x)
 

@@ -4,6 +4,7 @@
 # Authors: Lahav Lipson
 
 import argparse
+import logging
 from pathlib import Path
 
 import cv2
@@ -11,6 +12,8 @@ import numpy as np
 from imageio.v3 import imread, imwrite
 
 from infinigen.tools.dataset_loader import get_frame_path
+
+logger = logging.getLogger(__name__)
 
 """
 Usage: python -m tools.ground_truth.rigid_warp <scene-folder> <frame-index-i>
@@ -50,8 +53,8 @@ if __name__ == "__main__":
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image1)
-    print(f"Wrote {args.output / 'A.png'}")
+    logger.info(f'Wrote {args.output / 'A.png'}')
     imwrite(args.output / "C.png", image2)
-    print(f"Wrote {args.output / 'C.png'}")
+    logger.info(f'Wrote {args.output / 'C.png'}')
     imwrite(args.output / "B.png", warped_image)
-    print(f"Wrote {args.output / 'B.png'}")
+    logger.info(f'Wrote {args.output / 'B.png'}')

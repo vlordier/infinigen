@@ -4,6 +4,7 @@
 # Authors: Lahav Lipson
 
 
+import logging
 import re
 import subprocess
 import time
@@ -11,6 +12,8 @@ from collections import defaultdict
 from datetime import datetime
 from itertools import chain
 from shutil import which
+
+logger = logging.getLogger(__name__)
 
 gres_regex = re.compile(".*gpu:([^:]+):([0-9]+).*").fullmatch
 cpu_regex = re.compile(".+/([0-9]+)[^/]+").fullmatch
@@ -23,7 +26,7 @@ def sinfo():
             return subprocess.check_output(sinfo_command.split()).decode()
         except subprocess.CalledProcessError as e:
             current_time_str = datetime.now().strftime("%m/%d %I:%M%p")
-            print(f"[{current_time_str}] sinfo failed with error:\n{e}")
+            logger.info(f'[{current_time_str}] sinfo failed with error:\n{e}')
             time.sleep(60)
 
 
@@ -63,12 +66,12 @@ def nodes_with_gpus(*gpu_names):
 if __name__ == "__main__":
     gpu_table, node_type_lookup, shared_node_mem = get_gpu_nodes()
     for group, lookup in gpu_table.items():
-        print(f"{group.ljust(10)} {dict(lookup)} Total: {sum(lookup.values())}")
-    print()
+        logger.info(f'{group.ljust(10)} {dict(lookup)} Total: {sum(lookup.values())}')
+    logger.info("")
 
     for k, v in sorted(node_type_lookup.items()):
-        print(f"{k.ljust(10)} {','.join(v)}")
-    print()
+        logger.info(f'{k.ljust(10)} {",".join(v)}')
+    logger.info("")
 
     for key, val in shared_node_mem.items():
-        print(f"{key} {val}gb per cpu")
+        logger.info(f'{key} {val}gb per cpu')

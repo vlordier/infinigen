@@ -25,6 +25,8 @@ except ImportError:
     coacd = None
     warnings.warn("coacd could not be imported. Some features may be unavailable.")
 
+logger = logging.getLogger(__name__)
+
 FORMAT_CHOICES = ["fbx", "obj", "usdc", "usda", "stl", "ply"]
 BAKE_TYPES = {
     "DIFFUSE": "Base Color",
@@ -1086,12 +1088,7 @@ def export_sim_ready(
         trimesh.repair.fix_inversion(mesh_tri)
         preprocess_mode = "off"
         if not mesh_tri.is_volume:
-            print(
-                mesh_tri.is_watertight,
-                mesh_tri.is_winding_consistent,
-                np.isfinite(mesh_tri.center_mass).all(),
-                mesh_tri.volume > 0.0,
-            )
+            logger.info("%s %s %s %s", mesh_tri.is_watertight, mesh_tri.is_winding_consistent, np.isfinite(mesh_tri.center_mass).all(), mesh_tri.volume > 0.0)
             preprocess_mode = "on"
 
             if len(mesh_tri.vertices) < 4:
@@ -1266,7 +1263,7 @@ def main(args):
             shutil.copy(blendfile, args.output_folder / "solve_state.json")
 
         if not blendfile.suffix == ".blend":
-            print(f"Skipping non-blend file {blendfile}")
+            logger.info(f'Skipping non-blend file {blendfile}')
             continue
 
         bpy.ops.wm.open_mainfile(filepath=str(blendfile))

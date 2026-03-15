@@ -165,13 +165,13 @@ class BBox:
 
 
 def md5_hash(x: int | str | list | tuple) -> Any:
-    if isinstance(x, (tuple, list)):
+    if isinstance(x, tuple | list):
         m = hashlib.md5()
         for s in x:
-            assert isinstance(s, (int, str))
+            assert isinstance(s, int | str)
             m.update(str(s).encode("utf-8"))
         return m
-    elif isinstance(x, (int, str)):
+    elif isinstance(x, int | str):
         x = str(x).encode("utf-8")
         return hashlib.md5(x)
     else:

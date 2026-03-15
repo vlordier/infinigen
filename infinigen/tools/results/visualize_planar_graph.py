@@ -11,6 +11,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.getcwd())
+import logging
+
 from PIL import Image
 
 from infinigen.core.constraints.example_solver.room import GraphMaker
@@ -18,6 +20,8 @@ from infinigen.core.constraints.example_solver.room import GraphMaker
 # noinspection PyUnresolvedReferences
 from infinigen.core.util.math import FixedSeed
 from infinigen_examples.generate_individual_assets import make_args
+
+logger = logging.getLogger(__name__)
 
 
 def build_scene(idx, path):
@@ -38,7 +42,7 @@ def make_grid(args, path, n):
             files.append(f"{path}/images/{filename}")
     files = files[:n]
     if len(files) == 0:
-        print("No images found")
+        logger.info('No images found')
         return
     with Image.open(files[0]) as i:
         x, y = i.size

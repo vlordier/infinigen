@@ -578,7 +578,7 @@ def set_geomod_inputs(mod, inputs: dict):
         elif v is None:
             continue
 
-        if isinstance(soc.default_value, (float, int)):
+        if isinstance(soc.default_value, float | int):
             v = type(soc.default_value)(v)
         if isinstance(v, np.ndarray):
             v = v.tolist()

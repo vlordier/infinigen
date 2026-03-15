@@ -285,7 +285,7 @@ def animate_wiggle_bones(
 
     mag = np.deg2rad(mag_deg) / len(bones)
     frame_period = int(bpy.context.scene.render.fps / freq)
-    print("freq:", freq)
+    logger.info("%s %s", 'freq:', freq)
 
     for i, b in enumerate(bones):
         b_off = -(off + i / len(bones)) * frame_period / wavelength

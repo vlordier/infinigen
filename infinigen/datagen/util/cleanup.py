@@ -6,8 +6,11 @@
 # - Karhan Kayan (cleanup fluid files)
 
 import argparse
+import logging
 import shutil
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 FILES_TO_DELETE = [
     "*.mtl",
@@ -26,18 +29,18 @@ FILES_TO_DELETE = [
 
 def cleanup(folder, verbose=False, skip_coarse=False):
     if not verbose:
-        print(f"Cleaning up {folder}")
+        logger.info(f'Cleaning up {folder}')
 
     def check_delete(filepath):
         if skip_coarse and "coarse" in str(file_path):
             return
         elif file_path.is_file() or file_path.is_symlink():
             if verbose:
-                print(f"Removing {file_path}")
+                logger.info(f'Removing {file_path}')
             file_path.unlink()
         elif file_name_to_del.endswith("/"):  # Just extra precaution
             if verbose:
-                print(f"Removing {file_path}")
+                logger.info(f'Removing {file_path}')
             shutil.rmtree(file_path)
 
     for file_name_to_del in FILES_TO_DELETE:

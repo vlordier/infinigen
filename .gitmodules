@@ -24,4 +24,5 @@
 	url = https://github.com/glfw/glfw.git
 [submodule "infinigen/OcMesher"]
 	path = infinigen/OcMesher
-	url = https://github.com/princeton-vl/OcMesher.git
+	url = https://github.com/vlordier/OcMesher.git
+	branch = develop

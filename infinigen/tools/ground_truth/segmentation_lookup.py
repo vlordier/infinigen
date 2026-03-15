@@ -6,6 +6,7 @@
 import argparse
 import colorsys
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -15,8 +16,11 @@ import numpy as np
 from imageio.v3 import imread, imwrite
 from numba.types import bool_
 
+from infinigen.core.util.array_ops import unique_rows
 from infinigen.tools.compress_masks import recover
 from infinigen.tools.dataset_loader import get_frame_path
+
+logger = logging.getLogger(__name__)
 
 try:
     from einops import pack, rearrange, repeat
@@ -107,16 +111,14 @@ if __name__ == "__main__":
     # Complain if the query isn't valid/present
     unique_names = sorted({q["name"] for q in present_objects})
     if args.query is None:
-        print("`--query` not specified. Choices are:")
+        logger.info('`--query` not specified. Choices are:')
         for qn in unique_names:
-            print(f"- {qn}")
+            logger.info(f'- {qn}')
         sys.exit(0)
     elif not any((args.query.lower() in name.lower()) for name in unique_names):
-        print(
-            f'"{args.query}" doesn\'t match any object names in this image. Choices are:'
-        )
+        logger.info(f'''"{args.query}" doesn't match any object names in this image. Choices are:''')
         for qn in unique_names:
-            print(f"- {qn}")
+            logger.info(f'- {qn}')
         sys.exit(0)
 
     # Mask the pixels with any relevant object
@@ -134,13 +136,7 @@ if __name__ == "__main__":
         [object_segmentation_mask, instance_segmentation_mask], "h w *"
     )
     combined_mask = rearrange(combined_mask, "h w d -> (h w) d")
-    # Void-view unique: reinterpret each row as an opaque byte blob so NumPy
-    # runs a fast 1-D unique instead of the slow axis=0 lexsort path.
-    combined_mask = np.ascontiguousarray(combined_mask)
-    void_row_dtype = np.dtype((np.void, combined_mask.dtype.itemsize * combined_mask.shape[1]))
-    void_view = combined_mask.view(void_row_dtype).reshape(-1)
-    unique_void_rows, indices = np.unique(void_view, return_inverse=True)
-    uniq_instances = unique_void_rows.view(combined_mask.dtype).reshape(-1, combined_mask.shape[1])
+    uniq_instances, indices = unique_rows(combined_mask, return_inverse=True)
     unique_colors = np.stack([arr2color(row) for row in uniq_instances])
 
     if args.boxes:
@@ -171,6 +167,6 @@ if __name__ == "__main__":
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image)
-    print(f"Wrote {args.output / 'A.png'}")
+    logger.info(f'Wrote {args.output / 'A.png'}')
     imwrite(args.output / "B.png", canvas)
-    print(f"Wrote {args.output / 'B.png'}")
+    logger.info(f'Wrote {args.output / 'B.png'}')

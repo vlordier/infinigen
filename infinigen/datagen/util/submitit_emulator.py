@@ -13,6 +13,8 @@ import logging
 import os
 import re
 import subprocess
+import sys
+import threading
 from dataclasses import dataclass
 from multiprocessing import Process
 from pathlib import Path
@@ -78,7 +80,7 @@ class FileTee:
 
     def close(self):
         self.inner.close()
-        self.stream.close()
+        self.stream.flush()
 
     def fileno(self):
         return self.inner.fileno()
@@ -97,25 +99,55 @@ def job_wrapper(
     stdout_passthrough: bool = False,
 ):
     with stdout_file.open("w") as stdout, stderr_file.open("w") as stderr:
-        if stdout_passthrough:
-            # TODO: send output to BOTH the file and the console
-            stdout = None
-            stderr = None
-
         if cuda_devices is not None:
             env = os.environ.copy()
             env[CUDA_VARNAME] = ",".join([str(i) for i in cuda_devices])
         else:
             env = None
 
-        subprocess.run(
-            command,
-            stdout=stdout,
-            stderr=stderr,
-            shell=False,
-            check=False,  # dont throw CalledProcessError
-            env=env,
-        )
+        if stdout_passthrough:
+            proc = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                shell=False,
+                env=env,
+                bufsize=1,
+            )
+            # text=True ensures stdout/stderr are text-mode file objects, so the
+            # drain threads can forward output line-by-line.
+
+            def drain(pipe, sinks):
+                for line in pipe:
+                    for sink in sinks:
+                        sink.write(line)
+                        sink.flush()
+
+            stdout_thread = threading.Thread(
+                target=drain, args=(proc.stdout, [stdout, sys.stdout])
+            )
+            stderr_thread = threading.Thread(
+                target=drain, args=(proc.stderr, [stderr, sys.stderr])
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            stdout_thread.join()
+            stderr_thread.join()
+            returncode = proc.wait()
+        else:
+            completed = subprocess.run(
+                command,
+                stdout=stdout,
+                stderr=stderr,
+                shell=False,
+                check=False,  # dont throw CalledProcessError
+                env=env,
+            )
+            returncode = completed.returncode
+
+        if returncode:
+            raise SystemExit(returncode)
 
 
 def launch_local(

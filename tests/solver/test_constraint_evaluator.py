@@ -1,6 +1,7 @@
 # Copyright (C) 2024, Princeton University.
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory of this source tree.
 
+import logging
 from functools import partial
 
 # Authors: Karhan Kayan
@@ -26,6 +27,8 @@ from infinigen.core.constraints.example_solver.state_def import (
 from infinigen.core.util import blender as butil
 from infinigen_examples.constraints.home import home_furniture_constraints
 from infinigen_examples.constraints.semantics import home_asset_usage
+
+logger = logging.getLogger(__name__)
 
 
 def test_home_furniture_constraints_implemented():
@@ -153,7 +156,7 @@ def test_accessibility_monotonicity():
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
 
-    print("nonaccessibility scores", scores)
+    logger.info("%s %s", 'nonaccessibility scores', scores)
 
     assert np.all(np.diff(scores) < 0)
 
@@ -190,7 +193,7 @@ def test_accessibility_side():
     score_terms += [cl.accessibility_cost(chair, table)]
     problem = cl.Problem(constraints, score_terms)
     res = evaluate.evaluate_problem(problem, state).loss()
-    print("nonaccessibility scores", res)
+    logger.info("%s %s", 'nonaccessibility scores', res)
     assert np.isclose(res, 0)
 
 
@@ -206,7 +209,7 @@ def test_accessibility_angle():
         table = butil.spawn_sphere(
             radius=1, location=(4 * np.cos(angle), 4 * np.sin(angle), 0), name="table1"
         )
-        print(table.location)
+        logger.info(table.location)
 
         obj_states[chair.name] = ObjectState(chair, tags={t.Semantics.Chair})
         obj_states[table.name] = ObjectState(table, tags={t.Semantics.Table})
@@ -226,7 +229,7 @@ def test_accessibility_angle():
         problem = cl.Problem(constraints, score_terms)
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
-    print("nonaccessibility scores", scores)
+    logger.info("%s %s", 'nonaccessibility scores', scores)
     assert scores == sorted(scores, reverse=True)
 
 
@@ -258,7 +261,7 @@ def test_accessibility_volume():
         problem = cl.Problem(constraints, score_terms)
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
-    print("nonaccessibility scores", scores)
+    logger.info("%s %s", 'nonaccessibility scores', scores)
     assert scores == sorted(scores)
 
 
@@ -327,7 +330,7 @@ def test_angle_alignment():
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
         # state.trimesh_scene.show()
-    print("angle_alignment costs", scores)
+    logger.info("%s %s", 'angle_alignment costs', scores)
     assert scores == sorted(scores)
 
 
@@ -369,7 +372,7 @@ def test_angle_alignment_multiple_objects():
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
 
-    print("angle_alignment costs (multiple objects):", scores)
+    logger.info("%s %s", 'angle_alignment costs (multiple objects):', scores)
     assert scores == sorted(scores)
 
 
@@ -412,7 +415,7 @@ def test_angle_alignment_multiple_objects_varying_positions():
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
 
-    print("angle_alignment costs (multiple objects, varying positions):", scores)
+    logger.info("%s %s", 'angle_alignment costs (multiple objects, varying positions):', scores)
     assert scores == sorted(scores)
 
 
@@ -465,7 +468,7 @@ def test_angle_alignment_multipolygon_projection():
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
 
-    print("angle_alignment costs (multipolygon projection):", scores)
+    logger.info("%s %s", 'angle_alignment costs (multipolygon projection):', scores)
     assert sorted(scores) == scores
 
 
@@ -560,7 +563,7 @@ def test_focus_score():
         res = evaluate.evaluate_problem(problem, state).loss()
         scores.append(res)
         # state.trimesh_scene.show()
-    print("focus_score costs", scores)
+    logger.info("%s %s", 'focus_score costs', scores)
     assert scores == sorted(scores)
 
 
@@ -777,7 +780,7 @@ def test_reflection_asymmetry():
     problem = cl.Problem(constraints, score_terms)
     res = evaluate.evaluate_problem(problem, state).loss()
     scores.append(res)
-    print(res)
+    logger.info(res)
     assert np.isclose(res, 0, atol=1e-2)
 
     # assert the asymmetry increases as we gradually move one chair away from the table
@@ -798,7 +801,7 @@ def test_reflection_asymmetry():
     res = evaluate.evaluate_problem(problem, state).loss()
     scores.append(res)
 
-    print("asymmetry scores", scores)
+    logger.info("%s %s", 'asymmetry scores', scores)
     # assert monotonocity
     assert scores == sorted(scores)
     # assert it is strict
@@ -877,7 +880,7 @@ def test_rotation_asymmetry():
 
     # assert it is strict
     assert (scores[0] < scores[1]) and scores[1] < scores[2] and scores[2] < scores[3]
-    print("asymmetry scores", scores)
+    logger.info("%s %s", 'asymmetry scores', scores)
 
 
 def test_coplanarity():

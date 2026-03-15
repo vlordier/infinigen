@@ -98,7 +98,7 @@ class in_range(BoolExpression):
     def __post_init__(self):
         if not isinstance(self.val, ScalarExpression):
             raise TypeError(f"in_range got {self.val=}, must be a ScalarExpression")
-        if not isinstance(self.low, (int, float)):
+        if not isinstance(self.low, int | float):
             raise TypeError(f"in_range got {self.low=}, must be a number")
-        if not isinstance(self.high, (int, float)):
+        if not isinstance(self.high, int | float):
             raise TypeError(f"in_range got {self.high=}, must be a number")

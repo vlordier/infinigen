@@ -20,6 +20,7 @@ import numpy as np
 from imageio import imwrite
 from matplotlib import pyplot as plt
 
+from infinigen.core.util.array_ops import unique_rows
 from infinigen.core.util.camera import get_3x4_RT_matrix_from_blender
 
 logger = logging.getLogger(__name__)
@@ -120,7 +121,7 @@ def colorize_depth(depth, scale_vmin=1.0):
 def colorize_int_array(data, color_seed=0):
     H, W, *_ = data.shape
     data = data.reshape((H * W, -1))
-    uniq, indices = np.unique(data, return_inverse=True, axis=0)
+    uniq, indices = unique_rows(data, return_inverse=True)
     random_states = [
         np.random.RandomState(e[:2].astype(np.uint32) + color_seed) for e in uniq
     ]
@@ -151,33 +152,31 @@ if __name__ == "__main__":
             if flow_color is not None:
                 output_path = args.flow_path.with_suffix(".png")
                 imwrite(output_path, flow_color)
-                print(f"Wrote {output_path}")
+                logger.info(f'Wrote {output_path}')
         except ModuleNotFoundError:
-            print(
-                "Flow visualization requires the 'flow_vis' package. Install it with 'pip install flow_vis'"
-            )
+            logger.info("Flow visualization requires the 'flow_vis' package. Install it with 'pip install flow_vis'")
             pass
 
     if args.normals_path is not None:
         normal_color = colorize_normals(load_normals(args.normals_path))
         output_path = args.normals_path.with_suffix(".png")
         imwrite(output_path, normal_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')
 
     if args.depth_path is not None:
         depth_color = colorize_depth(load_depth(args.depth_path))
         output_path = args.depth_path.with_suffix(".png")
         imwrite(output_path, depth_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')
 
     if args.uniq_inst_path is not None:
         mask_color = colorize_int_array(load_uniq_inst(args.uniq_inst_path))
         output_path = args.uniq_inst_path.with_suffix(".png")
         imwrite(output_path, mask_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')
 
     if args.seg_path is not None:
         mask_color = colorize_int_array(load_seg_mask(args.seg_path))
         output_path = args.seg_path.with_suffix(".png")
         imwrite(output_path, mask_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')

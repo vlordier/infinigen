@@ -4,12 +4,15 @@
 # Authors: Lahav Lipson
 
 
+import logging
 import re
 from collections import defaultdict
 from itertools import chain
 from pathlib import Path
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 CONFIG_FILE = Path(__file__).parent / "cfg.txt"
 assert CONFIG_FILE.exists(), CONFIG_FILE.resolve()
@@ -60,4 +63,4 @@ def generate_string(max_len=10000):
 
 
 if __name__ == "__main__":
-    print(generate_string())
+    logger.info(generate_string())

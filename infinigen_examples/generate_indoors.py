@@ -410,7 +410,7 @@ def compose_indoors(output_folder: Path, scene_seed: int, **overrides):
     def turn_off_lights():
         for o in bpy.data.objects:
             if o.type == "LIGHT" and not o.data.cycles.is_portal:
-                print(f"Deleting {o.name}")
+                logger.info(f'Deleting {o.name}')
                 butil.delete(o)
 
     p.run_stage("lights_off", turn_off_lights)

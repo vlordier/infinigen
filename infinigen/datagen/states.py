@@ -6,6 +6,7 @@
 # - Lahav Lipson: stereo version, local rendering
 # - Hei Law: initial version
 
+import logging
 import subprocess
 import time
 from pathlib import Path
@@ -13,6 +14,12 @@ from pathlib import Path
 import gin
 
 from infinigen.datagen.util.submitit_emulator import LocalJob
+
+logger = logging.getLogger(__name__)
+
+_SEFF_SUBPROCESS_TIMEOUT_SECONDS: int = 30
+_SEFF_RETRY_INTERVAL_SECONDS: int = 1
+_SEFF_DEFAULT_MAX_RETRIES: int = 10
 
 
 class JobState:
@@ -37,20 +44,31 @@ JOB_OBJ_SUCCEEDED = "MARK_AS_SUCCEEDED"
 # Will throw exception if the scene was not found. Sometimes this happens if the scene was queued very very recently
 # Keys: JobID ArrayJobID User Group State Clustername Ncpus Nnodes Ntasks Reqmem PerNode Cput Walltime Mem ExitStatus
 @gin.configurable
-def seff(job_obj, retry_on_error=True):
+def seff(job_obj, retry_on_error=True, max_retries=_SEFF_DEFAULT_MAX_RETRIES):
     scene_id = job_obj.job_id
-    assert scene_id.isdigit()
-    while True:
+    if not scene_id.isdigit():
+        raise ValueError(f"Invalid {scene_id=}, expected a numeric SLURM job ID")
+    if max_retries < 1:
+        raise ValueError(f"max_retries must be >= 1, got {max_retries}")
+    for attempt in range(max_retries):
         try:
             seff_out = subprocess.check_output(
-                f"/usr/bin/seff -d {scene_id}".split()
+                f"/usr/bin/seff -d {scene_id}".split(),
+                timeout=_SEFF_SUBPROCESS_TIMEOUT_SECONDS,
+                stderr=subprocess.PIPE,
             ).decode()
             lines = seff_out.splitlines()
             return dict(zip(lines[0].split(" ")[2:], lines[1].split(" ")[2:]))["State"]
-        except Exception as e:
-            if not retry_on_error:
-                raise e
-            time.sleep(1)
+        except subprocess.TimeoutExpired:
+            logger.warning(f"seff timed out for {scene_id} (attempt {attempt + 1}/{max_retries})")
+            if not retry_on_error or attempt >= max_retries - 1:
+                raise
+            time.sleep(_SEFF_RETRY_INTERVAL_SECONDS)
+        except (subprocess.CalledProcessError, KeyError, IndexError) as e:
+            logger.warning(f"seff failed for {scene_id}: {e} (attempt {attempt + 1}/{max_retries})")
+            if not retry_on_error or attempt >= max_retries - 1:
+                raise
+            time.sleep(_SEFF_RETRY_INTERVAL_SECONDS)
 
 
 def get_scene_state(scene: dict, taskname: str, scene_folder: Path):

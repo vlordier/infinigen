@@ -158,8 +158,6 @@ class Subpart(EnumTag):
     Ceiling = "ceiling"
     Wall = "wall"
 
-    StaircaseWall = "staircase-wall"  # TODO Lingjie Remove
-
     def __str__(self):
         return f"{self.__class__.__name__}({self.value})"
 

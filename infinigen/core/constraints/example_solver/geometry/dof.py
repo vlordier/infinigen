@@ -23,6 +23,9 @@ from infinigen.core.constraints.example_solver.geometry import stability
 
 logger = logging.getLogger(__name__)
 
+# Named constant for gin-configurable retry bound
+_CONSTRAINT_DEFAULT_N_TRY_RESOLVE: int = 10
+
 
 def stable_against_matrix(point, normal):
     """
@@ -510,7 +513,7 @@ def validate_relations_feasible(state: state_def.State, name: str) -> bool:
 
 @gin.configurable
 def try_apply_relation_constraints(
-    state: state_def.State, name: str, n_try_resolve=10, visualize=False
+    state: state_def.State, name: str, n_try_resolve=_CONSTRAINT_DEFAULT_N_TRY_RESOLVE, visualize=False
 ):
     """
     name is in objs.name
@@ -522,6 +525,8 @@ def try_apply_relation_constraints(
     objstate for name has update location rotaton etc
 
     """
+    if n_try_resolve < 1:
+        raise ValueError(f"n_try_resolve must be >= 1, got {n_try_resolve}")
 
     validate_relations_feasible(state, name)
 
