@@ -4,34 +4,69 @@
 
 """Parametric 3D world generator for progressive curriculum pre-training.
 
-Generates procedural environments with a single ``complexity`` knob that
-smoothly interpolates from a trivial "3D Flappy Bird" flight corridor
-to a full "Doom-like" 3D maze with branching paths, vertical passages,
-debris, and varied lighting.
+This module is the **Infinigen side** of the curriculum pipeline.  It
+generates pure 3D geometry (axis-aligned boxes) that describe training
+environments of increasing navigational complexity.  The output feeds
+into:
 
-**Complexity ladder** (all thresholds are soft — parameters blend smoothly):
+* **Infinigen** — via :func:`world_gin_overrides` (scene generation params)
+* **Genesis / DroneEnv** — via :func:`world_to_genesis_entities` and
+  :func:`world_to_drone_env_config` (separate conversion layer)
 
-==========  ====================================================
-complexity  Environment description
-==========  ====================================================
-0.0–0.15    Straight corridor with column-gap obstacles ("flappy")
-0.15–0.35   Wider corridor with textured walls, coloured surfaces
-0.35–0.55   Connected rooms with doors, furniture-like clutter
-0.55–0.75   L-shaped / T-junction corridors, debris, fog
-0.75–0.90   Multi-level branching maze, vertical shafts
-0.90–1.00   Dense "Doom-like" maze with dead-ends, full lighting
-==========  ====================================================
+Crucially, this module does *not* import or depend on Genesis, Blender, or
+any RL framework.  It only produces geometry (``list[BBox3D]``) and
+configuration dicts.  The physics simulation, reward shaping, and episode
+management live in the Genesis RL gym (e.g. GenesisDroneEnv).
 
-The output is always a list of :class:`~infinigen.core.syndata.metadata.BBox3D`
-objects, fully compatible with the existing syndata metadata/validation/Genesis
-export pipelines.
+Complexity ladder
+-----------------
 
-This module is **purely about parametric 3D geometry for Infinigen**.
-Physics simulation, RL reward shaping, and episode management are concerns
-of the Genesis/DroneEnv bridge layer — not this module.
+A single ``complexity`` parameter in [0, 1] drives the entire progression.
+All thresholds are soft — parameters blend smoothly so there are no hard
+jumps.
 
-All helpers are pure Python / NumPy — no ``bpy`` or ``genesis`` dependency
-at import time.
+===========  ====  ============================================================
+complexity   Preset  Navigation challenge
+===========  ====  ============================================================
+0.00 – 0.15  ``flappy()``    **Trivial 3D flight**: straight corridor, simple
+                              column-gap obstacles.  Teaches basic up/down,
+                              left/right, forward/back avoidance.
+0.15 – 0.35  ``corridor()``  **Textured corridor**: same topology but with
+                              visual variety — coloured walls, varied floor
+                              roughness, subtle fog.  Tests vision robustness.
+0.35 – 0.55  ``rooms()``     **Connected rooms**: doors, furniture-like clutter.
+                              Requires planning turns, entering/exiting spaces.
+0.55 – 0.75  ``branches()``  **Branching paths**: T-junctions, dead-ends, fog,
+                              debris.  Requires exploration and backtracking.
+0.75 – 0.90  ``maze()``      **Multi-level maze**: vertical shafts, upper
+                              corridors, dense obstacle fields.  Full 3D
+                              navigation with altitude changes.
+0.90 – 1.00  ``doom()``      **Dense 3D maze**: many rooms, branches, levels,
+                              heavy fog, point lights, full debris.  Approaches
+                              real-world indoor/outdoor complexity.
+===========  ====  ============================================================
+
+At ``complexity=1.0``, the generated world is suitable for importing into
+Infinigen as a coarse scene layout that Infinigen then populates with
+high-resolution assets (streets, forests, indoor furniture, moving tree
+branches, etc.) depending on the curriculum stage.
+
+Output format
+-------------
+:func:`generate_world` always returns a ``list[BBox3D]`` — axis-aligned
+bounding boxes representing walls, floors, ceilings, columns, furniture,
+and debris.  The number of boxes scales with complexity:
+
+* ``flappy`` (~0.05): ~10 boxes (corridor shell + a few column obstacles)
+* ``corridor`` (~0.25): ~20 boxes (more columns, tighter gaps)
+* ``rooms`` (~0.45): ~40–60 boxes (room walls + furniture)
+* ``branches`` (~0.65): ~80–120 boxes (branch corridors + dead-ends)
+* ``maze`` (~0.85): ~150–200 boxes (multiple levels + shafts)
+* ``doom`` (~0.98): ~250–350 boxes (full maze with heavy debris)
+
+These counts are approximate and vary with the RNG seed.  Each ``BBox3D``
+has a human-readable label (e.g. ``"main_col_lower_3"``, ``"room_2_furniture_1"``)
+for debugging and selective filtering.
 """
 
 from __future__ import annotations
@@ -61,8 +96,16 @@ _DEBRIS_SIZE_RANGE: tuple[float, float] = (0.05, 0.3)
 class VisualStyle:
     """Visual appearance parameters for the generated world.
 
-    These map to Infinigen material / lighting overrides — they do *not*
-    control Genesis rendering.  The Genesis bridge converts them separately.
+    These map to **Infinigen** material / lighting gin overrides (via
+    :func:`world_gin_overrides`).  They do *not* control Genesis rendering
+    — the Genesis bridge layer reads these values and maps them to the
+    appropriate Genesis light/material APIs separately.
+
+    At low complexity, everything is greyscale with uniform lighting.
+    As complexity increases, surfaces gain colour, roughness varies,
+    fog and clouds appear, and extra point lights add visual diversity.
+    At the highest stages, Infinigen uses these hints to add photorealistic
+    textures, sub-surface scattering, and HDR lighting.
 
     Parameters
     ----------
@@ -121,8 +164,23 @@ class WorldConfig:
     """Configuration for a procedurally generated 3D training world.
 
     A single ``complexity`` parameter in [0, 1] drives the entire
-    progression from a trivial flappy-bird corridor to a dense 3D maze.
-    Individual parameters can also be overridden for fine control.
+    progression from a trivial flight corridor to a dense 3D maze.
+    Individual parameters can be overridden for fine-grained control.
+
+    **Typical output sizes** (number of BBox3D obstacles per preset,
+    seed-dependent):
+
+    * ``flappy()``   (c≈0.05): ~10 boxes — basic corridor shell + columns
+    * ``corridor()`` (c≈0.25): ~20 boxes — more columns, tighter gaps
+    * ``rooms()``    (c≈0.45): ~40–60 — rooms with furniture clutter
+    * ``branches()`` (c≈0.65): ~80–120 — branch corridors + dead-ends
+    * ``maze()``     (c≈0.85): ~150–200 — multiple vertical levels
+    * ``doom()``     (c≈0.98): ~250–350 — dense maze with heavy debris
+
+    **Role in curriculum**: this config is *only* about 3D geometry for
+    Infinigen.  The RL simulation parameters (rewards, episode length,
+    termination conditions) belong to the Genesis DroneEnv bridge layer
+    and are derived from this config via :func:`world_to_drone_env_config`.
 
     Parameters
     ----------
@@ -138,10 +196,11 @@ class WorldConfig:
     corridor_height : float
         Corridor height (metres).
     num_columns : int | None
-        Number of column obstacles.  If *None*, derived from complexity.
+        Number of column obstacles.  If *None*, derived from complexity
+        (2 at c=0, up to 15 at c=1).
     gap_height : float | None
         Flyable gap size (metres).  If *None*, derived from complexity
-        (wider at low complexity, narrower at high).
+        (2.0m at c=0, 0.5m at c=1).
     num_rooms : int | None
         Number of connected rooms (complexity ≥ 0.35).  If *None*,
         derived from complexity.
@@ -157,7 +216,8 @@ class WorldConfig:
         Small obstacle density in [0, 1].  If *None*, derived from
         complexity.
     style : VisualStyle | None
-        Visual appearance.  If *None*, derived from complexity.
+        Visual appearance.  If *None*, auto-derived from complexity
+        (greyscale at c=0, vivid colours/fog/clouds at c=1).
     """
 
     complexity: float = 0.0
@@ -315,32 +375,61 @@ class WorldConfig:
 
     @staticmethod
     def flappy(*, seed: int | None = None) -> WorldConfig:
-        """Preset: trivial flappy-bird corridor (complexity ~0.05)."""
+        """Preset: trivial flight corridor for basic 3D navigation.
+
+        Produces a straight corridor with a few column-gap obstacles.
+        The agent learns elemental avoidance — fly up/down to dodge
+        columns, stay centred left/right, move forward.  ~10 boxes.
+        """
         return WorldConfig(complexity=0.05, seed=seed)
 
     @staticmethod
     def corridor(*, seed: int | None = None) -> WorldConfig:
-        """Preset: textured corridor with varied obstacles (complexity ~0.25)."""
+        """Preset: textured corridor with more obstacles and visual variety.
+
+        Same topology as ``flappy`` but with narrower gaps, more columns,
+        coloured walls, and subtle fog.  Tests that vision-based policies
+        are robust to surface appearance.  ~20 boxes.
+        """
         return WorldConfig(complexity=0.25, seed=seed)
 
     @staticmethod
     def rooms(*, seed: int | None = None) -> WorldConfig:
-        """Preset: connected rooms with doors and clutter (complexity ~0.45)."""
+        """Preset: connected rooms with doors and furniture-like clutter.
+
+        Introduces right-angle turns and doorway transitions.  The agent
+        must plan room entries/exits and avoid furniture.  ~40–60 boxes.
+        """
         return WorldConfig(complexity=0.45, seed=seed)
 
     @staticmethod
     def branches(*, seed: int | None = None) -> WorldConfig:
-        """Preset: branching corridors, debris, fog (complexity ~0.65)."""
+        """Preset: branching corridors with T-junctions and dead-ends.
+
+        Requires exploration, backtracking, and fog navigation.  Debris
+        is scattered in corridors.  ~80–120 boxes.
+        """
         return WorldConfig(complexity=0.65, seed=seed)
 
     @staticmethod
     def maze(*, seed: int | None = None) -> WorldConfig:
-        """Preset: multi-level 3D maze (complexity ~0.85)."""
+        """Preset: multi-level 3D maze with vertical shafts.
+
+        Full 3D navigation: altitude changes through vertical shafts,
+        upper corridors, dense obstacle fields.  ~150–200 boxes.
+        """
         return WorldConfig(complexity=0.85, seed=seed)
 
     @staticmethod
     def doom(*, seed: int | None = None) -> WorldConfig:
-        """Preset: dense "Doom-like" 3D maze, full effects (complexity ~0.98)."""
+        """Preset: dense "Doom-like" 3D maze — maximum complexity.
+
+        Many rooms, branching corridors, multiple vertical levels, heavy
+        fog, point lights, and dense debris.  Approaches real-world
+        indoor/outdoor complexity.  ~250–350 boxes.  At this level,
+        Infinigen would overlay high-resolution assets: photorealistic
+        walls, vegetation, furniture, dynamic elements.
+        """
         return WorldConfig(complexity=0.98, seed=seed)
 
     @staticmethod
@@ -351,7 +440,17 @@ class WorldConfig:
     ) -> WorldConfig:
         """Create a world config from curriculum progress in [0, 1].
 
-        Uses a gentle sqrt curve so early stages ramp slowly.
+        Uses a gentle sqrt curve so early stages ramp slowly, giving the
+        agent more time on simple environments before complexity increases.
+
+        Examples (approximate, seed-dependent)::
+
+            progress=0.00 → c≈0.00  flappy corridor        (~10 boxes)
+            progress=0.05 → c≈0.22  textured corridor       (~16 boxes)
+            progress=0.20 → c≈0.45  rooms with furniture    (~50 boxes)
+            progress=0.50 → c≈0.71  branching paths + fog   (~100 boxes)
+            progress=0.80 → c≈0.89  multi-level maze        (~180 boxes)
+            progress=1.00 → c≈1.00  dense Doom-like maze    (~300 boxes)
         """
         c = math.sqrt(max(0.0, min(1.0, progress)))
         return WorldConfig(complexity=c, seed=seed)
@@ -394,7 +493,7 @@ def _generate_corridor(
     """
     boxes: list[BBox3D] = []
     ox, oy, oz = origin
-    dx_dir, dy_dir, dz_dir = direction
+    dx_dir, dy_dir, _dz_dir = direction
 
     cor_len = length if length is not None else config.effective_corridor_length
     cor_w = config.corridor_width
@@ -582,20 +681,32 @@ def _generate_debris(
 def generate_world(config: WorldConfig) -> list[BBox3D]:
     """Generate a procedural 3D world from the given configuration.
 
-    The world complexity scales smoothly from a simple flight corridor
-    to a multi-level branching maze with debris and visual effects.
+    This is the core **Infinigen geometry generator**.  It produces pure
+    3D layout data (bounding boxes) with no physics or RL semantics.
+    The boxes describe walls, floors, ceilings, column obstacles,
+    furniture, rooms, corridors, vertical shafts, and scattered debris.
+
+    **Downstream consumers:**
+
+    * **Infinigen pipeline** — reads :func:`world_gin_overrides` to
+      configure scene generation (grid resolution, scatter density,
+      material settings, fog, lighting).
+    * **Genesis DroneEnv** — receives box geometry via
+      :func:`world_to_genesis_entities` (separate conversion step).
+    * **Curriculum tracker** — reads :func:`world_to_frame_metadata`
+      for depth stats, traversability, and obstacle counts.
 
     Parameters
     ----------
     config : WorldConfig
-        World generation parameters.
+        World generation parameters (see :class:`WorldConfig` for
+        complexity ladder and preset factories).
 
     Returns
     -------
     list[BBox3D]
-        All obstacles/walls/floors/ceilings as bounding boxes,
-        compatible with :class:`~infinigen.core.syndata.metadata.FrameMetadata`
-        and the Genesis export pipeline.
+        All obstacles/walls/floors/ceilings as bounding boxes.
+        Each box has a unique human-readable ``label``.
 
     Raises
     ------
@@ -740,7 +851,8 @@ def generate_world(config: WorldConfig) -> list[BBox3D]:
 def world_summary(config: WorldConfig) -> dict[str, Any]:
     """Return a human-readable summary of the world configuration.
 
-    Useful for logging, debugging, and curriculum tracking.
+    Useful for logging, debugging, and curriculum tracking dashboards.
+    All values are the *effective* parameters after complexity derivation.
     """
     style = config.effective_style
     return {
@@ -772,14 +884,17 @@ def world_to_frame_metadata(
     """Build a dict compatible with :class:`FrameMetadata` from world output.
 
     The returned dict can be passed to ``FrameMetadata(**d)`` or stored
-    as JSON for the training pipeline.
+    as JSON for the training pipeline.  It includes depth statistics,
+    traversability ratio, obstacle list, and camera placement — all
+    computed from the pure 3D geometry without running any physics
+    simulation.
 
     Parameters
     ----------
     config : WorldConfig
         The world config used for generation.
     boxes : list[BBox3D]
-        The generated obstacles.
+        The generated obstacles from :func:`generate_world`.
     frame_id : int
         Frame identifier.
     scene_seed : int
@@ -838,8 +953,12 @@ def world_to_genesis_entities(
 ) -> list[dict[str, Any]]:
     """Convert world obstacles to Genesis entity config dicts.
 
-    Each BBox3D becomes a fixed Box entity.  Compatible with
+    This is the **Infinigen → Genesis conversion layer**.  Each BBox3D
+    becomes a fixed Box entity suitable for
     :class:`~infinigen.core.syndata.genesis_export.GenesisEntityConfig`.
+
+    Note: ``BBox3D.extent`` stores half-extents, so Genesis ``size``
+    is ``extent * 2`` in each dimension.
 
     Parameters
     ----------
@@ -874,16 +993,25 @@ def world_to_drone_env_config(
 ) -> dict[str, Any]:
     """Build a DroneEnvConfig-compatible dict from world output.
 
+    This is the **Infinigen → Genesis DroneEnv conversion layer**.
+    It translates the pure 3D geometry into RL simulation parameters:
+    map bounds, reward scales, termination conditions, command ranges,
+    and obstacle entity lists.
+
+    The RL gym (Genesis DroneEnv) consumes this dict to configure the
+    physics environment.  Infinigen only *produces* the configuration —
+    it does not run the simulation.
+
     Parameters
     ----------
     config : WorldConfig
         The world config used for generation.
     boxes : list[BBox3D]
-        The generated obstacles.
+        The generated obstacles from :func:`generate_world`.
     num_envs : int
-        Number of parallel environments.
+        Number of parallel environments for vectorised training.
     dt : float
-        Physics timestep.
+        Physics timestep (seconds).
 
     Returns
     -------
@@ -967,10 +1095,15 @@ def world_to_drone_env_config(
 
 
 def world_gin_overrides(config: WorldConfig) -> dict[str, object]:
-    """Return Infinigen gin-compatible overrides for the world.
+    """Return **Infinigen-specific** gin-compatible overrides for the world.
 
-    Maps world config to scene-generation parameters.  These are
-    *Infinigen pipeline* parameters — not Genesis simulation settings.
+    Maps world config to scene-generation parameters that control
+    Infinigen's procedural pipeline: grid resolution, object density,
+    material properties, fog, clouds, and lighting.
+
+    These are *not* Genesis simulation settings — Genesis receives its
+    configuration through :func:`world_to_genesis_entities` and
+    :func:`world_to_drone_env_config` instead.
 
     Parameters
     ----------
@@ -980,7 +1113,8 @@ def world_gin_overrides(config: WorldConfig) -> dict[str, object]:
     Returns
     -------
     dict[str, object]
-        Gin-compatible override dict.
+        Gin-compatible override dict.  Keys match Infinigen's pipeline
+        gin bindings (e.g. ``"grid_coarsen"``, ``"scatter_density_multiplier"``).
     """
     style = config.effective_style
     return {

@@ -8,23 +8,41 @@ This bpy-free package provides configuration, scheduling, and validation
 tools that sit *outside* the Blender render loop.  Every module can be
 imported and tested without ``bpy`` so that CI stays fast and portable.
 
-The public API is organised into three concern groups:
+The public API is organised into **five concern groups**, cleanly
+separating what Infinigen owns from what Genesis/DroneEnv owns:
 
-**Infinigen pipeline** — scene generation config, gin bindings, resource
-budgeting.  No dependency on Genesis or GenesisDroneEnv.
+1. **Infinigen pipeline** — scene generation config, gin bindings,
+   resource budgeting, domain randomisation.  No dependency on Genesis
+   or any RL framework.
 
-**Genesis World bridge** — converters that map Infinigen config/assets
-to Genesis entity/camera/light types and generate runnable scripts.
+2. **Procedural world generation** — :class:`WorldConfig` +
+   :func:`generate_world` produce pure 3D geometry (``list[BBox3D]``)
+   with progressive complexity: from trivial "3D Flappy Bird" corridors
+   to dense multi-level "Doom-like" mazes.  This is **Infinigen's** job:
+   the 3D world and assets.  Genesis then imports these for physics
+   simulation.
 
-**GenesisDroneEnv bridge** — bidirectional data exchange between
-Infinigen (scene export) and GenesisDroneEnv (training feedback →
-curriculum adjustment).  Curriculum *control* logic lives elsewhere.
+3. **Simple pre-training** — :class:`FlappyColumnConfig` for an even
+   simpler bootstrapping environment (superseded by :class:`WorldConfig`
+   at ``complexity=0.05``).
+
+4. **Genesis World bridge** — converters mapping Infinigen config/assets
+   to Genesis entity/camera/light types and generating runnable scripts.
+   This is the **export interface** from Infinigen to Genesis.
+
+5. **GenesisDroneEnv bridge** — bidirectional data exchange between
+   Infinigen (scene export) and GenesisDroneEnv (training feedback →
+   curriculum adjustment).  Curriculum *control* logic lives in a
+   separate project — this package only provides data contracts.
 
 Typical usage
 -------------
->>> from infinigen.core.syndata import complexity, quality_presets
->>> cfg = complexity.CurriculumConfig(stage=3, total_stages=10)
->>> overrides = quality_presets.drone_preset("fast")
+>>> from infinigen.core.syndata import WorldConfig, generate_world
+>>> cfg = WorldConfig.from_curriculum_progress(0.3, seed=42)
+>>> boxes = generate_world(cfg)  # pure 3D geometry for Infinigen
+>>> # Separately, convert to Genesis entities for RL simulation:
+>>> from infinigen.core.syndata import world_to_genesis_entities
+>>> genesis_ents = world_to_genesis_entities(boxes)
 """
 
 from infinigen.core.syndata.camera_config import CameraRigConfig, DroneCamera
@@ -79,7 +97,7 @@ from infinigen.core.syndata.world_gen import (
 )
 
 __all__ = [
-    # ── Infinigen pipeline — scene generation config ──
+    # ── 1. Infinigen pipeline — scene generation config & gin bindings ──
     "CameraRigConfig",
     "CurriculumConfig",
     "DensityScaler",
@@ -96,7 +114,9 @@ __all__ = [
     "drone_preset",
     "resolution_for_stage",
     "to_gin_bindings",
-    # ── Infinigen pipeline — procedural world generation ──
+    # ── 2. Procedural world generation (Infinigen geometry) ──
+    #    WorldConfig → generate_world() → list[BBox3D]
+    #    Pure 3D layout, no Genesis/RL types.
     "VisualStyle",
     "WorldConfig",
     "generate_world",
@@ -105,13 +125,13 @@ __all__ = [
     "world_to_drone_env_config",
     "world_to_frame_metadata",
     "world_to_genesis_entities",
-    # ── Infinigen pipeline — simple pre-training (legacy) ──
+    # ── 3. Simple pre-training (flappy-bird corridor) ──
     "FlappyColumnConfig",
     "FlappyObstacle",
     "flappy_drone_env_config",
     "flappy_genesis_entities",
     "generate_flappy_obstacles",
-    # ── Genesis World bridge ──
+    # ── 4. Genesis World bridge (Infinigen → Genesis conversion) ──
     "GenesisCamera",
     "GenesisEntityConfig",
     "GenesisEpisodeConfig",
@@ -123,7 +143,7 @@ __all__ = [
     "episode_to_genesis",
     "observation_to_genesis",
     "to_genesis_script",
-    # ── GenesisDroneEnv bridge ──
+    # ── 5. GenesisDroneEnv bridge (bidirectional data exchange) ──
     "DroneEnvConfig",
     "TrainingOutcome",
     "apply_curriculum_adjustment",
