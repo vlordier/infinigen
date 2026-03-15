@@ -7,7 +7,6 @@
 import bpy
 import numpy as np
 from scipy.ndimage import distance_transform_edt
-from skimage import measure
 
 from infinigen.assets.lighting import sky_lighting
 from infinigen.assets.objects.cloud.node import (
@@ -15,6 +14,7 @@ from infinigen.assets.objects.cloud.node import (
     scatter_func,
     shader_material,
 )
+from infinigen.assets.utils.isosurface import marching_cubes_vertices_faces
 from infinigen.core import surface
 from infinigen.core.util import blender as butil
 from infinigen.core.util.logging import Suppress
@@ -181,7 +181,7 @@ class Cumulus:
         dists /= dists.max()
         dists[dists < 0.01] = 0
 
-        verts, faces, normals, values = measure.marching_cubes(dists, 0.08)
+        verts, faces = marching_cubes_vertices_faces(dists, 0.08)
 
         max_v = verts.max()
         min_v = verts.min()

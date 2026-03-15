@@ -8,8 +8,8 @@ import bmesh
 import numpy as np
 from numpy.random import uniform
 from scipy.ndimage import convolve
-from skimage.measure import marching_cubes
 
+from infinigen.assets.utils.isosurface import marching_cubes_vertices_faces
 from infinigen.assets.utils.object import data2mesh
 
 
@@ -81,7 +81,7 @@ def build_laplacian_3d(
     a, b = build_laplacian(stencil * n * n, a, b, t, k, dt, tau, eps, alpha, gamma, teq)
 
     a = np.pad(a, 1)
-    vertices, faces, _, _ = marching_cubes(a, 0.5)
+    vertices, faces = marching_cubes_vertices_faces(a, 0.5)
     vertices -= 1
     vertices /= n
     vertices[:, :-1] -= 1
@@ -117,7 +117,7 @@ def build_laplacian_2d(
 
     a = np.pad(a, 1)
     a = np.stack([a, a], axis=-1)
-    vertices, faces, _, _ = marching_cubes(a, 0.5)
+    vertices, faces = marching_cubes_vertices_faces(a, 0.5)
     vertices -= 1
     vertices /= n
     mesh = data2mesh(vertices, [], faces)

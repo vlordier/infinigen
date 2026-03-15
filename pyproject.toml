@@ -30,7 +30,7 @@ dependencies = [
 
     "bpy==5.0.1",
     "gin_config>=0.5.0",
-    "imageio<2.32.0",      # e.g. 2.31.1
+    "imageio>=2.33,<3",    # required by scikit-image 0.25.x
     "matplotlib",
     "networkx",
     "numpy<2",
@@ -69,6 +69,7 @@ vis = [
     "pyglet<2" # for trimesh_scene.show()
 ]
 dev = [
+    "mcubes==0.1.6",
     "pytest",
     "pytest-cov",
     "pytest-xdist",
