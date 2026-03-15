@@ -1,0 +1,26 @@
+# light_linking.gin — Blender 5.0 Light Linking: sun excludes interior objects
+#
+# Usage: add to any run's gin config stack to activate sun/interior separation:
+#
+#   python -m infinigen.launch ... -- --gin_file light_linking.gin
+#
+# What this does:
+#   - Enables Blender 5.0's stable Light Linking feature (was experimental in 4.x)
+#   - Sun lights are configured to exclude objects whose name contains "interior"
+#   - Interior objects are lit only by artificial point/area lights
+#   - Exterior objects receive full sun + artificial lighting as normal
+#
+# Result: eliminates "light bleeding" artefacts in dataset images where sun light
+# erroneously illuminates underground, cave, or interior scene regions.
+#
+# Variants:
+#   configure_light_linking.mode = "annotation"   # flat annotation pass: single light
+#   configure_light_linking.mode = "custom"       # supply include_names/exclude_names
+#
+# Pairs well with:
+#   eevee_annotations.gin  — faster GT rendering for annotation passes
+#   denoised_render.gin    — reduce sample count for interior-heavy scenes
+#   volume_atmosphere.gin  — fog/haze with correct per-region light interaction
+
+configure_light_linking.mode = "sun_exclude_interior"
+configure_light_linking.log_on_configure = True

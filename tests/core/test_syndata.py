@@ -1999,8 +1999,8 @@ class TestWorldConfigPresets:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-class TestFlappyPresets:
-    """Test FlappyColumnConfig preset factory methods."""
+class TestFlappyPresetsParametrized:
+    """Test FlappyColumnConfig preset factory methods (parametrized)."""
 
     @pytest.mark.parametrize("method", [
         FlappyColumnConfig.easy,
@@ -2391,7 +2391,10 @@ class TestFlappyPresetDeterminism:
     """Test that flappy presets produce identical results with same seed."""
 
     def test_easy_determinism(self):
-        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        from infinigen.core.syndata.pretraining import (
+            FlappyColumnConfig,
+            generate_flappy_obstacles,
+        )
         cfg = FlappyColumnConfig.easy()
         boxes1 = generate_flappy_obstacles(cfg, seed=123)
         boxes2 = generate_flappy_obstacles(cfg, seed=123)
@@ -2401,7 +2404,10 @@ class TestFlappyPresetDeterminism:
             assert b1.extent == b2.extent
 
     def test_medium_determinism(self):
-        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        from infinigen.core.syndata.pretraining import (
+            FlappyColumnConfig,
+            generate_flappy_obstacles,
+        )
         cfg = FlappyColumnConfig.medium()
         boxes1 = generate_flappy_obstacles(cfg, seed=456)
         boxes2 = generate_flappy_obstacles(cfg, seed=456)
@@ -2410,7 +2416,10 @@ class TestFlappyPresetDeterminism:
             assert b1.center == b2.center
 
     def test_hard_determinism(self):
-        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        from infinigen.core.syndata.pretraining import (
+            FlappyColumnConfig,
+            generate_flappy_obstacles,
+        )
         cfg = FlappyColumnConfig.hard()
         boxes1 = generate_flappy_obstacles(cfg, seed=789)
         boxes2 = generate_flappy_obstacles(cfg, seed=789)
@@ -2419,7 +2428,10 @@ class TestFlappyPresetDeterminism:
             assert b1.center == b2.center
 
     def test_different_seeds_produce_different_results(self):
-        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        from infinigen.core.syndata.pretraining import (
+            FlappyColumnConfig,
+            generate_flappy_obstacles,
+        )
         cfg = FlappyColumnConfig.easy()
         boxes1 = generate_flappy_obstacles(cfg, seed=1)
         boxes2 = generate_flappy_obstacles(cfg, seed=2)
@@ -2430,8 +2442,8 @@ class TestFlappyPresetDeterminism:
             assert centers1 != centers2
 
 
-class TestDomainRandomiserDeterminism:
-    """Test DomainRandomiser seeded sampling determinism."""
+class TestDomainRandomiserDeterminismEdgeCases:
+    """Test DomainRandomiser seeded sampling determinism (edge cases)."""
 
     def test_same_seed_same_samples(self):
         from infinigen.core.syndata.randomisation import DomainRandomiser
@@ -2577,6 +2589,7 @@ class TestBenchmarkWorldGen:
     def test_generate_world_under_1s(self):
         """World generation should complete in under 1s for any complexity."""
         import time
+
         from infinigen.core.syndata.world_gen import WorldConfig, generate_world
         for c in [0.0, 0.25, 0.5, 0.75, 1.0]:
             cfg = WorldConfig(complexity=c, seed=42)
@@ -2588,7 +2601,11 @@ class TestBenchmarkWorldGen:
     def test_flappy_generation_under_1s(self):
         """100× flappy obstacle generation should complete in under 1s."""
         import time
-        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+
+        from infinigen.core.syndata.pretraining import (
+            FlappyColumnConfig,
+            generate_flappy_obstacles,
+        )
         cfg = FlappyColumnConfig.hard()
         start = time.perf_counter()
         for _ in range(100):

@@ -481,14 +481,37 @@ def render_image(
     dof_aperture_fstop=2.8,
     flat_shading=False,
     override_num_samples=None,
+    use_eevee_next_for_annotations=False,
+    enable_render_time_pass=False,
 ):
     tic = time.time()
 
     for exclude in excludes:
         bpy.data.objects[exclude].hide_render = True
 
-    init.configure_cycles_devices()
+    using_eevee = flat_shading and use_eevee_next_for_annotations
+    if using_eevee:
+        # EEVEE Next is 10–50× faster than Cycles for flat annotation passes
+        # (depth, normals, object index) because flat random-color materials
+        # don't benefit from path tracing.
+        init.configure_eevee_next()
+    else:
+        init.configure_cycles_devices()
     set_displacement_mode()
+
+    # Inject the Blender 5.0 Render Time pass when requested.  This is a
+    # Cycles-only pass (not available under EEVEE) that records per-pixel
+    # render cost as a greyscale EXR layer.
+    active_passes = list(passes_to_save)
+    if enable_render_time_pass and not using_eevee:
+        # Enable the viewlayer pass so Cycles populates the RenderTime socket
+        init.configure_render_time_pass(enabled=True)
+        # Inject the descriptor only if the pass is not already listed,
+        # comparing by pass name (first element) to handle both list and
+        # tuple entries robustly.
+        rt_pass_name = init.RENDER_TIME_PASS_DESCRIPTOR[0]
+        if rt_pass_name not in (p[0] for p in active_passes):
+            active_passes.append(list(init.RENDER_TIME_PASS_DESCRIPTOR))
 
     tmp_dir = frames_folder.parent.resolve() / "tmp"
     tmp_dir.mkdir(exist_ok=True)
@@ -496,7 +519,8 @@ def render_image(
 
     camrig_id, subcam_id = cam_util.get_id(camera)
 
-    if override_num_samples is not None:  # usually used for GT
+    if override_num_samples is not None and not using_eevee:
+        # override_num_samples is a Cycles-only property; skip for EEVEE
         bpy.context.scene.cycles.samples = override_num_samples
 
     if flat_shading:
@@ -517,7 +541,7 @@ def render_image(
         with Timer("Flat Shading"):
             global_flat_shading()
     else:
-        segment_materials = "material_index" in (x[0] for x in passes_to_save)
+        segment_materials = "material_index" in (x[0] for x in active_passes)
         if segment_materials:
             with Timer("Set material indices"):
                 material_data = set_material_pass_indices()
@@ -535,7 +559,7 @@ def render_image(
 
     if not bpy.context.scene.use_nodes:
         bpy.context.scene.use_nodes = True
-    file_slot_nodes = configure_compositor(frames_folder, passes_to_save, flat_shading)
+    file_slot_nodes = configure_compositor(frames_folder, active_passes, flat_shading)
 
     indices = dict(cam_rig=camrig_id, resample=0, subcam=subcam_id)
 

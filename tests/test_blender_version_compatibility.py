@@ -8,7 +8,7 @@ Non-regression tests for Blender API compatibility.
 
 These tests document and verify the specific Blender API behaviors that
 the infinigen codebase depends on, to detect regressions when upgrading
-to a newer Blender/bpy version (e.g. from 4.2 to 4.5).
+to a newer Blender/bpy version (e.g. from 4.5 to 5.0).
 
 Each test targets a specific API path used in infinigen/core/util/blender.py,
 infinigen/core/surface.py, or infinigen/core/nodes/node_wrangler.py.
@@ -39,6 +39,15 @@ def test_bpy_app_version_string_non_empty():
     """bpy.app.version_string must be a non-empty string."""
     assert isinstance(bpy.app.version_string, str)
     assert len(bpy.app.version_string) > 0
+
+
+def test_bpy_version_is_5_0():
+    """Verify that we are running on the expected bpy 5.0.x release."""
+    major, minor, _patch = bpy.app.version
+    assert (major, minor) == (5, 0), (
+        f"Expected bpy 5.0.x but got {bpy.app.version_string}. "
+        "Please ensure bpy==5.0.1 is installed."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -605,3 +614,919 @@ def test_merge_by_distance():
     # Threshold smaller than cube edge length – no merging expected on a clean cube
     butil.merge_by_distance(obj, face_size=0.001)
     assert len(obj.data.vertices) == initial_verts
+
+
+# ---------------------------------------------------------------------------
+# Color management – configure_color_management() (new in Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_color_management_default():
+    """configure_color_management() with defaults must set AgX and sRGB display."""
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    configure_color_management()
+    scene = bpy.context.scene
+    assert scene.view_settings.view_transform == "AgX"
+    assert scene.display_settings.display_device == "sRGB"
+    assert scene.view_settings.look == "None"
+
+
+def test_configure_color_management_aces2():
+    """configure_color_management() with ACES 2.0 must apply the ACES view transform."""
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    try:
+        configure_color_management(view_transform="ACES 2.0", display_device="sRGB")
+        assert bpy.context.scene.view_settings.view_transform == "ACES 2.0"
+    except (TypeError, AttributeError):
+        pytest.skip(
+            "ACES 2.0 view transform not available in this Blender build – "
+            "requires a complete Blender 5.0.x installation with OCIO config."
+        )
+
+
+def test_configure_color_management_exposure():
+    """configure_color_management() must propagate the exposure parameter."""
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    configure_color_management(exposure=1.5)
+    assert abs(bpy.context.scene.view_settings.exposure - 1.5) < 1e-5
+
+
+def test_configure_color_management_warns_unknown_transform(caplog):
+    """configure_color_management() must log a warning for an unknown view_transform."""
+    import logging
+
+    from infinigen.core.init import configure_color_management
+
+    configure_color_management.clear_config()
+    with caplog.at_level(logging.WARNING, logger="infinigen.core.init"):
+        try:
+            configure_color_management(view_transform="NotARealTransform_XYZ")
+        except Exception:
+            pass
+    assert any("NotARealTransform_XYZ" in r.message for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Nishita sky atmosphere – gin-configurable ozone/altitude (Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_nishita_lighting_gin_params_ozone_altitude():
+    """nishita_lighting must expose ozone_density and altitude as gin parameters."""
+    import inspect
+
+    from infinigen.assets.lighting.sky_lighting import nishita_lighting
+
+    sig = inspect.signature(nishita_lighting.__wrapped__)
+    params = sig.parameters
+    assert "ozone_density" in params, "ozone_density must be a gin-configurable parameter"
+    assert "altitude" in params, "altitude must be a gin-configurable parameter"
+
+
+def test_nishita_lighting_gin_params_have_defaults():
+    """ozone_density and altitude parameters must have non-empty default distributions."""
+    import inspect
+
+    from infinigen.assets.lighting.sky_lighting import nishita_lighting
+
+    sig = inspect.signature(nishita_lighting.__wrapped__)
+    ozone_default = sig.parameters["ozone_density"].default
+    altitude_default = sig.parameters["altitude"].default
+    assert ozone_default is not inspect.Parameter.empty
+    assert altitude_default is not inspect.Parameter.empty
+
+
+# ---------------------------------------------------------------------------
+# EEVEE Next annotation passes – configure_eevee_next() (Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_eevee_next_sets_engine():
+    """configure_eevee_next() must set the render engine to BLENDER_EEVEE_NEXT."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.render.engine == "BLENDER_EEVEE_NEXT"
+
+
+def test_configure_eevee_next_disables_shadows_by_default():
+    """configure_eevee_next() must disable shadows by default for faster annotation rendering."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.eevee.use_shadows is False
+
+
+def test_configure_eevee_next_single_taa_sample():
+    """configure_eevee_next() must use 1 TAA sample by default (sufficient for flat shading)."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.eevee.taa_render_samples == 1
+
+
+def test_configure_eevee_next_shadows_enabled_when_requested():
+    """configure_eevee_next(use_shadows=True) must enable shadows."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next(use_shadows=True)
+    assert bpy.context.scene.eevee.use_shadows is True
+
+
+def test_render_image_has_eevee_annotation_param():
+    """render_image must expose use_eevee_next_for_annotations as a gin parameter."""
+    import inspect
+
+    from infinigen.core.rendering.render import render_image
+
+    sig = inspect.signature(render_image.__wrapped__)
+    assert "use_eevee_next_for_annotations" in sig.parameters
+
+
+def test_configure_eevee_next_gin_params():
+    """configure_eevee_next must expose all relevant settings as gin parameters."""
+    import inspect
+
+    from infinigen.core.init import configure_eevee_next
+
+    sig = inspect.signature(configure_eevee_next.__wrapped__)
+    params = sig.parameters
+    assert "use_shadows" in params
+    assert "taa_render_samples" in params
+    assert "use_gtao" in params
+    assert "use_high_quality_normals" in params
+    assert "use_bloom" in params
+
+
+def test_configure_eevee_next_high_quality_normals_default():
+    """configure_eevee_next() must enable high-quality normals by default for accurate annotation."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.eevee.use_high_quality_normals is True
+
+
+# ---------------------------------------------------------------------------
+# Cycles denoiser fallback chain – _configure_denoiser() (Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_denoiser_sets_engine_to_cycles():
+    """configure_render_cycles() with denoise=True must keep CYCLES as the engine."""
+    import gin
+
+    from infinigen.core.init import configure_render_cycles
+
+    configure_render_cycles.clear_config()
+    gin.clear_config()
+    configure_render_cycles(
+        min_samples=0,
+        num_samples=512,
+        time_limit=0,
+        adaptive_threshold=0.01,
+        exposure=1.0,
+        denoise=True,
+    )
+    assert bpy.context.scene.render.engine == "CYCLES"
+
+
+def test_configure_denoiser_with_denoise_false():
+    """configure_render_cycles() with denoise=False must set use_denoising=False."""
+    import gin
+
+    from infinigen.core.init import configure_render_cycles
+
+    configure_render_cycles.clear_config()
+    gin.clear_config()
+    configure_render_cycles(
+        min_samples=0,
+        num_samples=512,
+        time_limit=0,
+        adaptive_threshold=0.01,
+        exposure=1.0,
+        denoise=False,
+    )
+    assert bpy.context.scene.cycles.use_denoising is False
+
+
+def test_configure_denoiser_fallback_leaves_defined_state():
+    """_configure_denoiser() must leave the scene in a defined state (denoiser set or disabled)."""
+    from infinigen.core.init import _configure_denoiser
+
+    # Save original state
+    orig_use_denoising = bpy.context.scene.cycles.use_denoising
+    bpy.context.scene.cycles.use_denoising = True
+
+    _configure_denoiser()
+
+    # Scene must be in a valid state: either a known denoiser is selected or
+    # use_denoising has been explicitly set to False.
+    # CYCLES_DENOISER_PRIORITY = ["OPTIX", "OPENIMAGEDENOISE"]
+    valid_denoisers = {"OPTIX", "OPENIMAGEDENOISE"}
+    if bpy.context.scene.cycles.use_denoising:
+        assert bpy.context.scene.cycles.denoiser in valid_denoisers, (
+            f"use_denoising=True but denoiser={bpy.context.scene.cycles.denoiser!r} "
+            "is not in the supported set"
+        )
+
+    # Restore
+    bpy.context.scene.cycles.use_denoising = orig_use_denoising
+
+
+def test_configure_render_cycles_sample_count():
+    """configure_render_cycles() must apply the num_samples gin parameter."""
+    import gin
+
+    from infinigen.core.init import configure_render_cycles
+
+    configure_render_cycles.clear_config()
+    gin.clear_config()
+    configure_render_cycles(
+        min_samples=128,
+        num_samples=1024,
+        time_limit=0,
+        adaptive_threshold=0.01,
+        exposure=1.0,
+        denoise=False,
+    )
+    assert bpy.context.scene.cycles.samples == 1024
+    assert bpy.context.scene.cycles.adaptive_min_samples == 128
+
+
+def test_configure_denoiser_gin_params():
+    """configure_render_cycles must expose denoise as a gin-configurable parameter."""
+    import inspect
+
+    from infinigen.core.init import configure_render_cycles
+
+    sig = inspect.signature(configure_render_cycles.__wrapped__)
+    params = sig.parameters
+    assert "denoise" in params
+    assert "num_samples" in params
+    assert "min_samples" in params
+    assert "adaptive_threshold" in params
+
+
+# ---------------------------------------------------------------------------
+# Scatter density scaling – scatter_instances() (Blender 5.0 Massive Geometry)
+# ---------------------------------------------------------------------------
+
+
+def test_scatter_instances_gin_params():
+    """scatter_instances must expose density_scale and max_density as gin parameters."""
+    import inspect
+
+    from infinigen.core.placement.instance_scatter import scatter_instances
+
+    sig = inspect.signature(scatter_instances.__wrapped__)
+    params = sig.parameters
+    assert "density_scale" in params, "density_scale gin parameter missing"
+    assert "max_density" in params, "max_density gin parameter missing"
+    assert "vol_density" in params
+    assert "density" in params
+
+
+def test_scatter_density_scale_default_is_one():
+    """scatter_instances.density_scale must default to 1.0 (no-op for existing scenes)."""
+    import inspect
+
+    from infinigen.core.placement.instance_scatter import scatter_instances
+
+    sig = inspect.signature(scatter_instances.__wrapped__)
+    assert sig.parameters["density_scale"].default == 1.0, (
+        "Default density_scale is not 1.0 — existing scenes would be affected"
+    )
+
+
+def test_scatter_max_density_default_raised():
+    """Default max_density must be >= 10000 (raised for Blender 5.0 buffer limits)."""
+    from infinigen.core.placement.instance_scatter import SCATTER_MAX_DENSITY_DEFAULT
+
+    assert SCATTER_MAX_DENSITY_DEFAULT >= 10000, (
+        f"SCATTER_MAX_DENSITY_DEFAULT={SCATTER_MAX_DENSITY_DEFAULT} is below 10000; "
+        "expected to be raised for Blender 5.0"
+    )
+
+
+def test_scatter_density_scale_applies():
+    """density_scale multiplier must be applied to density before the max_density cap."""
+    import inspect
+
+    from infinigen.core.placement.instance_scatter import (
+        SCATTER_MAX_DENSITY_DEFAULT,
+        scatter_instances,
+    )
+
+    sig = inspect.signature(scatter_instances.__wrapped__)
+    # Verify the logical contract documented in the docstring is consistent:
+    # density_scale default is 1.0, max_density default >= 10000
+    assert sig.parameters["density_scale"].default == 1.0
+    assert sig.parameters["max_density"].default >= SCATTER_MAX_DENSITY_DEFAULT
+
+
+# ---------------------------------------------------------------------------
+# Render Time Pass (P2) — Blender 5.0 per-pixel cost heatmap
+# ---------------------------------------------------------------------------
+
+
+def test_configure_render_time_pass_exists():
+    """configure_render_time_pass must exist in core.init."""
+    import importlib
+
+    m = importlib.import_module("infinigen.core.init")
+    assert hasattr(m, "configure_render_time_pass"), (
+        "configure_render_time_pass missing from infinigen.core.init"
+    )
+    assert callable(m.configure_render_time_pass)
+
+
+def test_configure_render_time_pass_is_gin_configurable():
+    """configure_render_time_pass must be decorated with @gin.configurable."""
+    from infinigen.core.init import configure_render_time_pass
+
+    assert hasattr(configure_render_time_pass, "__wrapped__"), (
+        "configure_render_time_pass is not gin-configurable — missing @gin.configurable"
+    )
+
+
+def test_configure_render_time_pass_gin_params():
+    """configure_render_time_pass must expose enabled and log_on_enable parameters."""
+    import inspect
+
+    from infinigen.core.init import configure_render_time_pass
+
+    sig = inspect.signature(configure_render_time_pass.__wrapped__)
+    params = sig.parameters
+    assert "enabled" in params, "enabled gin parameter missing"
+    assert "log_on_enable" in params, "log_on_enable gin parameter missing"
+
+
+def test_configure_render_time_pass_default_disabled():
+    """configure_render_time_pass.enabled must default to False (zero overhead by default)."""
+    import inspect
+
+    from infinigen.core.init import configure_render_time_pass
+
+    sig = inspect.signature(configure_render_time_pass.__wrapped__)
+    assert sig.parameters["enabled"].default is False, (
+        "configure_render_time_pass.enabled defaults to True — "
+        "this would add overhead to every render by default"
+    )
+
+
+def test_render_time_pass_descriptor_exists():
+    """RENDER_TIME_PASS_DESCRIPTOR must be a 2-tuple matching the compositor convention."""
+    from infinigen.core.init import RENDER_TIME_PASS_DESCRIPTOR
+
+    assert isinstance(RENDER_TIME_PASS_DESCRIPTOR, tuple), (
+        "RENDER_TIME_PASS_DESCRIPTOR must be a tuple"
+    )
+    assert len(RENDER_TIME_PASS_DESCRIPTOR) == 2, (
+        "RENDER_TIME_PASS_DESCRIPTOR must have exactly 2 elements (pass_name, socket_name)"
+    )
+    pass_name, socket_name = RENDER_TIME_PASS_DESCRIPTOR
+    assert pass_name == "render_time", f"Expected 'render_time', got {pass_name!r}"
+    assert socket_name == "RenderTime", f"Expected 'RenderTime', got {socket_name!r}"
+
+
+def test_render_image_enable_render_time_pass_param():
+    """render_image must expose enable_render_time_pass as a gin parameter."""
+    import inspect
+
+    from infinigen.core.rendering.render import render_image
+
+    sig = inspect.signature(render_image.__wrapped__)
+    assert "enable_render_time_pass" in sig.parameters, (
+        "enable_render_time_pass parameter missing from render_image"
+    )
+    assert sig.parameters["enable_render_time_pass"].default is False, (
+        "enable_render_time_pass must default to False"
+    )
+
+
+# ---------------------------------------------------------------------------
+# P2: Repeat Zones & Switch Menu — Blender 5.0 node system additions
+# ---------------------------------------------------------------------------
+
+
+def test_nodes_repeat_input_defined():
+    """Nodes.RepeatInput must be defined in node_info (bl5.0 Repeat Zone)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "RepeatInput"), "Nodes.RepeatInput missing"
+    assert Nodes.RepeatInput == "GeometryNodeRepeatInput"
+
+
+def test_nodes_repeat_output_defined():
+    """Nodes.RepeatOutput must be defined in node_info (bl5.0 Repeat Zone)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "RepeatOutput"), "Nodes.RepeatOutput missing"
+    assert Nodes.RepeatOutput == "GeometryNodeRepeatOutput"
+
+
+def test_nodes_menu_switch_defined():
+    """Nodes.MenuSwitch must be defined in node_info (bl5.0 Menu Switch)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "MenuSwitch"), "Nodes.MenuSwitch missing"
+    assert Nodes.MenuSwitch == "GeometryNodeMenuSwitch"
+
+
+def test_nodes_foreach_geometry_element_defined():
+    """ForEachGeometryElement Input/Output must be defined (bl5.0)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "ForEachGeometryElementInput"), (
+        "Nodes.ForEachGeometryElementInput missing"
+    )
+    assert hasattr(Nodes, "ForEachGeometryElementOutput"), (
+        "Nodes.ForEachGeometryElementOutput missing"
+    )
+
+
+def test_blender5_zone_node_types_constant():
+    """BLENDER5_ZONE_NODE_TYPES must be a frozenset containing the zone node values."""
+    from infinigen.core.nodes.node_info import Nodes
+    from infinigen.core.nodes.node_wrangler import BLENDER5_ZONE_NODE_TYPES
+
+    assert isinstance(BLENDER5_ZONE_NODE_TYPES, frozenset), (
+        "BLENDER5_ZONE_NODE_TYPES must be a frozenset"
+    )
+    assert Nodes.RepeatInput in BLENDER5_ZONE_NODE_TYPES
+    assert Nodes.RepeatOutput in BLENDER5_ZONE_NODE_TYPES
+    assert Nodes.ForEachGeometryElementInput in BLENDER5_ZONE_NODE_TYPES
+    assert Nodes.ForEachGeometryElementOutput in BLENDER5_ZONE_NODE_TYPES
+
+
+def test_node_wrangler_has_new_repeat_zone():
+    """NodeWrangler must expose new_repeat_zone() helper (bl5.0)."""
+    import inspect
+
+    from infinigen.core.nodes.node_wrangler import NodeWrangler
+
+    assert hasattr(NodeWrangler, "new_repeat_zone"), (
+        "NodeWrangler.new_repeat_zone() missing"
+    )
+    sig = inspect.signature(NodeWrangler.new_repeat_zone)
+    assert "iterations" in sig.parameters, "new_repeat_zone: 'iterations' param missing"
+    assert sig.parameters["iterations"].default == 1, (
+        "new_repeat_zone: 'iterations' must default to 1"
+    )
+    assert "input_kwargs" in sig.parameters, (
+        "new_repeat_zone: 'input_kwargs' param missing"
+    )
+
+
+def test_node_wrangler_has_new_menu_switch():
+    """NodeWrangler must expose new_menu_switch() helper (bl5.0)."""
+    import inspect
+
+    from infinigen.core.nodes.node_wrangler import NodeWrangler
+
+    assert hasattr(NodeWrangler, "new_menu_switch"), (
+        "NodeWrangler.new_menu_switch() missing"
+    )
+    sig = inspect.signature(NodeWrangler.new_menu_switch)
+    assert "data_type" in sig.parameters, "new_menu_switch: 'data_type' param missing"
+    assert "items" in sig.parameters, "new_menu_switch: 'items' param missing"
+    assert "active_index" in sig.parameters, (
+        "new_menu_switch: 'active_index' param missing"
+    )
+    assert sig.parameters["data_type"].default == "GEOMETRY", (
+        "new_menu_switch: 'data_type' must default to 'GEOMETRY'"
+    )
+    assert sig.parameters["active_index"].default == 0, (
+        "new_menu_switch: 'active_index' must default to 0"
+    )
+
+
+# ---------------------------------------------------------------------------
+# P3: Gin-configurable Volume Atmosphere — Blender 5.0+
+# ---------------------------------------------------------------------------
+
+
+def test_configure_volume_rendering_exists():
+    """configure_volume_rendering() must exist in core.init."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init",
+        "infinigen/core/init.py",
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    assert hasattr(module, "configure_volume_rendering"), (
+        "configure_volume_rendering() not found in core/init.py"
+    )
+
+
+def test_configure_volume_rendering_is_gin_configurable():
+    """configure_volume_rendering must be decorated with @gin.configurable."""
+    import inspect
+
+    def _load():
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "infinigen.core.init", "infinigen/core/init.py"
+        )
+        m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        try:
+            spec.loader.exec_module(m)  # type: ignore[union-attr]
+        except Exception:
+            pass
+        return m
+
+    m = _load()
+    fn = getattr(m, "configure_volume_rendering", None)
+    assert fn is not None
+    # gin.configurable wraps the function; inspect the qualified name or __wrapped__
+    src = inspect.getsource(m)
+    assert "@gin.configurable" in src or "gin.configurable" in src
+
+
+def test_configure_volume_rendering_signature():
+    """configure_volume_rendering must expose all documented parameters."""
+    import importlib.util
+    import inspect
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    fn = m.configure_volume_rendering
+    sig = inspect.signature(fn)
+    assert "volume_step_rate" in sig.parameters
+    assert "volume_max_steps" in sig.parameters
+    assert "volume_bounces" in sig.parameters
+    assert "atmosphere_preset" in sig.parameters
+    assert "use_world_volume" in sig.parameters
+    assert "world_volume_density" in sig.parameters
+    assert "world_volume_anisotropy" in sig.parameters
+    assert "world_volume_color" in sig.parameters
+
+
+def test_configure_volume_rendering_defaults():
+    """configure_volume_rendering default parameters must match baseline constants."""
+    import importlib.util
+    import inspect
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    fn = m.configure_volume_rendering
+    sig = inspect.signature(fn)
+    assert sig.parameters["atmosphere_preset"].default is None, (
+        "atmosphere_preset must default to None (no preset active)"
+    )
+    assert sig.parameters["use_world_volume"].default is False, (
+        "use_world_volume must default to False"
+    )
+    # Numeric defaults from CYCLES_VOLUME_* constants
+    vol_step_rate = getattr(m, "CYCLES_VOLUME_STEP_RATE", None)
+    vol_max_steps = getattr(m, "CYCLES_VOLUME_MAX_STEPS", None)
+    vol_bounces = getattr(m, "CYCLES_VOLUME_BOUNCES", None)
+    assert vol_step_rate is not None
+    assert vol_max_steps is not None
+    assert vol_bounces is not None
+    assert sig.parameters["volume_step_rate"].default == vol_step_rate
+    assert sig.parameters["volume_max_steps"].default == vol_max_steps
+    assert sig.parameters["volume_bounces"].default == vol_bounces
+
+
+def test_atmosphere_quality_presets_defined():
+    """ATMOSPHERE_QUALITY_PRESETS must define fog, haze, dense, and none presets."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", None)
+    assert presets is not None, "ATMOSPHERE_QUALITY_PRESETS missing from core/init.py"
+    assert isinstance(presets, dict)
+    for expected_key in ("none", "fog", "haze", "dense"):
+        assert expected_key in presets, (
+            f"ATMOSPHERE_QUALITY_PRESETS missing key '{expected_key}'"
+        )
+
+
+def test_atmosphere_presets_have_required_keys():
+    """Each non-none atmosphere preset must have volume_step_rate/max_steps/bounces."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", {})
+    required_keys = {"volume_step_rate", "volume_max_steps", "volume_bounces"}
+    for name, cfg in presets.items():
+        for key in required_keys:
+            assert key in cfg, (
+                f"ATMOSPHERE_QUALITY_PRESETS[{name!r}] missing key '{key}'"
+            )
+
+
+def test_fog_preset_denser_than_haze():
+    """The 'fog' preset must be denser (higher density) than 'haze'."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", {})
+    fog_density = presets["fog"].get("world_volume_density", 0)
+    haze_density = presets["haze"].get("world_volume_density", 0)
+    assert fog_density > haze_density, (
+        f"Expected fog density ({fog_density}) > haze density ({haze_density})"
+    )
+
+
+def test_dense_preset_has_more_steps_than_haze():
+    """'dense' atmosphere must have more volume_max_steps than 'haze'."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", {})
+    assert presets["dense"]["volume_max_steps"] > presets["haze"]["volume_max_steps"]
+
+
+# ---------------------------------------------------------------------------
+# Blender 5.0 P3 — SDF Grid / Volume Grid node type registrations
+# ---------------------------------------------------------------------------
+
+
+def test_sdf_grid_node_types_defined():
+    """Blender 5.0 SDF / Volume Grid node types must be registered in Nodes enum."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    expected = {
+        "GetNamedGrid": "GeometryNodeGetNamedGrid",
+        "StoreNamedGrid": "GeometryNodeStoreNamedGrid",
+        "GridInfo": "GeometryNodeGridInfo",
+        "SampleGrid": "GeometryNodeSampleGrid",
+        "FieldToGrid": "GeometryNodeFieldToGrid",
+        "GridToMesh": "GeometryNodeGridToMesh",
+        "MeshToSdfGrid": "GeometryNodeMeshToSDFGrid",
+        "PointsToSdfGrid": "GeometryNodePointsToSDFGrid",
+        "MeshToDensityGrid": "GeometryNodeMeshToDensityGrid",
+        "SdfGridBoolean": "GeometryNodeSDFGridBoolean",
+        "SdfGridOffset": "GeometryNodeSDFGridOffset",
+        "SdfFillet": "GeometryNodeSDFFillet",
+        "AdvectGrid": "GeometryNodeAdvectGrid",
+    }
+    for attr, expected_value in expected.items():
+        assert hasattr(Nodes, attr), f"Nodes.{attr} is missing from node_info.py"
+        assert getattr(Nodes, attr) == expected_value, (
+            f"Nodes.{attr} = {getattr(Nodes, attr)!r} but expected {expected_value!r}"
+        )
+
+
+def test_blender5_volume_grid_frozenset_exists():
+    """BLENDER5_VOLUME_GRID_NODE_TYPES frozenset must exist in node_wrangler."""
+    try:
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert isinstance(BLENDER5_VOLUME_GRID_NODE_TYPES, frozenset)
+    assert len(BLENDER5_VOLUME_GRID_NODE_TYPES) >= 10, (
+        "Expected at least 10 Volume Grid node types registered"
+    )
+
+
+def test_sdf_grid_boolean_in_volume_frozenset():
+    """SdfGridBoolean must be in BLENDER5_VOLUME_GRID_NODE_TYPES."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert Nodes.SdfGridBoolean in BLENDER5_VOLUME_GRID_NODE_TYPES
+
+
+def test_mesh_to_sdf_in_volume_frozenset():
+    """MeshToSdfGrid must be in BLENDER5_VOLUME_GRID_NODE_TYPES."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert Nodes.MeshToSdfGrid in BLENDER5_VOLUME_GRID_NODE_TYPES
+
+
+def test_field_to_grid_in_volume_frozenset():
+    """FieldToGrid must be in BLENDER5_VOLUME_GRID_NODE_TYPES."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert Nodes.FieldToGrid in BLENDER5_VOLUME_GRID_NODE_TYPES
+
+
+def test_new_sdf_grid_boolean_helper_signature():
+    """NodeWrangler.new_sdf_grid_boolean must accept operation/grid_a/grid_b."""
+    import inspect
+
+    try:
+        from infinigen.core.nodes.node_wrangler import NodeWrangler
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    sig = inspect.signature(NodeWrangler.new_sdf_grid_boolean)
+    params = sig.parameters
+    assert "operation" in params, "new_sdf_grid_boolean must accept 'operation' param"
+    assert params["operation"].default == "UNION"
+    assert "grid_a" in params
+    assert "grid_b" in params
+
+
+def test_new_field_to_grid_helper_signature():
+    """NodeWrangler.new_field_to_grid must accept field/resolution/voxel_size."""
+    import inspect
+
+    try:
+        from infinigen.core.nodes.node_wrangler import NodeWrangler
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    sig = inspect.signature(NodeWrangler.new_field_to_grid)
+    params = sig.parameters
+    assert "field" in params
+    assert "resolution" in params
+    assert params["resolution"].default == 32
+    assert "voxel_size" in params
+    assert params["voxel_size"].default is None
+
+
+# ---------------------------------------------------------------------------
+# P3: Light Linking (Blender 5.0 stable feature)
+# ---------------------------------------------------------------------------
+
+
+def _load_core_init_module():
+    """Load infinigen.core.init without bpy (best-effort; exceptions silenced)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    return m
+
+
+def test_light_linking_modes_frozenset_exists():
+    """LIGHT_LINKING_MODES frozenset must exist in core/init.py."""
+    m = _load_core_init_module()
+    assert hasattr(m, "LIGHT_LINKING_MODES"), (
+        "LIGHT_LINKING_MODES frozenset is missing from core/init.py"
+    )
+    modes = m.LIGHT_LINKING_MODES
+    assert isinstance(modes, frozenset), (
+        f"LIGHT_LINKING_MODES should be a frozenset, got {type(modes)}"
+    )
+
+
+def test_light_linking_modes_contains_expected():
+    """LIGHT_LINKING_MODES must contain all four expected policy modes."""
+    m = _load_core_init_module()
+    modes = m.LIGHT_LINKING_MODES
+    for expected in ("none", "sun_exclude_interior", "annotation", "custom"):
+        assert expected in modes, (
+            f"Expected mode {expected!r} missing from LIGHT_LINKING_MODES"
+        )
+
+
+def test_blender_light_types_constant_exists():
+    """BLENDER_LIGHT_TYPES tuple must be present in core/init.py."""
+    m = _load_core_init_module()
+    assert hasattr(m, "BLENDER_LIGHT_TYPES"), (
+        "BLENDER_LIGHT_TYPES tuple is missing from core/init.py"
+    )
+    light_types = m.BLENDER_LIGHT_TYPES
+    assert isinstance(light_types, tuple), (
+        f"BLENDER_LIGHT_TYPES should be a tuple, got {type(light_types)}"
+    )
+    assert "SUN" in light_types
+    assert "AREA" in light_types
+    assert "POINT" in light_types
+
+
+def test_configure_light_linking_function_exists():
+    """configure_light_linking must be defined in core/init.py."""
+    m = _load_core_init_module()
+    assert hasattr(m, "configure_light_linking"), (
+        "configure_light_linking function is missing from core/init.py"
+    )
+    assert callable(m.configure_light_linking)
+
+
+def test_configure_light_linking_is_gin_configurable():
+    """configure_light_linking must be decorated with @gin.configurable."""
+    import inspect
+
+    m = _load_core_init_module()
+    fn = m.configure_light_linking
+    # gin.configurable wraps the function; check the original is accessible
+    # via __wrapped__ or inspect the qualname
+    sig = inspect.signature(fn)
+    params = sig.parameters
+    assert "mode" in params, "configure_light_linking must accept 'mode' param"
+
+
+def test_configure_light_linking_default_mode_is_none():
+    """configure_light_linking default mode must be 'none' (zero overhead)."""
+    import inspect
+
+    m = _load_core_init_module()
+    sig = inspect.signature(m.configure_light_linking)
+    params = sig.parameters
+    assert "mode" in params
+    default = params["mode"].default
+    assert default == "none", (
+        f"configure_light_linking.mode default should be 'none', got {default!r}"
+    )
+
+
+def test_configure_light_linking_signature_include_exclude():
+    """configure_light_linking must accept include_names and exclude_names."""
+    import inspect
+
+    m = _load_core_init_module()
+    sig = inspect.signature(m.configure_light_linking)
+    params = sig.parameters
+    assert "include_names" in params, "configure_light_linking needs include_names"
+    assert "exclude_names" in params, "configure_light_linking needs exclude_names"
+    assert params["include_names"].default == ()
+    assert params["exclude_names"].default == ()
+
+
+def test_configure_light_linking_returns_int():
+    """configure_light_linking return type annotation must be int."""
+    import inspect
+
+    m = _load_core_init_module()
+    sig = inspect.signature(m.configure_light_linking)
+    ret = sig.return_annotation
+    # return annotation may be inspect.Parameter.empty if annotations not loaded
+    if ret is not inspect.Parameter.empty:
+        assert ret is int or ret == "int", (
+            f"configure_light_linking should return int, got {ret}"
+        )

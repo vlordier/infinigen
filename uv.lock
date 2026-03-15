@@ -65,8 +65,8 @@ wheels = [
 
 [[package]]
 name = "bpy"
-version = "4.5.7"
-source = { registry = "https://download.blender.org/pypi/bpy/" }
+version = "5.0.1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cython" },
     { name = "numpy" },
@@ -74,11 +74,10 @@ dependencies = [
     { name = "zstandard" },
 ]
 wheels = [
-    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:53e6d4f780af844faa817f91a10b2ec8ca78baf3d5a581681eb7041971c4743a", size = 220064241 },
-    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-macosx_11_0_x86_64.whl", hash = "sha256:e2ae8cec86af8107edefc11826e8444cac42b21638dbc4b1eec53306f9a7d188", size = 235149148 },
-    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:b3c7bbe2c2a2b46ddf27b5844f0f0abe9c87bd0f1d67db46bc14e57710ebcf64", size = 373032968 },
-    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-win_amd64.whl", hash = "sha256:a42b62f687461037546ff674b8405fd82b14e92781afcc37e52ff42467d9e69a", size = 326575443 },
-    { url = "https://download.blender.org/pypi/bpy/bpy-4.5.7-cp311-cp311-win_arm64.whl", hash = "sha256:98e321138879c315e99a64594908cec6738c11b2178ba44d74591b133fdd01e2", size = 194087423 },
+    { url = "https://files.pythonhosted.org/packages/80/ac/b6a3e733f07f70637f86fb16d64d69664a97bdeb7386ab84bd128cb96a31/bpy-5.0.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:92e2a9b62a17d41387a08e9f10fa68e843c2af91e7b1c557b8fd6a52ff1115e8", size = 228420793 },
+    { url = "https://files.pythonhosted.org/packages/79/62/bdc90f457acc6a82325f563c2b87cd57f5c3d6a7de2e23fdba8e640c9437/bpy-5.0.1-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:79c6e421f53ea24a5961d86eefb8141798eee708682415eb4f5a952c2abdeb8b", size = 374257847 },
+    { url = "https://files.pythonhosted.org/packages/6e/34/06ad77a826ae6cc2ee428bf0ac50528a92dff9bd85ac79303a2ce946ae77/bpy-5.0.1-cp311-cp311-win_amd64.whl", hash = "sha256:4c456809d3651e4850a336283dd73ceda64d7b7f5769490956e10d832c2e7347", size = 328327800 },
+    { url = "https://files.pythonhosted.org/packages/69/51/623e94ca35966162c4aa8968a1a5cf189870945eef57c70892225201fc1b/bpy-5.0.1-cp311-cp311-win_arm64.whl", hash = "sha256:fe98f7c7229dd7273bb143533de1b88c871744f4210140dc6bf3280a5b90dde6", size = 201961589 },
 ]
 
 [[package]]
@@ -551,7 +550,7 @@ wandb = [
 
 [package.metadata]
 requires-dist = [
-    { name = "bpy", specifier = "==4.5.7" },
+    { name = "bpy", specifier = "==5.0.1" },
     { name = "coacd", marker = "extra == 'sim'" },
     { name = "einops", marker = "extra == 'vis'" },
     { name = "flow-vis", marker = "extra == 'vis'" },

@@ -6,9 +6,6 @@ on:
       - main
     tags:
       - '*'
-  pull_request:
-    branches:
-      - main
 
 jobs:
   build_sdist_purepy:
@@ -36,6 +33,7 @@ jobs:
 
   build_wheels:
     name: Build wheel on ${{ matrix.os }} for ${{ matrix.cibw_archs }}
+    if: github.event_name != 'pull_request'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true

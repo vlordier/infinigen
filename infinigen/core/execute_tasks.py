@@ -369,11 +369,12 @@ def execute_tasks(
 
 
 def main(input_folder, output_folder, scene_seed, task, task_uniqname, **kwargs):
-    version_req = ["4.5.0"]
-    assert bpy.app.version_string in version_req, (
-        f"You are using blender={bpy.app.version_string} which is "
-        f"not supported. Please use {version_req}"
-    )
+    required_version = (5, 0, 1)
+    if bpy.app.version != required_version:
+        raise RuntimeError(
+            f"You are using blender={bpy.app.version_string} which is "
+            f"not supported. Please use {'.'.join(str(v) for v in required_version)}"
+        )
     logger.info(f"infinigen version {infinigen.__version__}")
     logger.info(f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')}")
 

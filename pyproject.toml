@@ -22,18 +22,13 @@ classifiers = [
     "Topic :: Multimedia :: Graphics :: 3D Modeling",
 ]
 
-[project.urls]
-Homepage = "https://infinigen.org"
-Repository = "https://github.com/princeton-vl/infinigen"
-Documentation = "https://infinigen.org/docs"
-
 requires-python = "==3.11.*"
 dependencies = [
 
     # NOTE: many less-than dependencies could likely be loosened
     #   we attempted to restrict to only versions that are known to be working
 
-    "bpy==4.5.7",
+    "bpy==5.0.1",
     "gin_config>=0.5.0",
     "imageio<2.32.0",      # e.g. 2.31.1
     "matplotlib",
@@ -95,13 +90,18 @@ wandb = [
     "wandb"
 ]
 
+[project.urls]
+Homepage = "https://infinigen.org"
+Repository = "https://github.com/princeton-vl/infinigen"
+Documentation = "https://infinigen.org/docs"
+
 # Use the official Blender PyPI as the primary source for bpy wheels.
 # To regenerate uv.lock from this index, run:
 #   INFINIGEN_MINIMAL_INSTALL=True uv lock
 # (requires access to download.blender.org)
 [[tool.uv.index]]
 name = "blender-pypi"
-url = "https://download.blender.org/pypi/bpy/"
+url = "https://download.blender.org/pypi/"
 explicit = true
 
 [tool.uv.sources]

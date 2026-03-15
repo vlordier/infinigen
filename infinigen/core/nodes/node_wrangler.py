@@ -27,6 +27,38 @@ from .utils import infer_input_socket, infer_output_socket
 
 logger = logging.getLogger(__name__)
 
+# Blender 5.0 zone node types — used by new_repeat_zone() and new_menu_switch()
+BLENDER5_ZONE_NODE_TYPES = frozenset(
+    {
+        Nodes.RepeatInput,
+        Nodes.RepeatOutput,
+        Nodes.ForEachGeometryElementInput,
+        Nodes.ForEachGeometryElementOutput,
+    }
+)
+
+# Blender 5.0 Volume Grid / SDF node types — used for P3 terrain upgrade path
+BLENDER5_VOLUME_GRID_NODE_TYPES = frozenset(
+    {
+        Nodes.GetNamedGrid,
+        Nodes.StoreNamedGrid,
+        Nodes.GridInfo,
+        Nodes.SampleGrid,
+        Nodes.SampleGridIndex,
+        Nodes.FieldToGrid,
+        Nodes.VoxelizeGrid,
+        Nodes.GridToMesh,
+        Nodes.MeshToSdfGrid,
+        Nodes.PointsToSdfGrid,
+        Nodes.MeshToDensityGrid,
+        Nodes.SdfGridBoolean,
+        Nodes.SdfGridOffset,
+        Nodes.SdfFillet,
+        Nodes.AdvectGrid,
+        Nodes.SetGridBackground,
+    }
+)
+
 
 class NodeMisuseWarning(UserWarning):
     pass
@@ -639,3 +671,158 @@ class NodeWrangler:
         return self.build_case(
             self.new_node(Nodes.Index), inputs + [-1], [True] * len(inputs) + [False]
         )
+
+    def new_repeat_zone(self, iterations=1, input_kwargs=None):
+        """Create a paired Repeat Zone (Blender 5.0+).
+
+        Returns (repeat_input, repeat_output).  Wire nodes *between* these two
+        to define the zone body.  ``iterations`` sets the loop count; use
+        ``input_kwargs`` to forward named values into the zone's first iteration.
+
+        Example::
+
+            inp, out = nw.new_repeat_zone(iterations=8)
+            accumulated = nw.new_node(
+                Nodes.Math,
+                [inp.outputs["Value"], inp.outputs["Index"]],
+                attrs={"operation": "ADD"},
+            )
+            nw.links.new(out.inputs["Value"], accumulated)
+        """
+        repeat_input = self._make_node(Nodes.RepeatInput)
+        repeat_output = self._make_node(Nodes.RepeatOutput)
+
+        # Blender 5.0 API: pair the two zone endpoints
+        if hasattr(repeat_input, "pair_with_output"):
+            repeat_input.pair_with_output(repeat_output)
+
+        # Set iteration count via the dedicated input or attribute
+        if hasattr(repeat_input, "inputs") and "Iterations" in repeat_input.inputs:
+            repeat_input.inputs["Iterations"].default_value = iterations
+        elif hasattr(repeat_input, "iterations"):
+            repeat_input.iterations = iterations
+
+        if input_kwargs:
+            for name, val in input_kwargs.items():
+                self.connect_input(
+                    infer_input_socket(repeat_input, name), val
+                )
+
+        return repeat_input, repeat_output
+
+    def new_menu_switch(self, data_type="GEOMETRY", items=None, active_index=0):
+        """Create a Menu Switch node (Blender 5.0+).
+
+        ``items`` is a list of ``(label, value)`` pairs; if omitted the node is
+        returned unmodified (Blender sets defaults).  ``active_index`` sets the
+        default-selected branch.
+
+        Example::
+
+            switch = nw.new_menu_switch(
+                data_type="FLOAT",
+                items=[("Wet", wet_node), ("Dry", dry_node), ("Snow", snow_node)],
+            )
+        """
+        node = self._make_node(Nodes.MenuSwitch)
+
+        if hasattr(node, "data_type"):
+            node.data_type = data_type
+
+        if items is not None and hasattr(node, "enum_items"):
+            # Clear default items first if possible
+            while node.enum_items:
+                node.enum_items.remove(node.enum_items[-1])
+            for label, val in items:
+                item = node.enum_items.new(label)
+                if val is not None:
+                    self.connect_input(
+                        infer_input_socket(node, label), val
+                    )
+
+        if hasattr(node, "active_index"):
+            node.active_index = active_index
+
+        return node
+
+    def new_sdf_grid_boolean(self, operation="UNION", grid_a=None, grid_b=None):
+        """Create an SDF Grid Boolean node (Blender 5.0+, P3 terrain path).
+
+        Wraps ``GeometryNodeSDFGridBoolean`` which combines two SDF grids using
+        Boolean set operations.  Useful for cave/rock intersection in the terrain
+        system without the manual C++ SDF marching currently required.
+
+        ``operation`` must be one of ``"UNION"``, ``"INTERSECT"``, or
+        ``"DIFFERENCE"``.  ``grid_a`` and ``grid_b`` are upstream SDF grid
+        sockets (e.g., from :meth:`new_node` with :attr:`Nodes.MeshToSdfGrid`).
+
+        Returns the SDF Grid Boolean node.
+
+        Example::
+
+            terrain_sdf = nw.new_node(Nodes.MeshToSdfGrid, [terrain_mesh])
+            cave_sdf = nw.new_node(Nodes.MeshToSdfGrid, [cave_mesh])
+            combined = nw.new_sdf_grid_boolean(
+                operation="DIFFERENCE",
+                grid_a=terrain_sdf,
+                grid_b=cave_sdf,
+            )
+            result_mesh = nw.new_node(Nodes.GridToMesh, [combined])
+        """
+        node = self._make_node(Nodes.SdfGridBoolean)
+
+        if hasattr(node, "operation"):
+            node.operation = operation
+
+        input_kwargs = {}
+        if grid_a is not None:
+            # Blender 5.0 SDF Grid Boolean node uses numeric socket names ("Grid 1", "Grid 2")
+            input_kwargs["Grid 1"] = grid_a
+        if grid_b is not None:
+            input_kwargs["Grid 2"] = grid_b
+
+        if input_kwargs:
+            for name, val in input_kwargs.items():
+                socket = infer_input_socket(node, name)
+                if socket is not None:
+                    self.connect_input(socket, val)
+
+        return node
+
+    def new_field_to_grid(self, field=None, resolution=32, voxel_size=None):
+        """Convert a procedural Blender field into a Volume Grid (Blender 5.0+).
+
+        Wraps ``GeometryNodeFieldToGrid`` which samples a field over a 3-D grid,
+        enabling procedural fog/haze/cloud density authored entirely in the node
+        tree without Python callbacks or VDB files.
+
+        ``field`` is the upstream field socket to sample (e.g., from a Noise
+        Texture or Math node).  ``resolution`` sets the grid resolution along
+        each axis.  ``voxel_size``, if given, overrides ``resolution`` with an
+        explicit voxel side length in Blender units.
+
+        Returns the Field to Grid node.
+
+        Example::
+
+            noise = nw.new_node(
+                Nodes.NoiseTexture,
+                attrs={"noise_dimensions": "3D", "scale": 2.0},
+            )
+            fog_grid = nw.new_field_to_grid(field=noise.outputs["Fac"], resolution=64)
+            result_mesh = nw.new_node(Nodes.GridToMesh, [fog_grid])
+        """
+        node = self._make_node(Nodes.FieldToGrid)
+
+        if voxel_size is not None and hasattr(node, "inputs"):
+            if "Voxel Size" in node.inputs:
+                node.inputs["Voxel Size"].default_value = voxel_size
+        elif hasattr(node, "inputs") and "Resolution" in node.inputs:
+            node.inputs["Resolution"].default_value = resolution
+
+        if field is not None:
+            socket = infer_input_socket(node, "Field")
+            if socket is not None:
+                self.connect_input(socket, field)
+
+        return node
