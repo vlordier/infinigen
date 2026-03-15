@@ -18,6 +18,9 @@ env:
   INFINIGEN_INSTALL_TERRAIN: False
   INFINIGEN_INSTALL_CUSTOMGT: False
 
+permissions:
+  contents: read
+
 jobs:
 
   lint:
