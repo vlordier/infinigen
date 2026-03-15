@@ -39,6 +39,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,7 @@ def validate_gin_config(
     required_keys: list[str] | None = None,
     type_rules: dict[str, type | tuple[type, ...]] | None = None,
     range_rules: dict[str, tuple[float | int | None, float | int | None]] | None = None,
-    custom_rules: dict[str, callable] | None = None,
+    custom_rules: dict[str, Callable[[object], bool]] | None = None,
 ) -> list[str]:
     """Validate the currently-bound gin configuration.
 

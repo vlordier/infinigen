@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import random
 import time
+from collections.abc import Callable
 from functools import wraps
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def retry(
     max_delay: float = 60.0,
     jitter: bool = True,
     retryable: tuple[type[BaseException], ...] = (Exception,),
-    on_retry: None | callable = None,
+    on_retry: Callable[[int, BaseException, float], None] | None = None,
 ):
     """Decorator / wrapper factory that retries a callable on failure.
 

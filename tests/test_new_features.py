@@ -239,7 +239,7 @@ class TestHealthCheck:
         mod = _get_health_check()
         results = mod.run_health_checks()
         assert isinstance(results, list)
-        assert len(results) >= 4  # At least python, disk, packages, gpu, blender, output
+        assert len(results) >= 6  # python, disk, packages, gpu, blender, output
 
     def test_format_report(self):
         mod = _get_health_check()
