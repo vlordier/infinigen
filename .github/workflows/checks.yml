@@ -58,6 +58,10 @@ jobs:
         run: |
           uv pip install pytest pytest-cov gin-config numpy scipy opencv-python-headless torch --extra-index-url https://download.pytorch.org/whl/cpu
 
+      - name: Add repository root to PYTHONPATH
+        run: |
+          echo "PYTHONPATH=${GITHUB_WORKSPACE}:${PYTHONPATH}" >> "$GITHUB_ENV"
+
       - name: Run focused health checks with coverage
         run: |
           pytest --noconftest --maxfail=1 tests/test_repo_health.py \
