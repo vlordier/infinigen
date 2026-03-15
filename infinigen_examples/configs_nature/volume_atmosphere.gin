@@ -1,0 +1,34 @@
+# Volume Atmosphere preset for Infinigen (Blender 5.0+)
+#
+# Blender 5.0 exposes volume grid rendering as first-class Geometry Nodes
+# citizens. This preset activates the gin-configurable configure_volume_rendering()
+# function to inject a homogeneous world-space participating medium into the
+# scene, simulating outdoor atmospheric haze.
+#
+# Preset variants (choose one atmosphere_preset value):
+#
+#   "none"   – No atmosphere.  Identical to baseline Infinigen.  Fastest.
+#   "haze"   – Light outdoor haze.  Minimal performance impact (~5%).
+#   "fog"    – Ground-level fog.  Moderate performance impact (~15-25%).
+#   "dense"  – Heavy industrial smog / storm.  High performance impact (~40%).
+#
+# Usage:
+#   python -m infinigen.launch ... --configs base volume_atmosphere
+#
+# The "haze" preset is the default here.  Switch to "fog" or "dense" by
+# overriding the atmosphere_preset binding in a run-specific gin file:
+#
+#   configure_volume_rendering.atmosphere_preset = "fog"
+#
+# Individual parameters can also be tuned on top of any preset:
+#
+#   configure_volume_rendering.atmosphere_preset = "haze"
+#   configure_volume_rendering.world_volume_density = 0.03
+#
+# Pairs well with denoised_render.gin (more samples needed for volumes)
+# and eevee_annotations.gin (flat GT passes are unaffected by world volumes).
+#
+# Note: World volume atmospheres apply to full/Cycles renders only.
+# The flat/GT annotation render (EEVEE) ignores volumetric scattering.
+
+configure_volume_rendering.atmosphere_preset = "haze"

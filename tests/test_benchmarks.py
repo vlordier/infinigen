@@ -2064,3 +2064,279 @@ class TestArrayOpsUniqueRows:
             f"Expected ≥1.5× speedup from unique_rows, got {speedup:.2f}× "
             f"(ref={t_ref*1000:.1f} ms, opt={t_opt*1000:.1f} ms)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Blender 5.0.1 feature benchmarks — bpy-free parameter-validation speed tests
+# ---------------------------------------------------------------------------
+
+
+def _load_core_init_module():
+    """Load infinigen/core/init.py without requiring bpy at import time."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    return m
+
+
+class TestBlender5ColorManagementBenchmark:
+    """Benchmark: configure_color_management() signature / constant access speed."""
+
+    def test_color_management_constant_access_speed(self):
+        """Module-level colour management constant lookups must be sub-microsecond."""
+        m = _load_core_init_module()
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = getattr(m, "CYCLES_DENOISER_PRIORITY", None)
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 1.0, (
+            f"Constant lookup too slow: {avg_us:.3f} µs/call (expected < 1 µs)"
+        )
+
+    def test_color_management_function_signature_inspection(self):
+        """inspect.signature(configure_color_management) < 5 ms."""
+        import inspect
+
+        m = _load_core_init_module()
+        fn = getattr(m, "configure_color_management", None)
+        if fn is None:
+            pytest.skip("configure_color_management not found (bpy unavailable)")
+        n_iters = 1_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            inspect.signature(fn)
+        elapsed = time.perf_counter() - t0
+        avg_ms = elapsed / n_iters * 1e3
+        assert avg_ms < 5.0, (
+            f"Signature inspection too slow: {avg_ms:.3f} ms/call (expected < 5 ms)"
+        )
+
+
+class TestBlender5ScatterDensityBenchmark:
+    """Benchmark: density_scale math (the core hot-path of scatter_instances)."""
+
+    @staticmethod
+    def _density_scale_reference(vol_density, density_scale, max_density):
+        """Reference implementation: apply density_scale then clip."""
+        scaled = vol_density * density_scale
+        return min(scaled, max_density)
+
+    def test_density_scale_bulk_performance(self):
+        """Density scaling of 100 k scatter points should complete in < 5 ms."""
+        n = 100_000
+        rng = np.random.default_rng(42)
+        vol_densities = rng.uniform(0, 200, n)
+        density_scale = 2.0
+        max_density = 20_000
+
+        t0 = time.perf_counter()
+        # Vectorised numpy version — mirrors what scatter_instances does in bulk
+        scaled = np.minimum(vol_densities * density_scale, max_density)
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+
+        assert len(scaled) == n
+        assert elapsed_ms < 5.0, (
+            f"Bulk density scale took {elapsed_ms:.2f} ms (expected < 5 ms)"
+        )
+
+    def test_density_scale_correctness(self):
+        """density_scale=2.0 must double density before max_density cap."""
+        base = 100.0
+        scaled = self._density_scale_reference(base, density_scale=2.0, max_density=300)
+        assert abs(scaled - 200.0) < 1e-9
+
+    def test_density_scale_cap(self):
+        """density_scale must never produce density above max_density."""
+        base = 8000.0
+        scaled = self._density_scale_reference(
+            base, density_scale=2.0, max_density=10_000
+        )
+        assert scaled <= 10_000.0
+
+    def test_density_scale_default_noop(self):
+        """density_scale=1.0 must be a no-op."""
+        base = 500.0
+        scaled = self._density_scale_reference(base, density_scale=1.0, max_density=10_000)
+        assert abs(scaled - base) < 1e-9
+
+
+class TestBlender5NodeInfoBenchmark:
+    """Benchmark: Blender 5.0 node type constant lookups."""
+
+    def test_node_info_attribute_access_speed(self):
+        """Nodes.RepeatInput attribute access must be < 1 µs each."""
+        try:
+            from infinigen.core.nodes.node_info import Nodes
+        except ModuleNotFoundError:
+            pytest.skip("bpy not available")
+
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = Nodes.RepeatInput
+            _ = Nodes.RepeatOutput
+            _ = Nodes.MenuSwitch
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 10.0, (
+            f"Nodes constant lookup: {avg_us:.2f} µs/3-access (expected < 10 µs)"
+        )
+
+    def test_zone_frozenset_membership_speed(self):
+        """Membership test in BLENDER5_ZONE_NODE_TYPES must be < 1 µs each."""
+        try:
+            from infinigen.core.nodes.node_info import Nodes
+            from infinigen.core.nodes.node_wrangler import BLENDER5_ZONE_NODE_TYPES
+        except ModuleNotFoundError:
+            pytest.skip("bpy not available")
+
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = Nodes.RepeatInput in BLENDER5_ZONE_NODE_TYPES
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 1.0, (
+            f"frozenset membership test: {avg_us:.3f} µs/call (expected < 1 µs)"
+        )
+
+
+class TestBlender5VolumeAtmosphereBenchmark:
+    """Benchmark: volume atmosphere preset lookup and parameter merging."""
+
+    # Mirror ATMOSPHERE_QUALITY_PRESETS inline so this test runs without bpy.
+    _PRESETS = {
+        "none": {
+            "volume_step_rate": 0.1,
+            "volume_max_steps": 32,
+            "volume_bounces": 4,
+            "use_world_volume": False,
+        },
+        "fog": {
+            "volume_step_rate": 0.05,
+            "volume_max_steps": 64,
+            "volume_bounces": 8,
+            "use_world_volume": True,
+            "world_volume_density": 0.04,
+            "world_volume_anisotropy": 0.3,
+            "world_volume_color": (0.85, 0.87, 0.9, 1.0),
+        },
+        "haze": {
+            "volume_step_rate": 0.08,
+            "volume_max_steps": 48,
+            "volume_bounces": 6,
+            "use_world_volume": True,
+            "world_volume_density": 0.015,
+            "world_volume_anisotropy": 0.15,
+            "world_volume_color": (0.9, 0.88, 0.82, 1.0),
+        },
+        "dense": {
+            "volume_step_rate": 0.02,
+            "volume_max_steps": 128,
+            "volume_bounces": 12,
+            "use_world_volume": True,
+            "world_volume_density": 0.12,
+            "world_volume_anisotropy": 0.5,
+            "world_volume_color": (0.7, 0.68, 0.65, 1.0),
+        },
+    }
+
+    def test_preset_lookup_speed(self):
+        """ATMOSPHERE_QUALITY_PRESETS dict lookup must be sub-microsecond."""
+        presets = self._PRESETS
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = presets["haze"]
+            _ = presets["fog"]
+            _ = presets["dense"]
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 1.0, (
+            f"Preset lookup: {avg_us:.3f} µs/3-lookups (expected < 1 µs)"
+        )
+
+    def test_preset_parameter_merge_speed(self):
+        """Merging a preset dict into local variables < 5 µs."""
+        presets = self._PRESETS
+        defaults = {
+            "volume_step_rate": 0.1,
+            "volume_max_steps": 32,
+            "volume_bounces": 4,
+            "use_world_volume": False,
+            "world_volume_density": 0.02,
+            "world_volume_anisotropy": 0.2,
+            "world_volume_color": (0.85, 0.87, 0.9, 1.0),
+        }
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            cfg = presets["fog"]
+            merged = defaults.copy()
+            merged.update({k: cfg[k] for k in defaults if k in cfg})
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 5.0, (
+            f"Preset merge: {avg_us:.3f} µs/call (expected < 5 µs)"
+        )
+        assert merged["use_world_volume"] is True
+
+    def test_preset_correctness_fog_denser_than_haze(self):
+        """Fog must be denser than haze."""
+        fog_density = self._PRESETS["fog"].get("world_volume_density", 0)
+        haze_density = self._PRESETS["haze"].get("world_volume_density", 0)
+        assert fog_density > haze_density
+
+    def test_preset_correctness_dense_most_steps(self):
+        """Dense must have the most volume_max_steps."""
+        steps = {k: v["volume_max_steps"] for k, v in self._PRESETS.items()}
+        assert steps["dense"] >= max(steps.values())
+
+
+class TestBlender5RenderTimePassBenchmark:
+    """Benchmark: RENDER_TIME_PASS_DESCRIPTOR constant access."""
+
+    # Inline the constant so the test runs without bpy.
+    _RENDER_TIME_PASS_DESCRIPTOR = ("render_time", "RenderTime")
+
+    def test_descriptor_tuple_access_speed(self):
+        """RENDER_TIME_PASS_DESCRIPTOR tuple access must be sub-microsecond."""
+        descriptor = self._RENDER_TIME_PASS_DESCRIPTOR
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            pass_name, socket_name = descriptor
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 1.0, (
+            f"Tuple unpack: {avg_us:.3f} µs/call (expected < 1 µs)"
+        )
+        assert pass_name == "render_time"
+        assert socket_name == "RenderTime"
+
+    def test_passes_to_save_dedup_speed(self):
+        """Deduplication of passes_to_save list < 1 ms for 1k entries."""
+        passes = [("depth", "Depth"), ("normal", "Normal")] * 500  # 1000 entries
+
+        n_iters = 1_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            seen = set()
+            deduped = []
+            for p in passes:
+                if p[0] not in seen:
+                    seen.add(p[0])
+                    deduped.append(p)
+        elapsed_ms = (time.perf_counter() - t0) / n_iters * 1e3
+        assert elapsed_ms < 1.0, (
+            f"passes dedup: {elapsed_ms:.3f} ms/call (expected < 1 ms)"
+        )

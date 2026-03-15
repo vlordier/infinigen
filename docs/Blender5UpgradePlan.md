@@ -320,7 +320,8 @@ addressed by the bpy 5.0.1 upgrade in this PR.
 | **Sky ozone/altitude** | Hardcoded `clip_gaussian(...)` | Gin-configurable parameters | ✅ Done | `assets/lighting/sky_lighting.py` |
 | **Cycles denoiser** | OPTIX-only with silent failure | OPTIX → OIDN → disabled fallback chain | ✅ Done | `core/init.py` |
 | **Scatter density** | max_density=5000 hardcoded | `density_scale` + `max_density=10000` gin params | ✅ Done | `core/placement/instance_scatter.py` |
-| **Repeat Zones** | Not available | `RepeatInput/Output` in `Nodes` + `new_repeat_zone()` | ✅ Done | `core/nodes/node_info.py`, `node_wrangler.py` |
+| **Render Time pass** | Not available | `configure_render_time_pass()` gin-configurable | ✅ Done | `core/init.py` |
+| **Volume atmosphere** | Hardcoded constants | `configure_volume_rendering()` + `ATMOSPHERE_QUALITY_PRESETS` | ✅ Done | `core/init.py` |
 | **Menu Switch** | Not available | `MenuSwitch` in `Nodes` + `new_menu_switch()` | ✅ Done | `core/nodes/node_info.py`, `node_wrangler.py` |
 | **Volume nodes** | Manual CUDA kernels | Native SDF Grid nodes | 📋 Optional | `terrain/` |
 | **Intel Mac wheel** | Available | Dropped in 5.0.x | ✅ Handled | `uv.lock` |
@@ -357,7 +358,7 @@ C.scene.render.engine = "BLENDER_EEVEE_NEXT"  # Blender 5.0+
 | Switch Menu for material variants | ⭐⭐ Medium (diversity) | 🟡 Medium | **P2 ✅ Implemented** |
 | Render Time pass → adaptive budgeting | ⭐⭐ Medium (throughput) | 🔴 High | **P2** ✅ |
 | SDF Grid terrain (replace C++ mesher) | ⭐⭐⭐ High (realism) | 🔴 High | **P3** |
-| Volume grids for fog/clouds/haze | ⭐⭐⭐ High (diversity) | 🔴 High | **P3** |
+| Volume grids for fog/clouds/haze | ⭐⭐⭐ High (diversity) | 🔴 High | **P3 ✅ Implemented** |
 | Bundles for asset parameter passing | ⭐ Low (DX) | 🔴 High | **P4** |
 | Closures for shader reuse | ⭐ Low (DX) | 🔴 High | **P4** |
 

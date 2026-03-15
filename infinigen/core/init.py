@@ -41,10 +41,53 @@ CYCLES_GPUTYPES_PREFERENCE = [
 # CPU-only, significantly improved in Blender 5.0), then disabled with a warning.
 CYCLES_DENOISER_PRIORITY = ["OPTIX", "OPENIMAGEDENOISE"]
 
-# Cycles volume rendering defaults
+# Cycles volume rendering defaults (Blender 5.0: step_rate controls quality
+# vs. speed trade-off; max_steps caps ray march iterations; bounces controls
+# how many times a volume ray can scatter before being terminated).
 CYCLES_VOLUME_STEP_RATE = 0.1
 CYCLES_VOLUME_MAX_STEPS = 32
 CYCLES_VOLUME_BOUNCES = 4
+
+# Atmosphere quality tiers used by configure_volume_rendering():
+#   "none"    – no volume scattering (default, fastest)
+#   "fog"     – ground-level fog / low-visibility conditions
+#   "haze"    – light atmospheric haze suitable for outdoor scenes
+#   "dense"   – heavy industrial haze or storm atmosphere
+ATMOSPHERE_QUALITY_PRESETS: dict[str, dict] = {
+    "none": {
+        "volume_step_rate": 0.1,
+        "volume_max_steps": 32,
+        "volume_bounces": 4,
+        "use_world_volume": False,
+    },
+    "fog": {
+        "volume_step_rate": 0.05,
+        "volume_max_steps": 64,
+        "volume_bounces": 8,
+        "use_world_volume": True,
+        "world_volume_density": 0.04,
+        "world_volume_anisotropy": 0.3,
+        "world_volume_color": (0.85, 0.87, 0.9, 1.0),
+    },
+    "haze": {
+        "volume_step_rate": 0.08,
+        "volume_max_steps": 48,
+        "volume_bounces": 6,
+        "use_world_volume": True,
+        "world_volume_density": 0.015,
+        "world_volume_anisotropy": 0.15,
+        "world_volume_color": (0.9, 0.88, 0.82, 1.0),
+    },
+    "dense": {
+        "volume_step_rate": 0.02,
+        "volume_max_steps": 128,
+        "volume_bounces": 12,
+        "use_world_volume": True,
+        "world_volume_density": 0.12,
+        "world_volume_anisotropy": 0.5,
+        "world_volume_color": (0.7, 0.68, 0.65, 1.0),
+    },
+}
 
 # Cached device enumeration result to avoid repeated Blender API calls
 _cached_devices: list | None = None
@@ -235,10 +278,6 @@ def configure_render_cycles(
     )
     bpy.context.scene.cycles.time_limit = time_limit
     bpy.context.scene.cycles.film_exposure = exposure
-    bpy.context.scene.cycles.volume_step_rate = CYCLES_VOLUME_STEP_RATE
-    bpy.context.scene.cycles.volume_preview_step_rate = CYCLES_VOLUME_STEP_RATE
-    bpy.context.scene.cycles.volume_max_steps = CYCLES_VOLUME_MAX_STEPS
-    bpy.context.scene.cycles.volume_bounces = CYCLES_VOLUME_BOUNCES
 
     # Enable persistent data when rendering multiple frames
     frame_start = bpy.context.scene.frame_start
@@ -561,6 +600,139 @@ RENDER_TIME_PASS_DESCRIPTOR = ("render_time", "RenderTime")
 
 
 @gin.configurable
+def configure_volume_rendering(
+    volume_step_rate: float = CYCLES_VOLUME_STEP_RATE,
+    volume_max_steps: int = CYCLES_VOLUME_MAX_STEPS,
+    volume_bounces: int = CYCLES_VOLUME_BOUNCES,
+    atmosphere_preset: str | None = None,
+    use_world_volume: bool = False,
+    world_volume_density: float = 0.02,
+    world_volume_anisotropy: float = 0.2,
+    world_volume_color: tuple[float, float, float, float] = (0.85, 0.87, 0.9, 1.0),
+) -> None:
+    """Configure Cycles volume rendering quality and optional world-space atmosphere.
+
+    Blender 5.0 ships native volumetric data (OpenVDB grids) as first-class
+    geometry-node citizens.  The Python-accessible rendering parameters
+    (``volume_step_rate``, ``volume_max_steps``, ``volume_bounces``) control
+    how accurately Cycles ray-marches through any volume present in the scene,
+    whether authored via Geometry Nodes or via a World shader.
+
+    This function also supports injecting a *World Volume* shader — a uniform
+    homogeneous participating medium applied to the entire scene — which is the
+    simplest way to add atmospheric fog, haze, or dense smog without authoring
+    per-object volumes.
+
+    **Atmosphere presets** (``atmosphere_preset``):
+
+    ``"none"``   – no volume scattering (default; identical to baseline Infinigen)
+    ``"fog"``    – ground-level fog / low-visibility with high anisotropy
+    ``"haze"``   – light atmospheric haze for sunny outdoor scenes
+    ``"dense"``  – heavy industrial smog or storm conditions
+
+    When ``atmosphere_preset`` is set, it overrides all other keyword arguments
+    so that a single gin binding activates a complete atmospheric profile:
+
+    .. code-block:: python
+
+        # Activate via gin
+        configure_volume_rendering.atmosphere_preset = "fog"
+
+    Individual parameters can still be overridden on top of a preset.
+
+    Args:
+        volume_step_rate: Cycles ray-march step size (relative to scene scale).
+            Smaller values → higher quality, more render time.
+        volume_max_steps: Maximum number of Cycles volume integration steps per
+            ray.  Increase for very deep volumes (e.g. storm clouds).
+        volume_bounces: Maximum number of volume-scattering events per ray.
+        atmosphere_preset: When set to one of ``"none"``, ``"fog"``, ``"haze"``,
+            or ``"dense"``, this overrides the individual parameters above with
+            a balanced preset tuned for that condition.
+        use_world_volume: When ``True``, injects a homogeneous participating
+            medium (Principled Volume shader) into the scene World material.
+        world_volume_density: Extinction coefficient of the world volume (higher
+            = thicker fog/haze).
+        world_volume_anisotropy: Henyey-Greenstein phase function anisotropy
+            (``-1`` = back-scatter, ``0`` = isotropic, ``1`` = forward-scatter).
+            Forward-scatter values (``0.2``–``0.5``) simulate realistic haze.
+        world_volume_color: RGBA scattering colour of the world volume.
+    """
+    # Apply preset if requested — overrides individual parameters.
+    if atmosphere_preset is not None:
+        if atmosphere_preset not in ATMOSPHERE_QUALITY_PRESETS:
+            known = list(ATMOSPHERE_QUALITY_PRESETS)
+            logger.warning(
+                f"Unknown atmosphere_preset={atmosphere_preset!r}; "
+                f"known presets: {known}.  Ignoring preset and using "
+                "explicit parameters."
+            )
+        else:
+            cfg = ATMOSPHERE_QUALITY_PRESETS[atmosphere_preset]
+            volume_step_rate = cfg.get("volume_step_rate", volume_step_rate)
+            volume_max_steps = cfg.get("volume_max_steps", volume_max_steps)
+            volume_bounces = cfg.get("volume_bounces", volume_bounces)
+            use_world_volume = cfg.get("use_world_volume", use_world_volume)
+            world_volume_density = cfg.get("world_volume_density", world_volume_density)
+            world_volume_anisotropy = cfg.get(
+                "world_volume_anisotropy", world_volume_anisotropy
+            )
+            world_volume_color = cfg.get("world_volume_color", world_volume_color)
+
+    # Apply Cycles volume rendering quality settings.
+    bpy.context.scene.cycles.volume_step_rate = volume_step_rate
+    bpy.context.scene.cycles.volume_preview_step_rate = volume_step_rate
+    bpy.context.scene.cycles.volume_max_steps = volume_max_steps
+    bpy.context.scene.cycles.volume_bounces = volume_bounces
+
+    logger.info(
+        f"Volume rendering: {volume_step_rate=}, {volume_max_steps=}, "
+        f"{volume_bounces=}, {use_world_volume=}"
+    )
+
+    if not use_world_volume:
+        return
+
+    # Inject a Principled Volume shader into the World material.
+    world = bpy.context.scene.world
+    if world is None:
+        world = bpy.data.worlds.new("World")
+        bpy.context.scene.world = world
+
+    world.use_nodes = True
+    ntree = world.node_tree
+    nodes = ntree.nodes
+    links = ntree.links
+
+    # Remove any existing volume socket connection to avoid duplicates.
+    world_out = next(
+        (n for n in nodes if n.type == "OUTPUT_WORLD"), None
+    )
+    if world_out is None:
+        world_out = nodes.new("ShaderNodeOutputWorld")
+        world_out.location = (300, 0)
+
+    # Clear existing volume link if any.
+    for link in list(links):
+        if link.to_node == world_out and link.to_socket.name == "Volume":
+            links.remove(link)
+
+    # Create Principled Volume shader node.
+    vol = nodes.new("ShaderNodeVolumePrincipled")
+    vol.location = (0, 0)
+    vol.inputs["Density"].default_value = world_volume_density
+    vol.inputs["Anisotropy"].default_value = world_volume_anisotropy
+    if "Color" in vol.inputs:
+        vol.inputs["Color"].default_value = world_volume_color
+
+    links.new(vol.outputs["Volume"], world_out.inputs["Volume"])
+    logger.info(
+        f"World volume atmosphere injected: "
+        f"{world_volume_density=:.4f}, {world_volume_anisotropy=:.3f}"
+    )
+
+
+@gin.configurable
 def configure_blender(
     render_engine="CYCLES",
     motion_blur=False,
@@ -576,6 +748,7 @@ def configure_blender(
         raise ValueError(f"Unrecognized {render_engine=}")
 
     configure_color_management()
+    configure_volume_rendering()
 
     bpy.context.scene.render.use_motion_blur = motion_blur
     if motion_blur:

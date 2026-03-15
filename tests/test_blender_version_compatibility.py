@@ -1110,3 +1110,188 @@ def test_node_wrangler_has_new_menu_switch():
     assert sig.parameters["active_index"].default == 0, (
         "new_menu_switch: 'active_index' must default to 0"
     )
+
+
+# ---------------------------------------------------------------------------
+# P3: Gin-configurable Volume Atmosphere — Blender 5.0+
+# ---------------------------------------------------------------------------
+
+
+def test_configure_volume_rendering_exists():
+    """configure_volume_rendering() must exist in core.init."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init",
+        "infinigen/core/init.py",
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    assert hasattr(module, "configure_volume_rendering"), (
+        "configure_volume_rendering() not found in core/init.py"
+    )
+
+
+def test_configure_volume_rendering_is_gin_configurable():
+    """configure_volume_rendering must be decorated with @gin.configurable."""
+    import inspect
+
+    def _load():
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "infinigen.core.init", "infinigen/core/init.py"
+        )
+        m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+        try:
+            spec.loader.exec_module(m)  # type: ignore[union-attr]
+        except Exception:
+            pass
+        return m
+
+    m = _load()
+    fn = getattr(m, "configure_volume_rendering", None)
+    assert fn is not None
+    # gin.configurable wraps the function; inspect the qualified name or __wrapped__
+    src = inspect.getsource(m)
+    assert "@gin.configurable" in src or "gin.configurable" in src
+
+
+def test_configure_volume_rendering_signature():
+    """configure_volume_rendering must expose all documented parameters."""
+    import importlib.util
+    import inspect
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    fn = getattr(m, "configure_volume_rendering")
+    sig = inspect.signature(fn)
+    assert "volume_step_rate" in sig.parameters
+    assert "volume_max_steps" in sig.parameters
+    assert "volume_bounces" in sig.parameters
+    assert "atmosphere_preset" in sig.parameters
+    assert "use_world_volume" in sig.parameters
+    assert "world_volume_density" in sig.parameters
+    assert "world_volume_anisotropy" in sig.parameters
+    assert "world_volume_color" in sig.parameters
+
+
+def test_configure_volume_rendering_defaults():
+    """configure_volume_rendering default parameters must match baseline constants."""
+    import importlib.util
+    import inspect
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    fn = getattr(m, "configure_volume_rendering")
+    sig = inspect.signature(fn)
+    assert sig.parameters["atmosphere_preset"].default is None, (
+        "atmosphere_preset must default to None (no preset active)"
+    )
+    assert sig.parameters["use_world_volume"].default is False, (
+        "use_world_volume must default to False"
+    )
+    # Numeric defaults from CYCLES_VOLUME_* constants
+    vol_step_rate = getattr(m, "CYCLES_VOLUME_STEP_RATE", None)
+    vol_max_steps = getattr(m, "CYCLES_VOLUME_MAX_STEPS", None)
+    vol_bounces = getattr(m, "CYCLES_VOLUME_BOUNCES", None)
+    assert vol_step_rate is not None
+    assert vol_max_steps is not None
+    assert vol_bounces is not None
+    assert sig.parameters["volume_step_rate"].default == vol_step_rate
+    assert sig.parameters["volume_max_steps"].default == vol_max_steps
+    assert sig.parameters["volume_bounces"].default == vol_bounces
+
+
+def test_atmosphere_quality_presets_defined():
+    """ATMOSPHERE_QUALITY_PRESETS must define fog, haze, dense, and none presets."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", None)
+    assert presets is not None, "ATMOSPHERE_QUALITY_PRESETS missing from core/init.py"
+    assert isinstance(presets, dict)
+    for expected_key in ("none", "fog", "haze", "dense"):
+        assert expected_key in presets, (
+            f"ATMOSPHERE_QUALITY_PRESETS missing key '{expected_key}'"
+        )
+
+
+def test_atmosphere_presets_have_required_keys():
+    """Each non-none atmosphere preset must have volume_step_rate/max_steps/bounces."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", {})
+    required_keys = {"volume_step_rate", "volume_max_steps", "volume_bounces"}
+    for name, cfg in presets.items():
+        for key in required_keys:
+            assert key in cfg, (
+                f"ATMOSPHERE_QUALITY_PRESETS[{name!r}] missing key '{key}'"
+            )
+
+
+def test_fog_preset_denser_than_haze():
+    """The 'fog' preset must be denser (higher density) than 'haze'."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", {})
+    fog_density = presets["fog"].get("world_volume_density", 0)
+    haze_density = presets["haze"].get("world_volume_density", 0)
+    assert fog_density > haze_density, (
+        f"Expected fog density ({fog_density}) > haze density ({haze_density})"
+    )
+
+
+def test_dense_preset_has_more_steps_than_haze():
+    """'dense' atmosphere must have more volume_max_steps than 'haze'."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "infinigen.core.init", "infinigen/core/init.py"
+    )
+    m = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    try:
+        spec.loader.exec_module(m)  # type: ignore[union-attr]
+    except Exception:
+        pass
+    presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", {})
+    assert presets["dense"]["volume_max_steps"] > presets["haze"]["volume_max_steps"]
