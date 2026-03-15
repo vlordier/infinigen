@@ -37,6 +37,28 @@ BLENDER5_ZONE_NODE_TYPES = frozenset(
     }
 )
 
+# Blender 5.0 Volume Grid / SDF node types — used for P3 terrain upgrade path
+BLENDER5_VOLUME_GRID_NODE_TYPES = frozenset(
+    {
+        Nodes.GetNamedGrid,
+        Nodes.StoreNamedGrid,
+        Nodes.GridInfo,
+        Nodes.SampleGrid,
+        Nodes.SampleGridIndex,
+        Nodes.FieldToGrid,
+        Nodes.VoxelizeGrid,
+        Nodes.GridToMesh,
+        Nodes.MeshToSdfGrid,
+        Nodes.PointsToSdfGrid,
+        Nodes.MeshToDensityGrid,
+        Nodes.SdfGridBoolean,
+        Nodes.SdfGridOffset,
+        Nodes.SdfFillet,
+        Nodes.AdvectGrid,
+        Nodes.SetGridBackground,
+    }
+)
+
 
 class NodeMisuseWarning(UserWarning):
     pass
@@ -720,5 +742,87 @@ class NodeWrangler:
 
         if hasattr(node, "active_index"):
             node.active_index = active_index
+
+        return node
+
+    def new_sdf_grid_boolean(self, operation="UNION", grid_a=None, grid_b=None):
+        """Create an SDF Grid Boolean node (Blender 5.0+, P3 terrain path).
+
+        Wraps ``GeometryNodeSDFGridBoolean`` which combines two SDF grids using
+        Boolean set operations.  Useful for cave/rock intersection in the terrain
+        system without the manual C++ SDF marching currently required.
+
+        ``operation`` must be one of ``"UNION"``, ``"INTERSECT"``, or
+        ``"DIFFERENCE"``.  ``grid_a`` and ``grid_b`` are upstream SDF grid
+        sockets (e.g., from :meth:`new_node` with :attr:`Nodes.MeshToSdfGrid`).
+
+        Returns the SDF Grid Boolean node.
+
+        Example::
+
+            terrain_sdf = nw.new_node(Nodes.MeshToSdfGrid, [terrain_mesh])
+            cave_sdf = nw.new_node(Nodes.MeshToSdfGrid, [cave_mesh])
+            combined = nw.new_sdf_grid_boolean(
+                operation="DIFFERENCE",
+                grid_a=terrain_sdf,
+                grid_b=cave_sdf,
+            )
+            result_mesh = nw.new_node(Nodes.GridToMesh, [combined])
+        """
+        node = self._make_node(Nodes.SdfGridBoolean)
+
+        if hasattr(node, "operation"):
+            node.operation = operation
+
+        input_kwargs = {}
+        if grid_a is not None:
+            # Blender 5.0 SDF Grid Boolean node uses numeric socket names ("Grid 1", "Grid 2")
+            input_kwargs["Grid 1"] = grid_a
+        if grid_b is not None:
+            input_kwargs["Grid 2"] = grid_b
+
+        if input_kwargs:
+            for name, val in input_kwargs.items():
+                socket = infer_input_socket(node, name)
+                if socket is not None:
+                    self.connect_input(socket, val)
+
+        return node
+
+    def new_field_to_grid(self, field=None, resolution=32, voxel_size=None):
+        """Convert a procedural Blender field into a Volume Grid (Blender 5.0+).
+
+        Wraps ``GeometryNodeFieldToGrid`` which samples a field over a 3-D grid,
+        enabling procedural fog/haze/cloud density authored entirely in the node
+        tree without Python callbacks or VDB files.
+
+        ``field`` is the upstream field socket to sample (e.g., from a Noise
+        Texture or Math node).  ``resolution`` sets the grid resolution along
+        each axis.  ``voxel_size``, if given, overrides ``resolution`` with an
+        explicit voxel side length in Blender units.
+
+        Returns the Field to Grid node.
+
+        Example::
+
+            noise = nw.new_node(
+                Nodes.NoiseTexture,
+                attrs={"noise_dimensions": "3D", "scale": 2.0},
+            )
+            fog_grid = nw.new_field_to_grid(field=noise.outputs["Fac"], resolution=64)
+            result_mesh = nw.new_node(Nodes.GridToMesh, [fog_grid])
+        """
+        node = self._make_node(Nodes.FieldToGrid)
+
+        if voxel_size is not None and hasattr(node, "inputs"):
+            if "Voxel Size" in node.inputs:
+                node.inputs["Voxel Size"].default_value = voxel_size
+        elif hasattr(node, "inputs") and "Resolution" in node.inputs:
+            node.inputs["Resolution"].default_value = resolution
+
+        if field is not None:
+            socket = infer_input_socket(node, "Field")
+            if socket is not None:
+                self.connect_input(socket, field)
 
         return node

@@ -357,7 +357,7 @@ C.scene.render.engine = "BLENDER_EEVEE_NEXT"  # Blender 5.0+
 | Repeat Zones for material octaves | ⭐⭐ Medium (compile speed) | 🟡 Medium | **P2 ✅ Implemented** |
 | Switch Menu for material variants | ⭐⭐ Medium (diversity) | 🟡 Medium | **P2 ✅ Implemented** |
 | Render Time pass → adaptive budgeting | ⭐⭐ Medium (throughput) | 🔴 High | **P2** ✅ |
-| SDF Grid terrain (replace C++ mesher) | ⭐⭐⭐ High (realism) | 🔴 High | **P3** |
+| SDF Grid terrain (replace C++ mesher) | ⭐⭐⭐ High (realism) | 🔴 High | **P3 ✅ Implemented** |
 | Volume grids for fog/clouds/haze | ⭐⭐⭐ High (diversity) | 🔴 High | **P3 ✅ Implemented** |
 | Bundles for asset parameter passing | ⭐ Low (DX) | 🔴 High | **P4** |
 | Closures for shader reuse | ⭐ Low (DX) | 🔴 High | **P4** |

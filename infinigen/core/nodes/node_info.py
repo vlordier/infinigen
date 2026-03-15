@@ -286,6 +286,24 @@ class Nodes:
     ForEachGeometryElementInput = "GeometryNodeForEachGeometryElementInput"
     ForEachGeometryElementOutput = "GeometryNodeForEachGeometryElementOutput"
 
+    # bl5.0 additions — Volume Grid & SDF nodes (P3 terrain upgrade path)
+    GetNamedGrid = "GeometryNodeGetNamedGrid"
+    StoreNamedGrid = "GeometryNodeStoreNamedGrid"
+    GridInfo = "GeometryNodeGridInfo"
+    SampleGrid = "GeometryNodeSampleGrid"
+    SampleGridIndex = "GeometryNodeSampleGridIndex"
+    FieldToGrid = "GeometryNodeFieldToGrid"
+    VoxelizeGrid = "GeometryNodeVoxelizeGrid"
+    GridToMesh = "GeometryNodeGridToMesh"
+    MeshToSdfGrid = "GeometryNodeMeshToSDFGrid"
+    PointsToSdfGrid = "GeometryNodePointsToSDFGrid"
+    MeshToDensityGrid = "GeometryNodeMeshToDensityGrid"
+    SdfGridBoolean = "GeometryNodeSDFGridBoolean"
+    SdfGridOffset = "GeometryNodeSDFGridOffset"
+    SdfFillet = "GeometryNodeSDFFillet"
+    AdvectGrid = "GeometryNodeAdvectGrid"
+    SetGridBackground = "GeometryNodeSetGridBackground"
+
 
 """
 Blender doesnt have an automatic way of discovering what properties

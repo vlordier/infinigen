@@ -1295,3 +1295,118 @@ def test_dense_preset_has_more_steps_than_haze():
         pass
     presets = getattr(m, "ATMOSPHERE_QUALITY_PRESETS", {})
     assert presets["dense"]["volume_max_steps"] > presets["haze"]["volume_max_steps"]
+
+
+# ---------------------------------------------------------------------------
+# Blender 5.0 P3 — SDF Grid / Volume Grid node type registrations
+# ---------------------------------------------------------------------------
+
+
+def test_sdf_grid_node_types_defined():
+    """Blender 5.0 SDF / Volume Grid node types must be registered in Nodes enum."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    expected = {
+        "GetNamedGrid": "GeometryNodeGetNamedGrid",
+        "StoreNamedGrid": "GeometryNodeStoreNamedGrid",
+        "GridInfo": "GeometryNodeGridInfo",
+        "SampleGrid": "GeometryNodeSampleGrid",
+        "FieldToGrid": "GeometryNodeFieldToGrid",
+        "GridToMesh": "GeometryNodeGridToMesh",
+        "MeshToSdfGrid": "GeometryNodeMeshToSDFGrid",
+        "PointsToSdfGrid": "GeometryNodePointsToSDFGrid",
+        "MeshToDensityGrid": "GeometryNodeMeshToDensityGrid",
+        "SdfGridBoolean": "GeometryNodeSDFGridBoolean",
+        "SdfGridOffset": "GeometryNodeSDFGridOffset",
+        "SdfFillet": "GeometryNodeSDFFillet",
+        "AdvectGrid": "GeometryNodeAdvectGrid",
+    }
+    for attr, expected_value in expected.items():
+        assert hasattr(Nodes, attr), f"Nodes.{attr} is missing from node_info.py"
+        assert getattr(Nodes, attr) == expected_value, (
+            f"Nodes.{attr} = {getattr(Nodes, attr)!r} but expected {expected_value!r}"
+        )
+
+
+def test_blender5_volume_grid_frozenset_exists():
+    """BLENDER5_VOLUME_GRID_NODE_TYPES frozenset must exist in node_wrangler."""
+    try:
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert isinstance(BLENDER5_VOLUME_GRID_NODE_TYPES, frozenset)
+    assert len(BLENDER5_VOLUME_GRID_NODE_TYPES) >= 10, (
+        "Expected at least 10 Volume Grid node types registered"
+    )
+
+
+def test_sdf_grid_boolean_in_volume_frozenset():
+    """SdfGridBoolean must be in BLENDER5_VOLUME_GRID_NODE_TYPES."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert Nodes.SdfGridBoolean in BLENDER5_VOLUME_GRID_NODE_TYPES
+
+
+def test_mesh_to_sdf_in_volume_frozenset():
+    """MeshToSdfGrid must be in BLENDER5_VOLUME_GRID_NODE_TYPES."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert Nodes.MeshToSdfGrid in BLENDER5_VOLUME_GRID_NODE_TYPES
+
+
+def test_field_to_grid_in_volume_frozenset():
+    """FieldToGrid must be in BLENDER5_VOLUME_GRID_NODE_TYPES."""
+    try:
+        from infinigen.core.nodes.node_info import Nodes
+        from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    assert Nodes.FieldToGrid in BLENDER5_VOLUME_GRID_NODE_TYPES
+
+
+def test_new_sdf_grid_boolean_helper_signature():
+    """NodeWrangler.new_sdf_grid_boolean must accept operation/grid_a/grid_b."""
+    import inspect
+
+    try:
+        from infinigen.core.nodes.node_wrangler import NodeWrangler
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    sig = inspect.signature(NodeWrangler.new_sdf_grid_boolean)
+    params = sig.parameters
+    assert "operation" in params, "new_sdf_grid_boolean must accept 'operation' param"
+    assert params["operation"].default == "UNION"
+    assert "grid_a" in params
+    assert "grid_b" in params
+
+
+def test_new_field_to_grid_helper_signature():
+    """NodeWrangler.new_field_to_grid must accept field/resolution/voxel_size."""
+    import inspect
+
+    try:
+        from infinigen.core.nodes.node_wrangler import NodeWrangler
+    except ModuleNotFoundError:
+        pytest.skip("bpy not available in this environment")
+
+    sig = inspect.signature(NodeWrangler.new_field_to_grid)
+    params = sig.parameters
+    assert "field" in params
+    assert "resolution" in params
+    assert params["resolution"].default == 32
+    assert "voxel_size" in params
+    assert params["voxel_size"].default is None

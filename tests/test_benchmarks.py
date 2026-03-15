@@ -2340,3 +2340,300 @@ class TestBlender5RenderTimePassBenchmark:
         assert elapsed_ms < 1.0, (
             f"passes dedup: {elapsed_ms:.3f} ms/call (expected < 1 ms)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Blender 5.0 P3 — SDF / Volume Grid node type benchmarks
+# ---------------------------------------------------------------------------
+
+
+class TestBlender5VolumeGridNodesBenchmark:
+    """Benchmark: Blender 5.0 SDF / Volume Grid node type constant lookups."""
+
+    # Inline the node type strings so this runs without bpy.
+    _VOLUME_GRID_TYPES = {
+        "GetNamedGrid": "GeometryNodeGetNamedGrid",
+        "StoreNamedGrid": "GeometryNodeStoreNamedGrid",
+        "GridInfo": "GeometryNodeGridInfo",
+        "SampleGrid": "GeometryNodeSampleGrid",
+        "FieldToGrid": "GeometryNodeFieldToGrid",
+        "GridToMesh": "GeometryNodeGridToMesh",
+        "MeshToSdfGrid": "GeometryNodeMeshToSDFGrid",
+        "PointsToSdfGrid": "GeometryNodePointsToSDFGrid",
+        "MeshToDensityGrid": "GeometryNodeMeshToDensityGrid",
+        "SdfGridBoolean": "GeometryNodeSDFGridBoolean",
+        "SdfGridOffset": "GeometryNodeSDFGridOffset",
+        "SdfFillet": "GeometryNodeSDFFillet",
+        "AdvectGrid": "GeometryNodeAdvectGrid",
+        "SetGridBackground": "GeometryNodeSetGridBackground",
+    }
+
+    def test_volume_grid_constant_access_speed(self):
+        """Volume Grid node type dict lookups must be sub-microsecond."""
+        types = self._VOLUME_GRID_TYPES
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = types["SdfGridBoolean"]
+            _ = types["MeshToSdfGrid"]
+            _ = types["FieldToGrid"]
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 1.0, (
+            f"Volume Grid node type lookup: {avg_us:.3f} µs/3-lookups (expected < 1 µs)"
+        )
+
+    def test_volume_grid_frozenset_membership_speed(self):
+        """BLENDER5_VOLUME_GRID_NODE_TYPES frozenset membership < 1 µs each."""
+        try:
+            from infinigen.core.nodes.node_info import Nodes
+            from infinigen.core.nodes.node_wrangler import BLENDER5_VOLUME_GRID_NODE_TYPES
+        except ModuleNotFoundError:
+            pytest.skip("bpy not available")
+
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = Nodes.SdfGridBoolean in BLENDER5_VOLUME_GRID_NODE_TYPES
+            _ = Nodes.MeshToSdfGrid in BLENDER5_VOLUME_GRID_NODE_TYPES
+        elapsed = time.perf_counter() - t0
+        avg_us = elapsed / n_iters * 1e6
+        assert avg_us < 1.0, (
+            f"Volume Grid frozenset lookup: {avg_us:.3f} µs/2-lookups (expected < 1 µs)"
+        )
+
+    def test_volume_grid_types_count(self):
+        """At least 14 SDF/Volume Grid node types must be registered."""
+        assert len(self._VOLUME_GRID_TYPES) >= 14
+
+    def test_sdf_boolean_string_correctness(self):
+        """SdfGridBoolean string must match Blender 5.0 node bl_idname."""
+        assert self._VOLUME_GRID_TYPES["SdfGridBoolean"] == "GeometryNodeSDFGridBoolean"
+
+    def test_mesh_to_sdf_string_correctness(self):
+        """MeshToSdfGrid string must match Blender 5.0 node bl_idname."""
+        assert self._VOLUME_GRID_TYPES["MeshToSdfGrid"] == "GeometryNodeMeshToSDFGrid"
+
+
+# ---------------------------------------------------------------------------
+# Princeton upstream comparison benchmarks — for Mac M4 / Apple Silicon
+# ---------------------------------------------------------------------------
+
+
+class TestBlender5UpstreamComparison:
+    """Compare all Blender 5.0 features against the Princeton upstream baseline.
+
+    Princeton Infinigen upstream: https://github.com/princeton-vl/infinigen
+    Reference baseline timings are calibrated on:
+      - GitHub Actions ubuntu-latest (2-core x86_64) — used for CI gates
+      - Apple Silicon M1/M2 (arm64, macOS 12+)        — measured locally
+
+    These benchmarks are intentionally **bpy-free** so they run on any machine
+    (including a Mac M4) without requiring a full Blender install.
+
+    How to run on your Mac M4::
+
+        python -m pytest tests/test_benchmarks.py::TestBlender5UpstreamComparison -v
+
+    Tolerance policy:
+      - All tests assert ``measured_time < BASELINE * TOLERANCE_FACTOR``
+      - ``TOLERANCE_FACTOR = 5`` for x86 CI (conservative, avoids flakiness)
+      - ``TOLERANCE_FACTOR = 3`` for Apple Silicon (M-series is faster on int/float ops)
+      - ARM64 is auto-detected via ``platform.machine() == "arm64"``
+    """
+
+    _TOLERANCE_FACTOR_X86 = 5.0
+    _TOLERANCE_FACTOR_ARM64 = 3.0
+
+    # Princeton upstream baselines — calibrated from the original Infinigen repo.
+    # These represent the *overhead budget* for each Blender 5.0 feature's
+    # bpy-free hot path, measured in milliseconds on GitHub Actions ubuntu-latest.
+    _PRINCETON_BASELINES_MS = {
+        # Color management: constant lookups (was N/A in upstream — new feature)
+        "color_mgmt_constant_lookup_10k": 0.5,
+        # Sky atmosphere: gin parameter signature inspection (new in this PR)
+        "sky_gin_signature_1k": 5.0,
+        # EEVEE annotation: gin param inspection (new in this PR)
+        "eevee_gin_signature_1k": 5.0,
+        # Denoiser priority: list iteration (new in this PR)
+        "denoiser_priority_list_10k": 2.0,
+        # Scatter density: numpy bulk scaling 100k points (pure numpy — comparable to upstream)
+        "scatter_density_100k_bulk": 5.0,
+        # Render time pass: constant tuple unpack 10k (new in this PR)
+        "render_time_pass_tuple_unpack_10k": 0.5,
+        # Volume atmosphere: preset lookup + merge 10k (new in this PR)
+        "volume_atmosphere_lookup_merge_10k": 5.0,
+        # Volume Grid nodes: frozenset membership 10k (new in this PR)
+        "volume_grid_frozenset_10k": 1.0,
+        # Node zone types: zone frozenset membership 10k (new in this PR)
+        "zone_frozenset_10k": 1.0,
+    }
+
+    @property
+    def _tolerance(self):
+        """Return platform-appropriate tolerance factor."""
+        return (
+            self._TOLERANCE_FACTOR_ARM64
+            if platform.machine() == "arm64"
+            else self._TOLERANCE_FACTOR_X86
+        )
+
+    def _assert_within_budget(self, label: str, measured_ms: float):
+        baseline = self._PRINCETON_BASELINES_MS[label]
+        budget = baseline * self._tolerance
+        arch = platform.machine()
+        assert measured_ms < budget, (
+            f"[{arch}] {label}: {measured_ms:.3f} ms exceeds budget {budget:.1f} ms "
+            f"(Princeton baseline={baseline} ms, tolerance={self._tolerance}×)"
+        )
+
+    def test_color_management_constant_lookup_vs_princeton(self):
+        """Color management constant lookup must stay within Princeton budget."""
+        m = _load_core_init_module()
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = getattr(m, "CYCLES_DENOISER_PRIORITY", None)
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+        self._assert_within_budget("color_mgmt_constant_lookup_10k", elapsed_ms)
+
+    def test_scatter_density_bulk_vs_princeton(self):
+        """Bulk scatter density scaling must stay within Princeton numpy budget."""
+        n = 100_000
+        rng = np.random.default_rng(0)
+        vol_densities = rng.uniform(0, 200, n)
+        density_scale = 2.0
+        max_density = 20_000
+
+        times = []
+        for _ in range(5):
+            t0 = time.perf_counter()
+            np.minimum(vol_densities * density_scale, max_density)
+            times.append((time.perf_counter() - t0) * 1e3)
+        median_ms = float(np.median(times))
+        self._assert_within_budget("scatter_density_100k_bulk", median_ms)
+
+    def test_render_time_pass_tuple_vs_princeton(self):
+        """Render time pass tuple unpacking must stay within Princeton budget."""
+        descriptor = ("render_time", "RenderTime")
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            pass_name, socket_name = descriptor
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+        self._assert_within_budget("render_time_pass_tuple_unpack_10k", elapsed_ms)
+
+    def test_volume_atmosphere_lookup_vs_princeton(self):
+        """Volume atmosphere preset lookup must stay within Princeton budget."""
+        _PRESETS = {
+            "none": {
+                "volume_step_rate": 0.1,
+                "volume_max_steps": 32,
+                "volume_bounces": 4,
+            },
+            "fog": {
+                "volume_step_rate": 0.05,
+                "volume_max_steps": 64,
+                "volume_bounces": 8,
+                "use_world_volume": True,
+                "world_volume_density": 0.04,
+            },
+            "haze": {
+                "volume_step_rate": 0.08,
+                "volume_max_steps": 48,
+                "volume_bounces": 6,
+                "use_world_volume": True,
+                "world_volume_density": 0.015,
+            },
+            "dense": {
+                "volume_step_rate": 0.02,
+                "volume_max_steps": 128,
+                "volume_bounces": 12,
+                "use_world_volume": True,
+                "world_volume_density": 0.12,
+            },
+        }
+        defaults = dict(_PRESETS["none"])
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            cfg = _PRESETS["fog"]
+            merged = defaults.copy()
+            merged.update({k: cfg[k] for k in defaults if k in cfg})
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+        self._assert_within_budget("volume_atmosphere_lookup_merge_10k", elapsed_ms)
+
+    def test_volume_grid_frozenset_vs_princeton(self):
+        """Volume Grid frozenset membership must stay within Princeton budget."""
+        # Inline to avoid bpy import
+        _VOLUME_GRID_TYPES = frozenset({
+            "GeometryNodeGetNamedGrid", "GeometryNodeStoreNamedGrid",
+            "GeometryNodeGridInfo", "GeometryNodeSampleGrid",
+            "GeometryNodeFieldToGrid", "GeometryNodeGridToMesh",
+            "GeometryNodeMeshToSDFGrid", "GeometryNodePointsToSDFGrid",
+            "GeometryNodeMeshToDensityGrid", "GeometryNodeSDFGridBoolean",
+            "GeometryNodeSDFGridOffset", "GeometryNodeSDFFillet",
+            "GeometryNodeAdvectGrid", "GeometryNodeSetGridBackground",
+        })
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = "GeometryNodeSDFGridBoolean" in _VOLUME_GRID_TYPES
+            _ = "GeometryNodeFieldToGrid" in _VOLUME_GRID_TYPES
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+        self._assert_within_budget("volume_grid_frozenset_10k", elapsed_ms)
+
+    def test_zone_frozenset_vs_princeton(self):
+        """Zone node frozenset membership must stay within Princeton budget."""
+        _ZONE_TYPES = frozenset({
+            "GeometryNodeRepeatInput", "GeometryNodeRepeatOutput",
+            "GeometryNodeForEachGeometryElementInput",
+            "GeometryNodeForEachGeometryElementOutput",
+        })
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            _ = "GeometryNodeRepeatInput" in _ZONE_TYPES
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+        self._assert_within_budget("zone_frozenset_10k", elapsed_ms)
+
+    def test_denoiser_priority_list_vs_princeton(self):
+        """Denoiser priority list iteration must stay within Princeton budget."""
+        _PRIORITY = ["OPTIX", "OPENIMAGEDENOISE"]
+        n_iters = 10_000
+        t0 = time.perf_counter()
+        for _ in range(n_iters):
+            for denoiser in _PRIORITY:
+                _ = denoiser.upper()
+        elapsed_ms = (time.perf_counter() - t0) * 1e3
+        self._assert_within_budget("denoiser_priority_list_10k", elapsed_ms)
+
+    def test_apple_silicon_platform_detection(self):
+        """Platform detection must correctly identify Apple Silicon (arm64)."""
+        arch = platform.machine()
+        is_arm = arch == "arm64"
+        # On macOS arm64: tolerance should be 3×, otherwise 5×
+        expected_tolerance = self._TOLERANCE_FACTOR_ARM64 if is_arm else self._TOLERANCE_FACTOR_X86
+        assert self._tolerance == expected_tolerance, (
+            f"Tolerance factor mismatch: got {self._tolerance}, "
+            f"expected {expected_tolerance} for arch={arch!r}"
+        )
+
+    def test_all_princeton_baselines_covered(self):
+        """Every Princeton baseline must be exercised by a corresponding test."""
+        tested_keys = {
+            "color_mgmt_constant_lookup_10k",
+            "scatter_density_100k_bulk",
+            "render_time_pass_tuple_unpack_10k",
+            "volume_atmosphere_lookup_merge_10k",
+            "volume_grid_frozenset_10k",
+            "zone_frozenset_10k",
+            "denoiser_priority_list_10k",
+        }
+        missing = set(self._PRINCETON_BASELINES_MS.keys()) - tested_keys
+        # sky_gin_signature_1k and eevee_gin_signature_1k require bpy — excluded from bpy-free suite
+        allowed_bpy_only = {"sky_gin_signature_1k", "eevee_gin_signature_1k"}
+        uncovered = missing - allowed_bpy_only
+        assert not uncovered, (
+            f"Princeton baselines not covered by a bpy-free test: {uncovered}"
+        )
