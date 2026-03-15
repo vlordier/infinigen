@@ -17,7 +17,7 @@ import json
 import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import numpy as np
 
@@ -150,7 +150,9 @@ class FrameMetadata:
         Path(path).write_text(json.dumps(self.to_dict(), indent=2))
 
     # Fields that are tuples in the dataclass but become lists in JSON.
-    _TUPLE_FIELDS = ("camera_position", "camera_rotation_euler", "velocity")
+    _TUPLE_FIELDS: ClassVar[tuple[str, ...]] = (
+        "camera_position", "camera_rotation_euler", "velocity",
+    )
 
     @staticmethod
     def load_json(path: str | Path) -> FrameMetadata:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import ClassVar
 
 __all__ = ["SceneBudget"]
 
@@ -51,10 +52,10 @@ class SceneBudget:
     resolution: tuple[int, int] = (256, 256)
 
     # ------ heuristic constants (empirically tuned for RTX 4090) -------------
-    _BYTES_PER_TRI: int = 120  # Cycles BVH ≈ 120 B/tri
-    _BYTES_PER_TEX_PX: int = 16  # RGBA float32
-    _MS_PER_SAMPLE_PER_MPIX: float = 0.35  # rough GPU throughput
-    _VRAM_SAFETY_FACTOR: float = 1.5  # account for caches & intermediates
+    _BYTES_PER_TRI: ClassVar[int] = 120  # Cycles BVH ≈ 120 B/tri
+    _BYTES_PER_TEX_PX: ClassVar[int] = 16  # RGBA float32
+    _MS_PER_SAMPLE_PER_MPIX: ClassVar[float] = 0.35  # rough GPU throughput
+    _VRAM_SAFETY_FACTOR: ClassVar[float] = 1.5  # account for caches & intermediates
 
     def __post_init__(self) -> None:
         if self.poly_count < 0:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import ClassVar
 
 __all__ = ["DensityScaler"]
 
@@ -46,7 +47,7 @@ class DensityScaler:
     obstacle_max: int = 50
     curve: str = "linear"
 
-    _CURVES = {"linear", "quadratic", "sqrt"}
+    _CURVES: ClassVar[frozenset[str]] = frozenset({"linear", "quadratic", "sqrt"})
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.difficulty <= 1.0:
