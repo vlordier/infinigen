@@ -9,6 +9,8 @@ Python / NumPy) so that the suite runs in CI without Blender.
 """
 
 
+import math
+
 import numpy as np
 import pytest
 
@@ -832,7 +834,6 @@ class TestEnrichedMetadata:
         assert meta.velocity == (0.0, 0.0, 0.0)
 
     def test_nearest_obstacle_default_inf(self):
-        import math
         meta = FrameMetadata()
         assert math.isinf(meta.nearest_obstacle_m)
 
@@ -863,7 +864,6 @@ class TestEnrichedMetadata:
         path = tmp_path / "inf_test.json"
         meta.save_json(path)
         loaded = FrameMetadata.load_json(path)
-        import math
         assert math.isinf(loaded.nearest_obstacle_m)
 
 

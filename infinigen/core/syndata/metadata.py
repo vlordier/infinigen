@@ -147,6 +147,9 @@ class FrameMetadata:
         """Write metadata to a JSON file."""
         Path(path).write_text(json.dumps(self.to_dict(), indent=2))
 
+    # Fields that are tuples in the dataclass but become lists in JSON.
+    _TUPLE_FIELDS = ("camera_position", "camera_rotation_euler", "velocity")
+
     @staticmethod
     def load_json(path: str | Path) -> FrameMetadata:
         """Load metadata from a JSON file."""
@@ -159,7 +162,7 @@ class FrameMetadata:
         if nom == "Infinity":
             data["nearest_obstacle_m"] = float("inf")
         # JSON deserialises tuples as lists — convert them back
-        for key in ("camera_position", "camera_rotation_euler", "velocity"):
+        for key in FrameMetadata._TUPLE_FIELDS:
             if key in data and isinstance(data[key], list):
                 data[key] = tuple(data[key])
         sp = data.pop("swarm_positions", [])

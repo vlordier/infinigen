@@ -21,8 +21,8 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 def _make_preset(
-    w: int,
-    h: int,
+    width: int,
+    height: int,
     num_samples: int,
     min_samples: int,
     adaptive_threshold: float,
@@ -46,10 +46,10 @@ def _make_preset(
         "configure_render_cycles.time_limit": time_limit,
         "configure_render_cycles.denoise": denoise,
         "configure_render_cycles.exposure": exposure,
-        "execute_tasks.generate_resolution": (w, h),
+        "execute_tasks.generate_resolution": (width, height),
         # Camera intrinsics must match render resolution
-        "get_sensor_coords.H": h,
-        "get_sensor_coords.W": w,
+        "get_sensor_coords.H": height,
+        "get_sensor_coords.W": width,
         "configure_blender.motion_blur": motion_blur,
         "render.volume_scatter": volume_scatter,
     }
@@ -57,25 +57,25 @@ def _make_preset(
 
 _PRESETS: dict[str, dict[str, Any]] = {
     "preview": _make_preset(
-        w=128, h=128, num_samples=16, min_samples=4,
+        width=128, height=128, num_samples=16, min_samples=4,
         adaptive_threshold=0.1, time_limit=5,
         denoise=False, exposure=0.8,
         motion_blur=False, volume_scatter=False,
     ),
     "fast": _make_preset(
-        w=256, h=256, num_samples=64, min_samples=8,
+        width=256, height=256, num_samples=64, min_samples=8,
         adaptive_threshold=0.05, time_limit=15,
         denoise=True, exposure=1.0,
         motion_blur=False, volume_scatter=False,
     ),
     "medium": _make_preset(
-        w=512, h=512, num_samples=128, min_samples=16,
+        width=512, height=512, num_samples=128, min_samples=16,
         adaptive_threshold=0.02, time_limit=30,
         denoise=True, exposure=1.0,
         motion_blur=True, volume_scatter=True,
     ),
     "high": _make_preset(
-        w=1024, h=1024, num_samples=512, min_samples=32,
+        width=1024, height=1024, num_samples=512, min_samples=32,
         adaptive_threshold=0.005, time_limit=120,
         denoise=True, exposure=1.0,
         motion_blur=True, volume_scatter=True,

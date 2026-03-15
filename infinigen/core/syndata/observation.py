@@ -36,7 +36,10 @@ PASS_MATERIAL_INDEX = "material_index"
 PASS_DIFFUSE_DIRECT = "diffuse_direct"
 PASS_DIFFUSE_COLOR = "diffuse_color"
 
-#: Common presets for different RL use-cases.
+#: Passes available via the ``flat/render_image`` path (cheap to render).
+PASSES_FLAT_AVAILABLE: frozenset[str] = frozenset({
+    PASS_DEPTH, PASS_NORMAL, PASS_FLOW, PASS_OBJECT_INDEX,
+})
 PASSES_MINIMAL: frozenset[str] = frozenset({PASS_DEPTH, PASS_OBJECT_INDEX})
 PASSES_NAVIGATION: frozenset[str] = frozenset({PASS_DEPTH, PASS_NORMAL, PASS_OBJECT_INDEX})
 PASSES_FULL: frozenset[str] = frozenset({
@@ -151,7 +154,7 @@ class ObservationConfig:
         """
         overrides: dict[str, Any] = {}
         # Flat passes (always enabled for RL — cheap to render)
-        flat_passes = sorted(self.passes & {PASS_DEPTH, PASS_NORMAL, PASS_FLOW, PASS_OBJECT_INDEX})
+        flat_passes = sorted(self.passes & PASSES_FLAT_AVAILABLE)
         if flat_passes:
             overrides["flat/render_image.passes_to_save"] = tuple(flat_passes)
         return overrides
