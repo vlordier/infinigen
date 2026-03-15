@@ -74,6 +74,22 @@ import numpy as np
 
 from infinigen.core.syndata.metadata import BBox3D
 
+__all__ = [
+    "COMPLEXITY_BRANCHES",
+    "COMPLEXITY_CORRIDOR",
+    "COMPLEXITY_DOOM",
+    "COMPLEXITY_MAZE",
+    "COMPLEXITY_ROOMS",
+    "InfinigenOverlayHints",
+    "VisualStyle",
+    "WorldConfig",
+    "generate_world",
+    "overlay_hints_for_complexity",
+    "world_gin_overrides",
+    "world_summary",
+    "world_to_frame_metadata",
+]
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------

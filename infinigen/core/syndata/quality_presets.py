@@ -16,6 +16,12 @@ from __future__ import annotations
 
 from typing import Any
 
+__all__ = [
+    "VALID_PRESETS",
+    "drone_preset",
+    "to_gin_bindings",
+]
+
 # ---------------------------------------------------------------------------
 # Preset definitions
 # ---------------------------------------------------------------------------

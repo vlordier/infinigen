@@ -16,6 +16,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+__all__ = [
+    "EpisodeConfig",
+    "TRAJECTORY_FOLLOW",
+    "TRAJECTORY_ORBIT",
+    "TRAJECTORY_RANDOM_WALK",
+    "TRAJECTORY_RRT",
+    "TRAJECTORY_STATIC",
+    "VALID_TRAJECTORIES",
+]
+
 # Trajectory modes that Infinigen supports via camera animation policies
 TRAJECTORY_STATIC = "static"  # single viewpoint
 TRAJECTORY_RANDOM_WALK = "random_walk"  # Brownian motion

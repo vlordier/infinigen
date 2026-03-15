@@ -34,6 +34,13 @@ from typing import Any
 
 import numpy as np
 
+__all__ = [
+    "FlappyColumnConfig",
+    "FlappyObstacle",
+    "flappy_frame_metadata",
+    "generate_flappy_obstacles",
+]
+
 # ---------------------------------------------------------------------------
 # Flappy-bird column config
 # ---------------------------------------------------------------------------

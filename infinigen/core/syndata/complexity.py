@@ -17,6 +17,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+__all__ = [
+    "CurriculumConfig",
+    "curriculum_overrides",
+]
+
 
 @dataclass(frozen=True)
 class CurriculumConfig:

@@ -21,6 +21,8 @@ from typing import Any
 
 import numpy as np
 
+__all__ = ["BBox3D", "DepthStats", "FrameMetadata"]
+
 
 @dataclass
 class BBox3D:

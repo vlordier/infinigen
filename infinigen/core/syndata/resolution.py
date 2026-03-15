@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import math
 
+__all__ = ["resolution_for_stage"]
+
 # Default ladder: stage 0 → 64 px, stage N-1 → 2048 px
 _DEFAULT_MIN = 64
 _DEFAULT_MAX = 2048

@@ -16,6 +16,23 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+__all__ = [
+    "ObservationConfig",
+    "PASSES_FLAT_AVAILABLE",
+    "PASSES_FULL",
+    "PASSES_MINIMAL",
+    "PASSES_NAVIGATION",
+    "PASS_DEPTH",
+    "PASS_DIFFUSE_COLOR",
+    "PASS_DIFFUSE_DIRECT",
+    "PASS_FLOW",
+    "PASS_MATERIAL_INDEX",
+    "PASS_NORMAL",
+    "PASS_OBJECT_INDEX",
+    "PASS_RGB",
+    "SensorNoiseModel",
+]
+
 # ---------------------------------------------------------------------------
 # Render passes available in Infinigen (via Cycles)
 # ---------------------------------------------------------------------------

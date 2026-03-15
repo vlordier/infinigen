@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+__all__ = ["DomainRandomiser"]
+
 
 @dataclass
 class _Range:

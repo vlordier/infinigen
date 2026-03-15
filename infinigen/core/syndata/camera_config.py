@@ -17,6 +17,14 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
+__all__ = [
+    "ASPECT_1_1",
+    "ASPECT_16_9",
+    "ASPECT_4_3",
+    "CameraRigConfig",
+    "DroneCamera",
+]
+
 # Standard drone FPV aspect ratios
 ASPECT_4_3 = 4 / 3
 ASPECT_16_9 = 16 / 9
