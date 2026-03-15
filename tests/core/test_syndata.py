@@ -2074,3 +2074,143 @@ class TestDomainRandomiserDeterminism:
         assert 0.0 <= dr.difficulty <= 1.0
         samples = dr.sample()
         assert len(samples) > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  StageGraph edge cases
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestStageGraphEdgeCases:
+    """Edge cases for StageGraph."""
+
+    def test_single_stage(self):
+        g = StageGraph(stages=(Stage(name="only"),))
+        assert len(g) == 1
+        assert "only" in g
+        assert g.parallel_groups() == [["only"]]
+
+    def test_len_and_contains(self):
+        g = StageGraph()
+        assert len(g) == 7  # default stages
+        assert "coarse" in g
+        assert "nonexistent" not in g
+
+    def test_linear_chain(self):
+        stages = (
+            Stage(name="a"),
+            Stage(name="b", depends_on=frozenset({"a"})),
+            Stage(name="c", depends_on=frozenset({"b"})),
+        )
+        g = StageGraph(stages=stages)
+        groups = g.parallel_groups()
+        assert groups == [["a"], ["b"], ["c"]]
+
+    def test_fully_parallel(self):
+        stages = tuple(Stage(name=f"s{i}") for i in range(5))
+        g = StageGraph(stages=stages)
+        groups = g.parallel_groups()
+        assert len(groups) == 1
+        assert len(groups[0]) == 5
+
+    def test_topological_order_is_consistent(self):
+        g = StageGraph()
+        order1 = g.topological_order()
+        order2 = g.topological_order()
+        assert order1 == order2
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  SceneBudget edge cases
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSceneBudgetEdgeCases:
+    """Edge cases for SceneBudget."""
+
+    def test_zero_poly_zero_texture(self):
+        b = SceneBudget(poly_count=0, texture_pixels=0)
+        assert b.estimated_vram_mb >= 0
+        assert b.estimated_render_seconds >= 0
+
+    def test_large_scene_exceeds_budget(self):
+        b = SceneBudget(
+            poly_count=50_000_000,
+            texture_pixels=100_000_000,
+            num_samples=512,
+            resolution=(4096, 4096),
+        )
+        assert not b.fits(max_vram_mb=1024, max_seconds=10)
+
+    def test_batch_fits_single_frame(self):
+        b = SceneBudget()
+        single = b.batch_fits(1, max_total_seconds=3600)
+        assert single is True
+
+    def test_batch_fits_many_frames(self):
+        b = SceneBudget(num_samples=512, resolution=(2048, 2048))
+        # Very tight budget should fail with many frames
+        assert not b.batch_fits(100_000, max_total_seconds=1)
+
+    def test_summary_keys(self):
+        b = SceneBudget()
+        s = b.summary()
+        assert "poly_count" in s
+        assert "estimated_vram_mb" in s
+        assert "estimated_render_seconds" in s
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ValidationResult hash/equality & new validation tests
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestValidationResultProperties:
+    """Test frozen/slotted ValidationResult properties."""
+
+    def test_frozen_immutable(self):
+        from infinigen.core.syndata.validation import ValidationResult
+        vr = ValidationResult(name="test", passed=True, message="ok")
+        with pytest.raises(AttributeError):
+            vr.name = "changed"  # type: ignore[misc]
+
+    def test_hashable(self):
+        from infinigen.core.syndata.validation import ValidationResult
+        vr1 = ValidationResult(name="test", passed=True, message="ok")
+        vr2 = ValidationResult(name="test", passed=True, message="ok")
+        assert hash(vr1) == hash(vr2)
+        assert vr1 == vr2
+        s = {vr1, vr2}
+        assert len(s) == 1
+
+    def test_fail_fast_stops_early(self):
+        """fail_fast=True returns fewer results on failure."""
+        sv = SceneValidator(min_obstacles=5, max_obstacles=10)
+        meta = {
+            "obstacles": [1],  # only 1, below min of 5
+            "traversability_ratio": 0.5,
+            "poly_count": 5000,
+        }
+        # Without fail_fast — all checks run
+        results_all = sv.validate(meta, fail_fast=False)
+        # With fail_fast — stops after first failure
+        results_fast = sv.validate(meta, fail_fast=True)
+        assert len(results_fast) <= len(results_all)
+        assert not results_fast[0].passed
+
+
+class TestObservationValidation:
+    """Test new observation.py validation."""
+
+    def test_unknown_pass_rejected(self):
+        from infinigen.core.syndata.observation import ObservationConfig
+        with pytest.raises(ValueError, match="Unknown render pass"):
+            ObservationConfig(passes=frozenset({"invalid_pass"}))
+
+    def test_exposure_jitter_negative_rejected(self):
+        with pytest.raises(ValueError, match="exposure_jitter"):
+            SensorNoiseModel(exposure_jitter=-1.0)
+
+    def test_exposure_jitter_zero_accepted(self):
+        nm = SensorNoiseModel(exposure_jitter=0.0)
+        assert nm.exposure_jitter == 0.0
