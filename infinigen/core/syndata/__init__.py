@@ -18,6 +18,14 @@ Typical usage
 from infinigen.core.syndata.camera_config import CameraRigConfig, DroneCamera
 from infinigen.core.syndata.complexity import CurriculumConfig, curriculum_overrides
 from infinigen.core.syndata.density_scaling import DensityScaler
+from infinigen.core.syndata.drone_env_bridge import (
+    DroneEnvConfig,
+    TrainingOutcome,
+    apply_curriculum_adjustment,
+    outcome_to_curriculum_params,
+    scene_to_drone_entities,
+    syndata_to_drone_env_config,
+)
 from infinigen.core.syndata.episode import EpisodeConfig
 from infinigen.core.syndata.genesis_export import (
     GenesisCamera,
@@ -47,6 +55,7 @@ __all__ = [
     "DensityScaler",
     "DomainRandomiser",
     "DroneCamera",
+    "DroneEnvConfig",
     "EpisodeConfig",
     "FrameMetadata",
     "GenesisCamera",
@@ -61,12 +70,17 @@ __all__ = [
     "SceneValidator",
     "SensorNoiseModel",
     "StageGraph",
+    "TrainingOutcome",
+    "apply_curriculum_adjustment",
     "build_genesis_config",
     "curriculum_overrides",
     "drone_preset",
     "episode_to_genesis",
     "observation_to_genesis",
+    "outcome_to_curriculum_params",
     "resolution_for_stage",
+    "scene_to_drone_entities",
+    "syndata_to_drone_env_config",
     "to_genesis_script",
     "to_gin_bindings",
 ]

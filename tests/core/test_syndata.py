@@ -22,6 +22,14 @@ from infinigen.core.syndata.camera_config import (
 )
 from infinigen.core.syndata.complexity import CurriculumConfig, curriculum_overrides
 from infinigen.core.syndata.density_scaling import DensityScaler
+from infinigen.core.syndata.drone_env_bridge import (
+    DroneEnvConfig,
+    TrainingOutcome,
+    apply_curriculum_adjustment,
+    outcome_to_curriculum_params,
+    scene_to_drone_entities,
+    syndata_to_drone_env_config,
+)
 from infinigen.core.syndata.episode import EpisodeConfig
 from infinigen.core.syndata.genesis_export import (
     GenesisCamera,
@@ -1820,3 +1828,542 @@ class TestBuildGenesisConfigWithEpisodeObservation:
         cfg = build_genesis_config(backend="cpu")
         assert cfg.episode is None
         assert cfg.observation is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  DroneEnvConfig
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestDroneEnvConfig:
+    """Tests for DroneEnvConfig — GenesisDroneEnv YAML config equivalent."""
+
+    def test_defaults(self):
+        cfg = DroneEnvConfig()
+        assert cfg.num_envs == 4096
+        assert cfg.dt == 0.01
+        assert cfg.cam_res == (256, 256)
+        assert cfg.num_actions == 4
+        assert cfg.num_obs == 23
+
+    def test_invalid_num_envs(self):
+        with pytest.raises(ValueError, match="num_envs"):
+            DroneEnvConfig(num_envs=0)
+
+    def test_invalid_dt(self):
+        with pytest.raises(ValueError, match="dt"):
+            DroneEnvConfig(dt=-0.01)
+
+    def test_invalid_cam_res(self):
+        with pytest.raises(ValueError, match="cam_res"):
+            DroneEnvConfig(cam_res=(0, 256))
+
+    def test_to_genesis_env_yaml(self):
+        cfg = DroneEnvConfig(num_envs=1024, dt=0.005, cam_res=(320, 240))
+        y = cfg.to_genesis_env_yaml()
+        assert y["num_envs"] == 1024
+        assert y["dt"] == 0.005
+        assert y["cam_res"] == [320, 240]
+        assert y["controller"] == "angle"
+        assert y["drone_num"] == 1
+        assert "init_x_range" in y
+        assert "init_y_range" in y
+        assert "init_z_range" in y
+
+    def test_to_rl_env_yaml(self):
+        cfg = DroneEnvConfig(
+            reward_scales={"target": 5.0, "crash": -20.0},
+            max_episode_length=2000,
+        )
+        y = cfg.to_rl_env_yaml()
+        assert "task" in y
+        task = y["task"]
+        assert task["reward_scales"]["target"] == 5.0
+        assert task["reward_scales"]["crash"] == -20.0
+        assert task["max_episode_length"] == 2000
+        assert task["num_actions"] == 4
+        assert "command_cfg" in task
+        assert "pos_x_range" in task["command_cfg"]
+
+    def test_to_genesis_env_yaml_has_all_keys(self):
+        """Ensure generated YAML has the keys GenesisDroneEnv expects."""
+        y = DroneEnvConfig().to_genesis_env_yaml()
+        expected_keys = {
+            "num_envs", "drone_num", "dt", "max_vis_FPS",
+            "use_FPV_camera", "cam_quat", "cam_pos", "cam_res",
+            "drone_init_pos", "vis_waypoints", "viewer_follow_drone",
+            "show_cam_GUI", "fixed_init_pos", "znear", "zfar",
+            "load_map", "use_rc", "show_viewer", "render_cam",
+            "controller", "min_dis", "map_width", "map_length",
+            "init_x_range", "init_y_range", "init_z_range", "target_thr",
+        }
+        assert expected_keys.issubset(set(y.keys()))
+
+    def test_json_round_trip(self, tmp_path):
+        cfg = DroneEnvConfig(
+            num_envs=512,
+            cam_res=(320, 240),
+            drone_init_pos=(1.0, 2.0, 0.5),
+            map_size=(5.0, 5.0),
+        )
+        p = tmp_path / "drone_env.json"
+        cfg.save_json(p)
+        loaded = DroneEnvConfig.load_json(p)
+        assert loaded.num_envs == 512
+        assert loaded.cam_res == (320, 240)
+        assert loaded.drone_init_pos == (1.0, 2.0, 0.5)
+        assert loaded.map_size == (5.0, 5.0)
+
+    def test_json_round_trip_tuple_normalisation(self, tmp_path):
+        """Ensure tuples survive JSON round-trip (JSON has only arrays)."""
+        cfg = DroneEnvConfig(
+            init_pos_range={"x": (-1.0, 1.0), "y": (-0.5, 0.5), "z": (0.3, 0.7)},
+            command_ranges={"x": (-2.0, 2.0), "y": (-2.0, 2.0), "z": (0.5, 1.5)},
+        )
+        p = tmp_path / "cfg.json"
+        cfg.save_json(p)
+        loaded = DroneEnvConfig.load_json(p)
+        assert isinstance(loaded.cam_res, tuple)
+        assert isinstance(loaded.init_pos_range["x"], tuple)
+        assert isinstance(loaded.command_ranges["x"], tuple)
+
+    def test_custom_termination(self):
+        cfg = DroneEnvConfig(
+            termination_conditions={"roll_deg": 90.0, "pitch_deg": 90.0, "ground_m": 0.2}
+        )
+        y = cfg.to_rl_env_yaml()
+        assert y["task"]["termination_if_roll_greater_than"] == 90.0
+        assert y["task"]["termination_if_pitch_greater_than"] == 90.0
+        assert y["task"]["termination_if_close_to_ground"] == 0.2
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  TrainingOutcome
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestTrainingOutcome:
+    """Tests for TrainingOutcome — structured training feedback."""
+
+    def test_defaults(self):
+        outcome = TrainingOutcome()
+        assert outcome.success_rate == 0.0
+        assert outcome.crash_rate == 0.0
+        assert outcome.difficulty == 0.0
+
+    def test_valid_outcome(self):
+        outcome = TrainingOutcome(
+            success_rate=0.8,
+            mean_reward=150.0,
+            crash_rate=0.1,
+            timeout_rate=0.1,
+            difficulty=0.5,
+            num_episodes=1000,
+        )
+        assert outcome.success_rate == 0.8
+        assert outcome.num_episodes == 1000
+
+    def test_invalid_success_rate(self):
+        with pytest.raises(ValueError, match="success_rate"):
+            TrainingOutcome(success_rate=1.5)
+
+    def test_invalid_crash_rate(self):
+        with pytest.raises(ValueError, match="crash_rate"):
+            TrainingOutcome(crash_rate=-0.1)
+
+    def test_invalid_difficulty(self):
+        with pytest.raises(ValueError, match="difficulty"):
+            TrainingOutcome(difficulty=1.1)
+
+    def test_json_round_trip(self, tmp_path):
+        outcome = TrainingOutcome(
+            success_rate=0.75,
+            mean_reward=120.5,
+            crash_rate=0.15,
+            failure_modes={"roll": 0.05, "ground_collision": 0.1},
+            difficulty=0.3,
+            metadata={"scene_id": "scene_001"},
+        )
+        p = tmp_path / "outcome.json"
+        outcome.save_json(p)
+        loaded = TrainingOutcome.load_json(p)
+        assert loaded.success_rate == 0.75
+        assert loaded.crash_rate == 0.15
+        assert loaded.failure_modes["roll"] == 0.05
+        assert loaded.metadata["scene_id"] == "scene_001"
+
+    def test_reward_breakdown(self):
+        outcome = TrainingOutcome(
+            reward_breakdown={"target": 8.5, "crash": -2.0, "smooth": -0.01}
+        )
+        assert outcome.reward_breakdown["target"] == 8.5
+        assert outcome.reward_breakdown["crash"] == -2.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  outcome_to_curriculum_params
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestOutcomeToCurriculumParams:
+    """Tests for curriculum progression from training outcomes."""
+
+    def test_advance_on_high_success(self):
+        outcome = TrainingOutcome(success_rate=0.85, crash_rate=0.05)
+        result = outcome_to_curriculum_params(outcome, current_stage=3, total_stages=10)
+        assert result["action"] == "advance"
+        assert result["recommended_stage"] == 4
+
+    def test_regress_on_high_crash(self):
+        outcome = TrainingOutcome(success_rate=0.2, crash_rate=0.6)
+        result = outcome_to_curriculum_params(outcome, current_stage=5, total_stages=10)
+        assert result["action"] == "regress"
+        assert result["recommended_stage"] == 4
+
+    def test_hold_on_moderate_performance(self):
+        outcome = TrainingOutcome(success_rate=0.5, crash_rate=0.3)
+        result = outcome_to_curriculum_params(outcome, current_stage=3, total_stages=10)
+        assert result["action"] == "hold"
+        assert result["recommended_stage"] == 3
+
+    def test_advance_capped_at_max_stage(self):
+        outcome = TrainingOutcome(success_rate=0.95, crash_rate=0.01)
+        result = outcome_to_curriculum_params(outcome, current_stage=9, total_stages=10)
+        assert result["recommended_stage"] == 9  # can't go beyond last stage
+        assert result["action"] == "advance"
+
+    def test_regress_capped_at_zero(self):
+        outcome = TrainingOutcome(success_rate=0.1, crash_rate=0.8)
+        result = outcome_to_curriculum_params(outcome, current_stage=0, total_stages=10)
+        assert result["recommended_stage"] == 0  # can't go below 0
+        assert result["action"] == "regress"
+
+    def test_difficulty_scales_with_stage(self):
+        outcome = TrainingOutcome(success_rate=0.9, crash_rate=0.02)
+        result = outcome_to_curriculum_params(outcome, current_stage=4, total_stages=10)
+        # Stage 5 → difficulty = 5/9 ≈ 0.556
+        assert 0.5 < result["difficulty"] < 0.6
+
+    def test_scene_adjustments_on_ground_collision(self):
+        outcome = TrainingOutcome(
+            success_rate=0.5,
+            crash_rate=0.4,
+            failure_modes={"ground_collision": 0.35},
+        )
+        result = outcome_to_curriculum_params(outcome, current_stage=3, total_stages=10)
+        assert result["scene_adjustments"]["widen_corridors"] is True
+
+    def test_scene_adjustments_increase_obstacles(self):
+        outcome = TrainingOutcome(success_rate=0.95, crash_rate=0.02)
+        result = outcome_to_curriculum_params(outcome, current_stage=3, total_stages=10)
+        assert result["scene_adjustments"]["increase_obstacles"] is True
+
+    def test_scene_adjustments_edge_cases(self):
+        outcome = TrainingOutcome(
+            success_rate=0.5,
+            crash_rate=0.3,
+            failure_modes={"roll": 0.2, "pitch": 0.15},
+        )
+        result = outcome_to_curriculum_params(outcome, current_stage=3, total_stages=10)
+        assert result["scene_adjustments"]["add_edge_cases"] is True
+
+    def test_invalid_total_stages(self):
+        outcome = TrainingOutcome()
+        with pytest.raises(ValueError, match="total_stages"):
+            outcome_to_curriculum_params(outcome, current_stage=0, total_stages=0)
+
+    def test_invalid_current_stage(self):
+        outcome = TrainingOutcome()
+        with pytest.raises(ValueError, match="current_stage"):
+            outcome_to_curriculum_params(outcome, current_stage=10, total_stages=10)
+
+    def test_custom_thresholds(self):
+        outcome = TrainingOutcome(success_rate=0.6, crash_rate=0.2)
+        result = outcome_to_curriculum_params(
+            outcome,
+            current_stage=3,
+            total_stages=10,
+            advance_threshold=0.5,
+            regress_crash_threshold=0.3,
+        )
+        assert result["action"] == "advance"
+
+    def test_single_stage_curriculum(self):
+        outcome = TrainingOutcome(success_rate=0.9, crash_rate=0.05)
+        result = outcome_to_curriculum_params(outcome, current_stage=0, total_stages=1)
+        assert result["recommended_stage"] == 0
+        assert result["difficulty"] == 0.0  # 0/max(1,0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  syndata_to_drone_env_config
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSyndataToDroneEnvConfig:
+    """Tests for Infinigen → DroneEnv config conversion."""
+
+    def test_defaults(self):
+        cfg = syndata_to_drone_env_config()
+        assert isinstance(cfg, DroneEnvConfig)
+        assert cfg.num_envs == 4096
+
+    def test_with_camera(self):
+        cam = DroneCamera(fov_deg=90, aspect_ratio=16 / 9)
+        cfg = syndata_to_drone_env_config(drone_camera=cam)
+        w, h = cfg.cam_res
+        # Should scale width to match 16:9 aspect
+        assert w > h
+
+    def test_with_observation_enables_camera(self):
+        obs = ObservationConfig(passes=PASSES_NAVIGATION)
+        cfg = syndata_to_drone_env_config(observation=obs)
+        assert cfg.render_cam is True
+        assert cfg.use_fpv_camera is True
+
+    def test_with_metadata_obstacles(self):
+        meta = FrameMetadata(
+            frame_id=0,
+            obstacles=[
+                BBox3D(center=(1.0, 2.0, 0.5), extent=(0.5, 0.5, 0.5), label="tree"),
+                BBox3D(center=(-1.0, -1.0, 0.5), extent=(0.3, 0.3, 1.0), label="building"),
+            ],
+        )
+        cfg = syndata_to_drone_env_config(frame_metadata=meta)
+        assert len(cfg.obstacle_entities) == 2
+        assert cfg.obstacle_entities[0]["name"] == "obstacle_0_tree"
+        # Init range should be derived from obstacle positions
+        assert cfg.init_pos_range["x"][0] < 0  # covers both obstacles
+
+    def test_with_curriculum_scales_crash_penalty(self):
+        curriculum = CurriculumConfig(stage=5, total_stages=10)
+        cfg = syndata_to_drone_env_config(curriculum=curriculum)
+        # Higher stage → harsher crash penalty
+        assert cfg.reward_scales["crash"] < -10.0
+
+    def test_with_randomiser(self):
+        rand = DomainRandomiser(difficulty=0.8, seed=42)
+        cfg = syndata_to_drone_env_config(randomiser=rand)
+        # Higher difficulty → wider init ranges
+        _x_lo, x_hi = cfg.init_pos_range["x"]
+        assert x_hi > 0.2  # Much wider than default 0.05
+
+    def test_with_scene_config(self):
+        scene = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(name="ground", morph_type="Plane"),
+                GenesisEntityConfig(name="wall_1", morph_type="Box", pos=(1, 0, 0.5)),
+                GenesisEntityConfig(name="rock", morph_type="Mesh", file_path="rock.obj"),
+            ],
+            backend="cpu",
+        )
+        cfg = syndata_to_drone_env_config(scene_config=scene)
+        # Ground plane should be excluded; only wall_1 and rock included
+        names = [e["name"] for e in cfg.obstacle_entities]
+        assert "ground" not in names
+        assert "wall_1" in names
+        assert "rock" in names
+
+    def test_custom_num_envs(self):
+        cfg = syndata_to_drone_env_config(num_envs=512)
+        assert cfg.num_envs == 512
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  apply_curriculum_adjustment
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestApplyCurriculumAdjustment:
+    """Tests for applying curriculum feedback to DroneEnvConfig."""
+
+    def test_widen_corridors(self):
+        base = DroneEnvConfig(map_size=(3.5, 3.5))
+        adj = {"scene_adjustments": {"widen_corridors": True}, "difficulty": 0.5}
+        result = apply_curriculum_adjustment(base, adj)
+        assert result.map_size[0] > 3.5
+        assert result.map_size[1] > 3.5
+
+    def test_reduce_clutter(self):
+        base = DroneEnvConfig(command_ranges={"x": (-2.0, 2.0), "y": (-2.0, 2.0), "z": (0.5, 1.0)})
+        adj = {"scene_adjustments": {"reduce_clutter": True}, "difficulty": 0.5}
+        result = apply_curriculum_adjustment(base, adj)
+        # Command range should shrink
+        x_lo, x_hi = result.command_ranges["x"]
+        assert abs(x_hi - x_lo) < 4.0
+
+    def test_increase_obstacles_penalty(self):
+        base = DroneEnvConfig(reward_scales={"crash": -10.0})
+        adj = {"scene_adjustments": {"increase_obstacles": True}, "difficulty": 0.5}
+        result = apply_curriculum_adjustment(base, adj)
+        assert result.reward_scales["crash"] < -10.0
+
+    def test_difficulty_scales_init_spread(self):
+        base = DroneEnvConfig()
+        adj_easy = {"scene_adjustments": {}, "difficulty": 0.1}
+        adj_hard = {"scene_adjustments": {}, "difficulty": 0.9}
+        easy = apply_curriculum_adjustment(base, adj_easy)
+        hard = apply_curriculum_adjustment(base, adj_hard)
+        easy_spread = easy.init_pos_range["x"][1] - easy.init_pos_range["x"][0]
+        hard_spread = hard.init_pos_range["x"][1] - hard.init_pos_range["x"][0]
+        assert hard_spread > easy_spread
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  scene_to_drone_entities
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestSceneToDroneEntities:
+    """Tests for scene_to_drone_entities code generation."""
+
+    def test_basic_entity(self):
+        scene = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(name="wall", morph_type="Box", pos=(1, 0, 0.5), is_fixed=True),
+            ],
+            backend="cpu",
+        )
+        lines = scene_to_drone_entities(scene)
+        assert len(lines) == 1
+        assert "gs.morphs.Box" in lines[0]
+        assert "fixed=True" in lines[0]
+        assert "self.wall" in lines[0]
+
+    def test_skips_ground_plane(self):
+        scene = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(name="ground", morph_type="Plane"),
+                GenesisEntityConfig(name="rock", morph_type="Mesh", file_path="rock.obj"),
+            ],
+            backend="cpu",
+        )
+        lines = scene_to_drone_entities(scene)
+        assert len(lines) == 1
+        assert "rock" in lines[0]
+        assert "gs.morphs.Mesh" in lines[0]
+
+    def test_file_path_in_output(self):
+        scene = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(name="terrain", morph_type="Mesh", file_path="/data/terrain.obj"),
+            ],
+            backend="cpu",
+        )
+        lines = scene_to_drone_entities(scene)
+        assert "/data/terrain.obj" in lines[0]
+
+    def test_extra_kwargs(self):
+        scene = GenesisSceneConfig(
+            entities=[
+                GenesisEntityConfig(
+                    name="box_1",
+                    morph_type="Box",
+                    extra={"size": (2.0, 1.0, 0.5)},
+                ),
+            ],
+            backend="cpu",
+        )
+        lines = scene_to_drone_entities(scene)
+        assert "size=" in lines[0]
+
+    def test_empty_scene(self):
+        scene = GenesisSceneConfig(backend="cpu")
+        lines = scene_to_drone_entities(scene)
+        assert lines == []
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  End-to-end: Infinigen → DroneEnv → Training → Curriculum feedback
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestEndToEndCurriculumLoop:
+    """End-to-end test for the bidirectional Infinigen ↔ DroneEnv bridge."""
+
+    def test_full_curriculum_loop(self):
+        """Simulate a complete curriculum training loop:
+        1. Generate Infinigen scene config for stage 0
+        2. Convert to DroneEnvConfig
+        3. Simulate training outcome (success)
+        4. Get curriculum adjustment → advance
+        5. Apply adjustment to next stage config
+        """
+        # Stage 0: easy curriculum
+        curriculum_0 = CurriculumConfig(stage=0, total_stages=5)
+        drone_cam = DroneCamera(fov_deg=90)
+        rig = CameraRigConfig.stereo(baseline_m=0.065, n_drones=1)
+        meta = FrameMetadata(
+            frame_id=0,
+            obstacles=[
+                BBox3D(center=(2.0, 0.0, 0.5), extent=(0.5, 0.5, 0.5), label="tree"),
+            ],
+        )
+
+        # Step 1: Infinigen → DroneEnv config
+        env_cfg = syndata_to_drone_env_config(
+            curriculum=curriculum_0,
+            drone_camera=drone_cam,
+            frame_metadata=meta,
+            num_envs=1024,
+        )
+        assert isinstance(env_cfg, DroneEnvConfig)
+        assert len(env_cfg.obstacle_entities) == 1
+
+        # Step 2: Verify YAML output is valid
+        genesis_yaml = env_cfg.to_genesis_env_yaml()
+        assert genesis_yaml["num_envs"] == 1024
+        rl_yaml = env_cfg.to_rl_env_yaml()
+        assert "task" in rl_yaml
+
+        # Step 3: Simulate a good training outcome
+        outcome = TrainingOutcome(
+            success_rate=0.85,
+            mean_reward=150.0,
+            crash_rate=0.05,
+            timeout_rate=0.10,
+            difficulty=0.0,
+            num_episodes=10000,
+        )
+
+        # Step 4: Get curriculum recommendation
+        adj = outcome_to_curriculum_params(outcome, current_stage=0, total_stages=5)
+        assert adj["action"] == "advance"
+        assert adj["recommended_stage"] == 1
+
+        # Step 5: Apply adjustment
+        next_cfg = apply_curriculum_adjustment(env_cfg, adj)
+        assert isinstance(next_cfg, DroneEnvConfig)
+
+    def test_curriculum_regression_on_failure(self):
+        """When the agent fails badly, curriculum should regress."""
+        outcome = TrainingOutcome(
+            success_rate=0.1,
+            crash_rate=0.7,
+            failure_modes={"ground_collision": 0.4, "roll": 0.2, "pitch": 0.1},
+            difficulty=0.5,
+        )
+        adj = outcome_to_curriculum_params(outcome, current_stage=5, total_stages=10)
+        assert adj["action"] == "regress"
+        assert adj["recommended_stage"] == 4
+        assert adj["scene_adjustments"]["widen_corridors"] is True
+
+    def test_genesis_scene_to_drone_env_round_trip(self, tmp_path):
+        """Build Genesis scene → convert to DroneEnv → verify entities preserved."""
+        # Build Genesis scene from Infinigen outputs
+        genesis_cfg = build_genesis_config(
+            drone_camera=DroneCamera(fov_deg=90),
+            camera_rig=CameraRigConfig.stereo(n_drones=2),
+            randomiser=DomainRandomiser(difficulty=0.5, seed=42),
+            backend="cpu",
+        )
+
+        # Convert to DroneEnv config
+        env_cfg = syndata_to_drone_env_config(scene_config=genesis_cfg, num_envs=256)
+        assert isinstance(env_cfg, DroneEnvConfig)
+
+        # Verify JSON persistence
+        p = tmp_path / "drone_env.json"
+        env_cfg.save_json(p)
+        loaded = DroneEnvConfig.load_json(p)
+        assert loaded.num_envs == 256
