@@ -28,9 +28,6 @@ from infinigen.core.util import blender as butil
 from . import moves
 from .reassignment import pose_backup, restore_pose_backup
 
-# from line_profiler import LineProfiler
-
-
 logger = logging.getLogger(__name__)
 
 GLOBAL_GENERATOR_SINGLETON_CACHE = {}
