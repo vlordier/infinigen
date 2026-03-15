@@ -98,6 +98,9 @@ _MIN_GAP: float = 0.3  # Minimum flyable gap (metres)
 _WALL_THICKNESS: float = 0.1  # Wall / floor / ceiling thickness
 _DEBRIS_SIZE_RANGE: tuple[float, float] = (0.05, 0.3)
 
+# Label substrings used to identify obstacle boxes in world_to_frame_metadata.
+_OBSTACLE_LABEL_TAGS: frozenset[str] = frozenset({"col_", "furniture", "debris"})
+
 # Complexity thresholds defining curriculum stage boundaries.
 # These are shared between InfinigenOverlayHints.from_complexity() and
 # WorldConfig effective value derivation.  Adjust here to reshape the
@@ -513,8 +516,8 @@ class WorldConfig:
     # Visual style
     style: VisualStyle | None = None
 
-    # Derived values
-    _effective: _EffectiveValues = field(init=False, repr=False, default=None)  # type: ignore[assignment]
+    # Derived values (populated by __post_init__, never None after construction)
+    _effective: _EffectiveValues | None = field(init=False, repr=False, default=None)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.complexity <= 1.0:
@@ -1253,12 +1256,11 @@ def world_to_frame_metadata(
     cor_len = config.effective_corridor_length
     cor_h = config.corridor_height
 
-    # Filter obstacle boxes using a set of label substrings
-    _OBSTACLE_LABELS = {"col_", "furniture", "debris"}
+    # Filter obstacle boxes using module-level label tag set
     cam_pos = np.array([0.3, 0.0, cor_h / 2])
     obstacle_boxes = [
         b for b in boxes
-        if any(tag in b.label for tag in _OBSTACLE_LABELS)
+        if any(tag in b.label for tag in _OBSTACLE_LABEL_TAGS)
     ]
     if obstacle_boxes:
         # Vectorized distance computation — batch all centers/extents
