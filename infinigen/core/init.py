@@ -37,6 +37,10 @@ CYCLES_GPUTYPES_PREFERENCE = [
     "CPU",
 ]
 
+# Cycles denoiser selection priority: OPTIX (NVIDIA GPU), then OIDN (bundled,
+# CPU-only, significantly improved in Blender 5.0), then disabled with a warning.
+CYCLES_DENOISER_PRIORITY = ["OPTIX", "OPENIMAGEDENOISE"]
+
 # Cycles volume rendering defaults
 CYCLES_VOLUME_STEP_RATE = 0.1
 CYCLES_VOLUME_MAX_STEPS = 32
@@ -220,13 +224,9 @@ def configure_render_cycles(
 ):
     bpy.context.scene.render.engine = "CYCLES"
 
-    # For now, denoiser is always turned on but can be configured via gin
     bpy.context.scene.cycles.use_denoising = denoise
     if denoise:
-        try:
-            bpy.context.scene.cycles.denoiser = "OPTIX"
-        except RuntimeError as e:
-            logger.warning(f"Cannot use OPTIX denoiser {e}")
+        _configure_denoiser()
 
     bpy.context.scene.cycles.samples = num_samples  # i.e. infinity
     bpy.context.scene.cycles.adaptive_min_samples = min_samples
@@ -245,6 +245,39 @@ def configure_render_cycles(
     frame_end = bpy.context.scene.frame_end
     if frame_end > frame_start:
         bpy.context.scene.render.use_persistent_data = True
+
+
+def _configure_denoiser():
+    """Select the best available Cycles denoiser with a hardened fallback chain.
+
+    Blender 5.0 ships a significantly improved OIDN (Open Image Denoise) model
+    that approaches OptiX quality without requiring an NVIDIA GPU.  The selection
+    order is:
+
+    1. **OPTIX** – best quality, NVIDIA GPU required.
+    2. **OPENIMAGEDENOISE** (OIDN) – excellent quality, CPU-only, bundled in
+       Blender 5.0.  This is the preferred fallback when OptiX is unavailable.
+    3. **Disabled** – if neither denoiser is accessible, denoising is turned off
+       with a clear warning so the operator knows to lower sample counts manually.
+
+    The old code only tried OPTIX and left ``use_denoising=True`` with no denoiser
+    configured when it failed (Blender would silently ignore the setting).  This
+    function always leaves the scene in a defined state.
+    """
+    for denoiser in CYCLES_DENOISER_PRIORITY:
+        try:
+            bpy.context.scene.cycles.denoiser = denoiser
+            logger.info(f"Cycles denoiser set to {denoiser}")
+            return
+        except (RuntimeError, TypeError) as e:
+            logger.debug(f"Denoiser {denoiser} not available: {e}")
+
+    # No supported denoiser — disable to avoid undefined Blender behavior.
+    bpy.context.scene.cycles.use_denoising = False
+    logger.warning(
+        "No supported Cycles denoiser found (tried OPTIX, OPENIMAGEDENOISE). "
+        "Denoising disabled — consider increasing num_samples manually."
+    )
 
 
 @gin.configurable

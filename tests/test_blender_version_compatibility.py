@@ -775,3 +775,104 @@ def test_configure_eevee_next_high_quality_normals_default():
     configure_eevee_next.clear_config()
     configure_eevee_next()
     assert bpy.context.scene.eevee.use_high_quality_normals is True
+
+
+# ---------------------------------------------------------------------------
+# Cycles denoiser fallback chain – _configure_denoiser() (Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_denoiser_sets_engine_to_cycles():
+    """configure_render_cycles() with denoise=True must keep CYCLES as the engine."""
+    import gin
+
+    from infinigen.core.init import configure_render_cycles
+
+    configure_render_cycles.clear_config()
+    gin.clear_config()
+    configure_render_cycles(
+        min_samples=0,
+        num_samples=512,
+        time_limit=0,
+        adaptive_threshold=0.01,
+        exposure=1.0,
+        denoise=True,
+    )
+    assert bpy.context.scene.render.engine == "CYCLES"
+
+
+def test_configure_denoiser_with_denoise_false():
+    """configure_render_cycles() with denoise=False must set use_denoising=False."""
+    import gin
+
+    from infinigen.core.init import configure_render_cycles
+
+    configure_render_cycles.clear_config()
+    gin.clear_config()
+    configure_render_cycles(
+        min_samples=0,
+        num_samples=512,
+        time_limit=0,
+        adaptive_threshold=0.01,
+        exposure=1.0,
+        denoise=False,
+    )
+    assert bpy.context.scene.cycles.use_denoising is False
+
+
+def test_configure_denoiser_fallback_leaves_defined_state():
+    """_configure_denoiser() must leave the scene in a defined state (denoiser set or disabled)."""
+    from infinigen.core.init import _configure_denoiser
+
+    # Save original state
+    orig_use_denoising = bpy.context.scene.cycles.use_denoising
+    bpy.context.scene.cycles.use_denoising = True
+
+    _configure_denoiser()
+
+    # Scene must be in a valid state: either a known denoiser is selected or
+    # use_denoising has been explicitly set to False.
+    # CYCLES_DENOISER_PRIORITY = ["OPTIX", "OPENIMAGEDENOISE"]
+    valid_denoisers = {"OPTIX", "OPENIMAGEDENOISE"}
+    if bpy.context.scene.cycles.use_denoising:
+        assert bpy.context.scene.cycles.denoiser in valid_denoisers, (
+            f"use_denoising=True but denoiser={bpy.context.scene.cycles.denoiser!r} "
+            "is not in the supported set"
+        )
+
+    # Restore
+    bpy.context.scene.cycles.use_denoising = orig_use_denoising
+
+
+def test_configure_render_cycles_sample_count():
+    """configure_render_cycles() must apply the num_samples gin parameter."""
+    import gin
+
+    from infinigen.core.init import configure_render_cycles
+
+    configure_render_cycles.clear_config()
+    gin.clear_config()
+    configure_render_cycles(
+        min_samples=128,
+        num_samples=1024,
+        time_limit=0,
+        adaptive_threshold=0.01,
+        exposure=1.0,
+        denoise=False,
+    )
+    assert bpy.context.scene.cycles.samples == 1024
+    assert bpy.context.scene.cycles.adaptive_min_samples == 128
+
+
+def test_configure_denoiser_gin_params():
+    """configure_render_cycles must expose denoise as a gin-configurable parameter."""
+    import inspect
+
+    from infinigen.core.init import configure_render_cycles
+
+    sig = inspect.signature(configure_render_cycles.__wrapped__)
+    params = sig.parameters
+    assert "denoise" in params
+    assert "num_samples" in params
+    assert "min_samples" in params
+    assert "adaptive_threshold" in params

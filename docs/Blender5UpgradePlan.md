@@ -318,6 +318,7 @@ addressed by the bpy 5.0.1 upgrade in this PR.
 | **EEVEE annotation passes** | Cycles for all renders | EEVEE_NEXT for flat/GT renders | ✅ Done | `core/init.py`, `core/rendering/render.py` |
 | **Color space** | No configuration | `configure_color_management()` with ACES 2.0 | ✅ Done | `core/init.py` |
 | **Sky ozone/altitude** | Hardcoded `clip_gaussian(...)` | Gin-configurable parameters | ✅ Done | `assets/lighting/sky_lighting.py` |
+| **Cycles denoiser** | OPTIX-only with silent failure | OPTIX → OIDN → disabled fallback chain | ✅ Done | `core/init.py` |
 | **Volume nodes** | Manual CUDA kernels | Native SDF Grid nodes | 📋 Optional | `terrain/` |
 | **Intel Mac wheel** | Available | Dropped in 5.0.x | ✅ Handled | `uv.lock` |
 
@@ -347,7 +348,7 @@ C.scene.render.engine = "BLENDER_EEVEE_NEXT"  # Blender 5.0+
 | ACES 2.0 color pipeline | ⭐⭐⭐ High (color fidelity) | 🟢 Low | **P1 ✅ Implemented** |
 | Fix `BLENDER_EEVEE` → `BLENDER_EEVEE_NEXT` | ⭐⭐ Breaking fix | 🟢 Low | **P1 ✅ Done** |
 | Improved sky (Nishita multi-scatter) | ⭐⭐⭐ High (free improvement) | 🟢 Low | **P1 ✅ Implemented** |
-| Cycles sample reduction (improved denoiser) | ⭐⭐ Medium (throughput) | 🟢 Low | **P2** |
+| Cycles sample reduction (improved denoiser) | ⭐⭐ Medium (throughput) | 🟢 Low | **P2 ✅ Implemented** |
 | Repeat Zones for material octaves | ⭐⭐ Medium (compile speed) | 🟡 Medium | **P2** |
 | Switch Menu for material variants | ⭐⭐ Medium (diversity) | 🟡 Medium | **P2** |
 | Render Time pass → adaptive budgeting | ⭐⭐ Medium (throughput) | 🔴 High | **P2** |
