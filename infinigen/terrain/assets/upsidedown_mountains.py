@@ -10,7 +10,7 @@ import cv2
 import gin
 import numpy as np
 from numpy import ascontiguousarray as AC
-from skimage.measure import label
+from scipy.ndimage import label
 from tqdm import tqdm
 
 try:
@@ -106,7 +106,8 @@ def upsidedown_mountains_asset(
     mask = (heightmap > 0).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    component_label = label(mask).astype(np.uint8)
+    component_label, _ = label(mask)
+    component_label = component_label.astype(np.uint8)
     kernel = np.ones((5, 5), np.uint8)
     n_label = component_label.max()
     for l in range(1, n_label + 1):

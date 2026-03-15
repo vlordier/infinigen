@@ -3,8 +3,8 @@
 # Original files authored by Marian Kleineberg: https://github.com/marian42/mesh_to_sdf/tree/master
 
 import numpy as np
+from imageio.v3 import imwrite
 from scipy.spatial.transform import Rotation
-from skimage import io
 
 try:
     import pyrender_wrapper
@@ -191,6 +191,6 @@ class Scan:
 
         depth = self.depth_buffer / np.max(self.depth_buffer) * 255
 
-        io.imsave(filename_depth, depth.astype(np.uint8))
+        imwrite(filename_depth, depth.astype(np.uint8))
         if self.normal_buffer is not None:
-            io.imsave(filename_normals, self.normal_buffer.astype(np.uint8))
+            imwrite(filename_normals, self.normal_buffer.astype(np.uint8))

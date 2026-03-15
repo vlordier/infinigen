@@ -15,7 +15,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import skimage.measure
 from imageio.v3 import imread
 from matplotlib import pyplot as plt
 from tqdm import tqdm
@@ -125,7 +124,14 @@ def process_mask(path, shape):
     mask = imread(path)
     H, W = mask.shape
     scale = (W // shape[0], H // shape[1])
-    out = skimage.measure.block_reduce(mask, scale, np.max)
+    block_h, block_w = scale[1], scale[0]
+    trimmed = mask[: (H // block_h) * block_h, : (W // block_w) * block_w]
+    out = trimmed.reshape(
+        trimmed.shape[0] // block_h,
+        block_h,
+        trimmed.shape[1] // block_w,
+        block_w,
+    ).max(axis=(1, 3))
     return repeat(out, "H W -> H W 3")
 
 
