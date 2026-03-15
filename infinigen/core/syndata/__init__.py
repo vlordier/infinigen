@@ -64,6 +64,11 @@ from infinigen.core.syndata.randomisation import DomainRandomiser
 from infinigen.core.syndata.resolution import resolution_for_stage
 from infinigen.core.syndata.validation import SceneValidator
 from infinigen.core.syndata.world_gen import (
+    COMPLEXITY_BRANCHES,
+    COMPLEXITY_CORRIDOR,
+    COMPLEXITY_DOOM,
+    COMPLEXITY_MAZE,
+    COMPLEXITY_ROOMS,
     InfinigenOverlayHints,
     VisualStyle,
     WorldConfig,
@@ -96,6 +101,11 @@ __all__ = [
     #    WorldConfig(complexity=[0,1]) → generate_world() → list[BBox3D]
     #    Pure 3D layout: corridors → rooms → streets → forests → indoor.
     #    InfinigenOverlayHints describes which asset categories to activate.
+    "COMPLEXITY_BRANCHES",
+    "COMPLEXITY_CORRIDOR",
+    "COMPLEXITY_DOOM",
+    "COMPLEXITY_MAZE",
+    "COMPLEXITY_ROOMS",
     "InfinigenOverlayHints",
     "VisualStyle",
     "WorldConfig",

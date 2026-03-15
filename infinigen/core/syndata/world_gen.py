@@ -82,6 +82,17 @@ _MIN_GAP: float = 0.3  # Minimum flyable gap (metres)
 _WALL_THICKNESS: float = 0.1  # Wall / floor / ceiling thickness
 _DEBRIS_SIZE_RANGE: tuple[float, float] = (0.05, 0.3)
 
+# Complexity thresholds defining curriculum stage boundaries.
+# These are shared between InfinigenOverlayHints.from_complexity() and
+# WorldConfig effective value derivation.  Adjust here to reshape the
+# progression globally.
+COMPLEXITY_CORRIDOR: float = 0.15   # c < this → flat corridor
+COMPLEXITY_ROOMS: float = 0.35      # c < this → textured corridor
+COMPLEXITY_BRANCHES: float = 0.55   # c < this → indoor rooms
+COMPLEXITY_MAZE: float = 0.75       # c < this → branching corridors
+COMPLEXITY_DOOM: float = 0.90       # c < this → multi-level maze
+# c >= COMPLEXITY_DOOM → full photorealism
+
 # ---------------------------------------------------------------------------
 # Infinigen overlay hints
 # ---------------------------------------------------------------------------
@@ -213,7 +224,7 @@ class InfinigenOverlayHints:
         """
         c = max(0.0, min(1.0, complexity))
 
-        if c < 0.15:
+        if c < COMPLEXITY_CORRIDOR:
             return InfinigenOverlayHints(
                 stage_description="Flat corridor — basic avoidance training",
                 environment_type="corridor",
@@ -222,7 +233,7 @@ class InfinigenOverlayHints:
                 material_complexity="flat",
                 lighting_complexity="uniform",
             )
-        if c < 0.35:
+        if c < COMPLEXITY_ROOMS:
             return InfinigenOverlayHints(
                 stage_description="Textured corridor — visual robustness",
                 environment_type="corridor",
@@ -231,7 +242,7 @@ class InfinigenOverlayHints:
                 material_complexity="basic_pbr",
                 lighting_complexity="single_sun",
             )
-        if c < 0.55:
+        if c < COMPLEXITY_BRANCHES:
             return InfinigenOverlayHints(
                 stage_description="Indoor rooms — furniture, doors, multi-light",
                 environment_type="indoor",
@@ -241,7 +252,7 @@ class InfinigenOverlayHints:
                 material_complexity="basic_pbr",
                 lighting_complexity="multi_light",
             )
-        if c < 0.75:
+        if c < COMPLEXITY_MAZE:
             return InfinigenOverlayHints(
                 stage_description="Mixed indoor/outdoor — vegetation, dynamic objects, fog",
                 environment_type="mixed",
@@ -254,7 +265,7 @@ class InfinigenOverlayHints:
                 material_complexity="full_pbr",
                 lighting_complexity="multi_light",
             )
-        if c < 0.90:
+        if c < COMPLEXITY_DOOM:
             return InfinigenOverlayHints(
                 stage_description="Outdoor streets/forest — vehicles, HDR, high-res",
                 environment_type="outdoor_street",
@@ -506,28 +517,28 @@ class WorldConfig:
             else max(_MIN_GAP, 2.0 - 1.5 * c)
         )
 
-        # Rooms emerge at c >= 0.35
+        # Rooms emerge at c >= COMPLEXITY_ROOMS
         eff["num_rooms"] = (
             self.num_rooms if self.num_rooms is not None
-            else max(0, round(8 * max(0, c - 0.35) / 0.65))
+            else max(0, round(8 * max(0, c - COMPLEXITY_ROOMS) / (1.0 - COMPLEXITY_ROOMS)))
         )
 
-        # Branches emerge at c >= 0.55
+        # Branches emerge at c >= COMPLEXITY_BRANCHES
         eff["num_branches"] = (
             self.num_branches if self.num_branches is not None
-            else max(0, round(6 * max(0, c - 0.55) / 0.45))
+            else max(0, round(6 * max(0, c - COMPLEXITY_BRANCHES) / (1.0 - COMPLEXITY_BRANCHES)))
         )
 
-        # Vertical levels at c >= 0.75
+        # Vertical levels at c >= COMPLEXITY_MAZE
         eff["num_levels"] = (
             self.num_levels if self.num_levels is not None
-            else max(1, round(1 + 3 * max(0, c - 0.75) / 0.25))
+            else max(1, round(1 + 3 * max(0, c - COMPLEXITY_MAZE) / (1.0 - COMPLEXITY_MAZE)))
         )
 
-        # Debris density
+        # Debris density emerges at c >= COMPLEXITY_CORRIDOR
         eff["debris_density"] = (
             self.debris_density if self.debris_density is not None
-            else min(1.0, max(0.0, (c - 0.15) / 0.85))
+            else min(1.0, max(0.0, (c - COMPLEXITY_CORRIDOR) / (1.0 - COMPLEXITY_CORRIDOR)))
         )
 
         # Corridor length scales with complexity
