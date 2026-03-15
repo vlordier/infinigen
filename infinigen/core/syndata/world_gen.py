@@ -176,15 +176,15 @@ class InfinigenOverlayHints:
     material_complexity: str = "flat"
     lighting_complexity: str = "uniform"
 
-    _VALID_ENV_TYPES: ClassVar[tuple[str, ...]] = (
+    _VALID_ENV_TYPES: ClassVar[frozenset[str]] = frozenset({
         "corridor", "indoor", "outdoor_street", "outdoor_forest", "mixed",
-    )
-    _VALID_MATERIALS: ClassVar[tuple[str, ...]] = (
+    })
+    _VALID_MATERIALS: ClassVar[frozenset[str]] = frozenset({
         "flat", "basic_pbr", "full_pbr", "subsurface",
-    )
-    _VALID_LIGHTING: ClassVar[tuple[str, ...]] = (
+    })
+    _VALID_LIGHTING: ClassVar[frozenset[str]] = frozenset({
         "uniform", "single_sun", "multi_light", "hdr_environment",
-    )
+    })
 
     def __post_init__(self) -> None:
         if self.environment_type not in self._VALID_ENV_TYPES:
