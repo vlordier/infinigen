@@ -50,7 +50,7 @@ from infinigen.core.syndata.camera_config import CameraRigConfig, DroneCamera
 from infinigen.core.syndata.complexity import CurriculumConfig, curriculum_overrides
 from infinigen.core.syndata.density_scaling import DensityScaler, InterpolationCurve
 from infinigen.core.syndata.episode import EpisodeConfig, TrajectoryType
-from infinigen.core.syndata.metadata import FrameMetadata
+from infinigen.core.syndata.metadata import BBox3D, DepthStats, FrameMetadata
 from infinigen.core.syndata.metrics import SceneBudget
 from infinigen.core.syndata.observation import ObservationConfig, SensorNoiseModel
 from infinigen.core.syndata.parallel_stages import StageGraph
@@ -123,4 +123,8 @@ __all__ = [
     "FlappyColumnConfig",
     "flappy_frame_metadata",
     "generate_flappy_obstacles",
+    # ── 4. Shared data contracts ──
+    #    Core types consumed by external Genesis/DroneEnv bridge projects.
+    "BBox3D",
+    "DepthStats",
 ]

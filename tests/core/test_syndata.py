@@ -2567,3 +2567,80 @@ class TestReprMethods:
         r = repr(wc)
         assert "WorldConfig" in r
         assert "complexity=0.5" in r
+
+
+# ── Commit 10: Benchmark / performance tests + init re-exports ──────────
+
+
+class TestBenchmarkWorldGen:
+    """Performance benchmarks for world generation (timing assertions)."""
+
+    def test_generate_world_under_100ms(self):
+        """World generation should complete in under 100ms for any complexity."""
+        import time
+        from infinigen.core.syndata.world_gen import WorldConfig, generate_world
+        for c in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            cfg = WorldConfig(complexity=c, seed=42)
+            start = time.perf_counter()
+            generate_world(cfg)
+            elapsed = time.perf_counter() - start
+            assert elapsed < 0.1, f"generate_world(c={c}) took {elapsed:.3f}s (limit 100ms)"
+
+    def test_flappy_generation_under_10ms(self):
+        """Flappy obstacle generation should be extremely fast."""
+        import time
+        from infinigen.core.syndata.pretraining import FlappyColumnConfig, generate_flappy_obstacles
+        cfg = FlappyColumnConfig.hard()
+        start = time.perf_counter()
+        for _ in range(100):
+            generate_flappy_obstacles(cfg, seed=42)
+        elapsed = time.perf_counter() - start
+        assert elapsed < 1.0, f"100× flappy generation took {elapsed:.3f}s (limit 1s)"
+
+    def test_validation_under_1ms(self):
+        """Scene validation should be near-instant."""
+        import time
+        sv = SceneValidator()
+        meta: dict[str, object] = {
+            "obstacles": [{"center": (0, 0, 0), "extent": (1, 1, 1)}] * 10,
+            "depth_stats": {"min_m": 0.5, "max_m": 50.0},
+            "traversability_ratio": 0.5,
+            "poly_count": 50000,
+        }
+        start = time.perf_counter()
+        for _ in range(1000):
+            sv.validate(meta)
+        elapsed = time.perf_counter() - start
+        assert elapsed < 1.0, f"1000× validation took {elapsed:.3f}s (limit 1s)"
+
+    def test_bbox3d_creation_performance(self):
+        """BBox3D (frozen+slots) creation should handle 10k instances quickly."""
+        import time
+        start = time.perf_counter()
+        boxes = [
+            BBox3D(center=(float(i), 0.0, 0.0), extent=(0.5, 0.5, 0.5))
+            for i in range(10000)
+        ]
+        elapsed = time.perf_counter() - start
+        assert len(boxes) == 10000
+        assert elapsed < 1.0, f"10k BBox3D creation took {elapsed:.3f}s (limit 1s)"
+
+
+class TestInitReExports:
+    """Test that __init__.py re-exports BBox3D and DepthStats."""
+
+    def test_bbox3d_importable_from_package(self):
+        from infinigen.core.syndata import BBox3D as BB
+        b = BB(center=(1, 2, 3), extent=(0.5, 0.5, 0.5))
+        assert b.center == (1, 2, 3)
+
+    def test_depth_stats_importable_from_package(self):
+        from infinigen.core.syndata import DepthStats as DS
+        ds = DS(min_m=1.0, max_m=100.0)
+        assert ds.min_m == 1.0
+
+    def test_all_exports_importable(self):
+        """All names in __all__ should be importable."""
+        import infinigen.core.syndata as syndata
+        for name in syndata.__all__:
+            assert hasattr(syndata, name), f"{name} not importable from syndata"
