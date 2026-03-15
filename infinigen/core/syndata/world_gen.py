@@ -648,6 +648,16 @@ class WorldConfig:
         """
         return InfinigenOverlayHints.from_complexity(self.complexity)
 
+    def __repr__(self) -> str:
+        """Concise representation with complexity and key effective values."""
+        hints = self.overlay_hints
+        return (
+            f"WorldConfig(complexity={self.complexity}, seed={self.seed}, "
+            f"cols={self.effective_num_columns}, rooms={self.effective_num_rooms}, "
+            f"branches={self.effective_num_branches}, levels={self.effective_num_levels}, "
+            f"env={hints.environment_type!r})"
+        )
+
     # ---- Preset factories ---------------------------------------------------
 
     @staticmethod

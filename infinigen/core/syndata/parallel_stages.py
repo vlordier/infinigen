@@ -153,3 +153,11 @@ class StageGraph:
         for wave in self.parallel_groups():
             order.extend(wave)
         return order
+
+    def __len__(self) -> int:
+        """Number of stages in the graph."""
+        return len(self.stages)
+
+    def __contains__(self, name: str) -> bool:
+        """Check whether a stage name exists in the graph."""
+        return any(s.name == name for s in self.stages)
