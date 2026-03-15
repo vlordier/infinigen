@@ -74,6 +74,12 @@ class StageGraph:
 
     stages: tuple[Stage, ...] = field(default_factory=lambda: _DEFAULT_STAGES)
 
+    # Cached name set for O(1) __contains__ (populated in __post_init__)
+    _name_set: frozenset[str] = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "_name_set", frozenset(s.name for s in self.stages))
+
     def _by_name(self) -> dict[str, Stage]:
         """Build a name → Stage lookup dict for dependency resolution."""
         return {s.name: s for s in self.stages}
@@ -163,5 +169,5 @@ class StageGraph:
         return len(self.stages)
 
     def __contains__(self, name: str) -> bool:
-        """Check whether a stage name exists in the graph."""
-        return any(s.name == name for s in self.stages)
+        """Check whether a stage name exists in the graph (O(1) lookup)."""
+        return name in self._name_set
