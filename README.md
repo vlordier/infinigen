@@ -25,6 +25,7 @@ For local Python-module development, the fastest runtime sanity check path is:
 ```bash
 make setup-local-bpy-env
 make check-bpy-runtime
+make test-repo-health
 ```
 
 ### Hello Room: Getting Started with Infinigen Indoors

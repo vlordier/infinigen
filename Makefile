@@ -1,5 +1,5 @@
 .PHONY: cleanpip cleanpy clean_terrain terrain customgt flip_fluids default \
-	check-bpy-runtime setup-local-bpy-env \
+	check-bpy-runtime setup-local-bpy-env test-repo-health \
        docker-build docker-build-cuda docker-build-arm64 docker-clean \
        docker-setup docker-run docker-run-no-opengl docker-run-no-gpu \
        docker-run-no-gpu-opengl
@@ -32,6 +32,9 @@ check-bpy-runtime:
 
 setup-local-bpy-env:
 	bash scripts/install/setup_local_bpy_env.sh
+
+test-repo-health:
+	.venv/bin/python -m pytest tests/test_repo_health.py -q
 
 # ---- Docker configuration ----
 

@@ -98,11 +98,23 @@ runtime automatically, use:
 scripts/install/setup_local_bpy_env.sh
 ```
 
+By default this also installs the repo itself in editable mode with the `dev`
+extra, so local test and lint tooling are available immediately.
+
+Useful overrides:
+
+```bash
+INSTALL_EXTRAS= scripts/install/setup_local_bpy_env.sh
+INSTALL_EXTRAS=dev,terrain,vis scripts/install/setup_local_bpy_env.sh
+INSTALL_EDITABLE=0 scripts/install/setup_local_bpy_env.sh
+```
+
 Equivalent Makefile helpers are also available:
 
 ```bash
 make setup-local-bpy-env
 make check-bpy-runtime
+make test-repo-health
 ```
 
 Or with an explicit interpreter path:
