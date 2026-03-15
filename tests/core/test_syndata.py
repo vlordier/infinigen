@@ -1928,9 +1928,9 @@ class TestWorldGenBoundaryComplexity:
             COMPLEXITY_MAZE,
             COMPLEXITY_ROOMS,
         )
-        for c in [COMPLEXITY_CORRIDOR, COMPLEXITY_ROOMS, COMPLEXITY_BRANCHES,
-                   COMPLEXITY_MAZE, COMPLEXITY_DOOM]:
-            cfg = WorldConfig(complexity=c, seed=42)
+        for threshold in [COMPLEXITY_CORRIDOR, COMPLEXITY_ROOMS, COMPLEXITY_BRANCHES,
+                          COMPLEXITY_MAZE, COMPLEXITY_DOOM]:
+            cfg = WorldConfig(complexity=threshold, seed=42)
             boxes = generate_world(cfg)
             assert len(boxes) > 0
 
@@ -1967,7 +1967,7 @@ class TestWorldConfigPresets:
         assert complexities == sorted(complexities)
 
     def test_preset_box_count_increases(self):
-        """Higher complexity presets should produce more boxes."""
+        """Higher complexity presets should produce more boxes overall."""
         presets = [
             WorldConfig.flappy(seed=42),
             WorldConfig.corridor(seed=42),
@@ -1977,7 +1977,12 @@ class TestWorldConfigPresets:
             WorldConfig.doom(seed=42),
         ]
         counts = [len(generate_world(p)) for p in presets]
-        # Allow non-strict monotonicity (seed variation), but overall trend
+        # Check that the majority of consecutive pairs are non-decreasing
+        increasing_pairs = sum(
+            1 for a, b in zip(counts, counts[1:]) if b >= a
+        )
+        assert increasing_pairs >= 3, f"Expected mostly increasing, got {counts}"
+        # Overall: last must exceed first
         assert counts[-1] > counts[0]
 
     def test_from_curriculum_progress_range(self):

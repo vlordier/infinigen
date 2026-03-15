@@ -66,13 +66,12 @@ class DensityScaler:
         if not 0.0 <= self.difficulty <= 1.0:
             msg = "difficulty must be in [0.0, 1.0]"
             raise ValueError(msg)
-        # Accept both string and InterpolationCurve enum values
-        curve_val = self.curve.value if isinstance(self.curve, InterpolationCurve) else self.curve
-        if curve_val not in self._CURVES:
+        # Normalize: accept InterpolationCurve enum or plain string, always store as string
+        if isinstance(self.curve, InterpolationCurve):
+            object.__setattr__(self, "curve", self.curve.value)
+        if self.curve not in self._CURVES:
             msg = f"curve must be one of {sorted(self._CURVES)}"
             raise ValueError(msg)
-        if curve_val != self.curve:
-            object.__setattr__(self, "curve", curve_val)
         if self.min_multiplier < 0:
             msg = f"min_multiplier must be non-negative, got {self.min_multiplier}"
             raise ValueError(msg)

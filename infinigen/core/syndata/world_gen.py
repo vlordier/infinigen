@@ -786,7 +786,7 @@ def _make_wall(
     dz: float,
     label: str,
 ) -> BBox3D:
-    """Create a wall/surface BBox3D at position ``(x, y, z)`` with half-extents ``(dx, dy, dz)``."""
+    """Create a wall/surface BBox3D centered at ``(x, y, z)`` with half-extents ``(dx, dy, dz)`` per axis."""
     return BBox3D(
         center=(x, y, z),
         extent=(dx, dy, dz),
