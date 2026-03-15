@@ -33,12 +33,6 @@ from infinigen.core.constraints.example_solver.geometry.parse_scene import add_t
 from infinigen.core.util import blender as butil
 from infinigen.core.util.logging import lazydebug
 
-# import fcl
-
-
-# from infinigen.core.tagging import tag_object,tag_system
-# from scipy.optimize import dual_annealing
-# from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 

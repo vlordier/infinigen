@@ -166,7 +166,9 @@ def nodegroup_petal_cross_contour(nw: NodeWrangler):
 @node_utils.to_nodegroup(
     "nodegroup_petal_z_contour", singleton=False, type="GeometryNodeTree"
 )
-def nodegroup_petal_z_contour(nw: NodeWrangler, curve_param=[]):
+def nodegroup_petal_z_contour(nw: NodeWrangler, curve_param=None):
+    if curve_param is None:
+        curve_param = []
     # Code generated using version 2.4.3 of the node_transpiler
 
     spline_parameter = nw.new_node(Nodes.SplineParameter)
@@ -330,7 +332,9 @@ def nodegroup_base_perturbation(nw: NodeWrangler, R=1.0):
 @node_utils.to_nodegroup(
     "nodegroup_petal_geometry", singleton=False, type="GeometryNodeTree"
 )
-def nodegroup_petal_geometry(nw: NodeWrangler, curve_param=[]):
+def nodegroup_petal_geometry(nw: NodeWrangler, curve_param=None):
+    if curve_param is None:
+        curve_param = []
     # Code generated using version 2.4.3 of the node_transpiler
 
     curve_line = nw.new_node(Nodes.CurveLine, input_kwargs={"End": (0.0, 0.0, 0.2)})

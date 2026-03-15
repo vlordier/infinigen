@@ -23,11 +23,8 @@ from infinigen.core.constraints import constraint_language as cl
 from infinigen.core.constraints.constraint_language import util as iu
 from infinigen.core.constraints.example_solver import state_def
 
-# from infinigen.core.util import blender as butil
 from infinigen.core.constraints.example_solver.geometry import planes as planes
 from infinigen.core.util import blender as butil
-
-# import fcl
 
 
 logger = logging.getLogger(__name__)
@@ -344,32 +341,6 @@ def move_obj_random_pt(
 
     random_point_global = random_sample_point(state, b_obj, face_mask, plane)
     iu.set_location(scene, a, random_point_global)
-
-
-# def place_randomly(scene, a, b, visualize = False):
-#     """
-#     place a randomly on b.
-#     """
-#     a_blender_mesh  = blender_objs_from_names(a)[0]
-#     a_trimesh = meshes_from_names(scene, a)[0]
-#     b_blender_mesh = blender_objs_from_names(b)[0]
-#     b_trimesh = meshes_from_names(scene, b)[0]
-#     b_proj = project_to_xy_poly(b_trimesh)
-
-#     xy_loc = sample_random_point(b_proj)
-#     if visualize:
-#         fig, ax = plt.subplots()
-#         if isinstance(b_proj, Polygon):
-#             x, y = b_proj.exterior.xy
-#             ax.fill(x, y, alpha=0.5, fc='red', ec='black', label='Polygon b')
-#         elif isinstance(b_proj, MultiPolygon):
-#             for sub_poly in b_proj.geoms:
-#                 x, y = sub_poly.exterior.xy
-#                 ax.fill(x, y, alpha=0.5, fc='red', ec='black', label='Polygon b')
-#         ax.plot(xy_loc.x, xy_loc.y, 'o', color='black', label='Random point')
-#         plt.show()
-
-#     set_location(scene, a, Vector((xy_loc.x, xy_loc.y, 0)))
 
 
 def supported_by(scene, a, b, visualize=False):

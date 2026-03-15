@@ -376,7 +376,7 @@ def keep_cam_pose_proposal(
 
     if rparams := camera_selection_ratio:
         for q in rparams:
-            if type(q) is tuple and q[0] == SelectionCriterions.CloseUp:
+            if isinstance(q, tuple) and q[0] == SelectionCriterions.CloseUp:
                 closeup = len([d for d in dists if d < q[1]]) / n_pix
                 if closeup < rparams[q][0] or closeup > rparams[q][1]:
                     logger.debug(f"keep_cam_pose_proposal rejects {closeup=} for {q=}")

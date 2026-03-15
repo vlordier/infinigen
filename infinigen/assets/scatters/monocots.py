@@ -34,9 +34,6 @@ def apply(obj, n=4, grass=None, selection=None, **kwargs):
 
 
 class Monocots:
-    def __init__(self):
-        pass
-
     def apply(self, obj, n=4, grass=None, selection=None, **kwargs):
         monocots = make_asset_collection(
             MonocotFactory(np.random.randint(1e5), grass=grass),

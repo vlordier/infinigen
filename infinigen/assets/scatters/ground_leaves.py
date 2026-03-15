@@ -25,9 +25,6 @@ def apply(obj, selection=None, density=70, season=None, **kwargs):
 
 
 class GroundLeaves:
-    def __init__(self):
-        pass
-
     def apply(self, obj, selection=None, density=70, season=None, **kwargs):
         leaf_col = random_leaf_collection(season=season)
         return scatter_instances(

@@ -117,11 +117,6 @@ NPTYPEDIM_ATTR = {
 }
 
 
-# class ParamType:
-#     Pointwise = "Pointwise"
-#     Constant = "Constant"
-
-
 class KernelDataType:
     float = "float"
     float2 = "float2_nonbuiltin"

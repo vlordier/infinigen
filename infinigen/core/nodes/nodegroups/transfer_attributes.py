@@ -100,7 +100,9 @@ def copy_geom_info(nw, source, target):
     )
 
 
-def transfer_att_node(nw, source, target, attribute_to_transfer_list=[]):
+def transfer_att_node(nw, source, target, attribute_to_transfer_list=None):
+    if attribute_to_transfer_list is None:
+        attribute_to_transfer_list = []
     # create a geom node in the non-remeshed version of the mesh (i.e., source)
     object_info = nw.new_node(Nodes.ObjectInfo, input_kwargs={"Object": target})
     group_input = nw.new_node(

@@ -164,8 +164,10 @@ def run_cleanup():
             d.remove(d_)
 
 
-def reset_scene(add_camera=False, clear_materials=False, obj_to_keep_list=[]):
+def reset_scene(add_camera=False, clear_materials=False, obj_to_keep_list=None):
     """Clear and reset scene."""
+    if obj_to_keep_list is None:
+        obj_to_keep_list = []
     set_active_obj(D.objects[0])
 
     for obj in D.objects:

@@ -97,7 +97,7 @@ class LeafFactory(AssetFactory):
 class BerryFactory(AssetFactory):
 
     def __init__(self, factory_seed, genome, coarse=False):
-        super(BerryFactory, self).__init__(factory_seed, coarse=coarse)
+        super().__init__(factory_seed, coarse=coarse)
         self.genome = dict(leaf_width=0.5, alpha=0.3, use_wave=True)
         self.genome.update(genome)
 

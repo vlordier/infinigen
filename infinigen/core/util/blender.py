@@ -184,9 +184,9 @@ class SelectObjects:
 
 
 class DisableModifiers:
-    def __init__(self, objs, keep=[]):
+    def __init__(self, objs, keep=None):
         self.objs = objs if isinstance(objs, list) else [objs]
-        self.keep = keep
+        self.keep = keep if keep is not None else []
         self.modifiers_disabled = []
 
     def __enter__(self):
@@ -489,7 +489,9 @@ def spawn_icosphere(radius=1, location=(0, 0, 0), scale=(1, 1, 1), name=None):
     return _get_and_name_active_object(name)
 
 
-def clear_scene(keep=[], targets=None, materials=True):
+def clear_scene(keep=None, targets=None, materials=True):
+    if keep is None:
+        keep = []
     D = bpy.data
     if targets is None:
         targets = get_all_bpy_data_targets()

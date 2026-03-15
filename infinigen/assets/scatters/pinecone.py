@@ -42,9 +42,6 @@ def apply(obj, n=5, selection=None):
 
 
 class Pinecone:
-    def __init__(self):
-        pass
-
     def apply(self, obj, n=5, selection=None):
         n_species = np.random.randint(2, 3)
         factories = [PineconeFactory(np.random.randint(1e5)) for i in range(n_species)]
