@@ -6,16 +6,7 @@
 
 Defines temporal structure for rendering: frame range, FPS, and trajectory
 type.  These map directly to ``execute_tasks.frame_range`` and
-``execute_tasks.fps`` gin bindings for the **Infinigen pipeline**.
-
-**Separation of concerns**: this module configures how Infinigen *renders*
-frames.  The actual simulation loop, drone dynamics, reward computation,
-and episode management are handled by **Genesis World** and
-**GenesisDroneEnv**.  Use
-:func:`~infinigen.core.syndata.genesis_export.episode_to_genesis` to
-convert an :class:`EpisodeConfig` to Genesis-native parameters
-(:class:`GenesisEpisodeConfig`) — Genesis handles ``scene.step(dt)``,
-vectorised env resets, and video recording natively.
+``execute_tasks.fps`` gin bindings for the Infinigen pipeline.
 
 All helpers are pure Python — no ``bpy`` dependency.
 """

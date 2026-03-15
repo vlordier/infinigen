@@ -8,11 +8,6 @@ Configures camera optics (FoV, focal length, aspect ratio) and rig
 layouts (stereo baseline, multi-drone positions) matching Infinigen's
 ``spawn_camera_rigs`` gin structure.
 
-**Infinigen pipeline config** — these define how Infinigen renders
-the scene.  When using Genesis World, convert via
-:func:`~infinigen.core.syndata.genesis_export.camera_from_syndata`
-to Genesis camera parameters (``gs.Camera``).
-
 All helpers are pure Python — no ``bpy`` dependency.
 """
 

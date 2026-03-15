@@ -4,17 +4,9 @@
 
 """Observation-space configuration for the Infinigen rendering pipeline.
 
-Defines which Blender render passes the agent's observation includes
+Defines which Blender render passes to include in the agent's observation
 and what post-processing (sensor noise) is applied.  Maps directly to
 Infinigen's ``render_image`` gin bindings.
-
-**Separation of concerns**: this module configures what Infinigen
-*renders* (which passes, what noise model).  The actual multi-pass
-camera rendering in the physics simulation is handled by **Genesis
-World** natively via ``camera.render(rgb=True, depth=True, ...)``.
-Use :func:`~infinigen.core.syndata.genesis_export.observation_to_genesis`
-to convert an :class:`ObservationConfig` to Genesis-native parameters.
-Genesis also handles sensor noise through its differentiable renderer.
 
 All helpers are pure Python — no ``bpy`` dependency.
 """

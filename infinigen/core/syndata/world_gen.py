@@ -4,18 +4,13 @@
 
 """Parametric 3D world generator for progressive curriculum pre-training.
 
-This module is the **Infinigen side** of the curriculum pipeline.  It
-generates pure 3D geometry (axis-aligned bounding boxes) describing
-training environments of increasing navigational complexity.
+Generates pure 3D geometry (axis-aligned bounding boxes) describing
+training environments of increasing navigational complexity.  Output
+is ``list[BBox3D]`` — pure geometry, no physics or RL types.
 
-**Separation of concerns:**
-
-- **Infinigen** (this module): generates 3D geometry and asset hints.
-  Output is ``list[BBox3D]`` — no physics, no RL, no Genesis types.
-- **Genesis World**: imports this geometry for physics simulation.
-  Conversion via :func:`world_to_genesis_entities` (separate step).
-- **GenesisDroneEnv**: runs the RL gym on top of Genesis.
-  Conversion via :func:`world_to_drone_env_config` (separate step).
+:class:`InfinigenOverlayHints` describes which Infinigen asset categories
+(vegetation, furniture, vehicles, weather) and render quality (texture
+resolution, material complexity) to activate at each complexity level.
 
 Curriculum progression
 ----------------------
@@ -1229,170 +1224,12 @@ def world_to_frame_metadata(
     }
 
 
-def world_to_genesis_entities(
-    boxes: list[BBox3D],
-) -> list[dict[str, Any]]:
-    """Convert world geometry to Genesis entity config dicts.
-
-    **Bridge layer: Infinigen → Genesis World.**
-
-    Each BBox3D becomes a fixed Box entity suitable for
-    ``scene.add_entity(gs.morphs.Box(size=..., pos=..., fixed=True))``.
-
-    Note: ``BBox3D.extent`` stores half-extents, so Genesis ``size``
-    is ``extent * 2`` in each dimension.
-
-    Parameters
-    ----------
-    boxes : list[BBox3D]
-        Output from :func:`generate_world` (pure Infinigen geometry).
-
-    Returns
-    -------
-    list[dict[str, Any]]
-        Genesis entity config dicts with ``name``, ``morph_type``,
-        ``pos``, ``is_fixed``, and ``extra`` keys.
-    """
-    entities: list[dict[str, Any]] = []
-    if not isinstance(boxes, list):
-        msg = f"boxes must be a list, got {type(boxes).__name__}"
-        raise TypeError(msg)
-    for b in boxes:
-        dx, dy, dz = b.extent
-        entities.append({
-            "name": b.label,
-            "morph_type": "Box",
-            "pos": b.center,
-            "is_fixed": True,
-            "extra": {"size": (dx * 2, dy * 2, dz * 2)},
-        })
-    return entities
-
-
-def world_to_drone_env_config(
-    config: WorldConfig,
-    boxes: list[BBox3D],
-    *,
-    num_envs: int = 2048,
-    dt: float = 0.01,
-) -> dict[str, Any]:
-    """Build a DroneEnvConfig-compatible dict from world geometry.
-
-    **Bridge layer: Infinigen → GenesisDroneEnv.**
-
-    Translates the pure 3D geometry into RL simulation parameters
-    consumed by GenesisDroneEnv: map bounds, reward scales, termination
-    conditions, command ranges, and obstacle entity lists.
-
-    Infinigen only *produces* this configuration — GenesisDroneEnv
-    consumes it to set up the physics environment, drone dynamics,
-    reward shaping, and episode management.
-
-    Parameters
-    ----------
-    config : WorldConfig
-        The world config used for generation (Infinigen side).
-    boxes : list[BBox3D]
-        The generated obstacles from :func:`generate_world`.
-    num_envs : int
-        Number of parallel environments for vectorised training
-        (GenesisDroneEnv parameter).
-    dt : float
-        Physics timestep in seconds (Genesis World parameter).
-
-    Returns
-    -------
-    dict[str, Any]
-        Configuration dict compatible with
-        :class:`~infinigen.core.syndata.drone_env_bridge.DroneEnvConfig`.
-
-    Raises
-    ------
-    ValueError
-        If *num_envs* < 1 or *dt* <= 0.
-    """
-    if num_envs < 1:
-        msg = f"num_envs must be >= 1, got {num_envs}"
-        raise ValueError(msg)
-    if dt <= 0:
-        msg = f"dt must be positive, got {dt}"
-        raise ValueError(msg)
-
-    cor_len = config.effective_corridor_length
-    cor_w = config.corridor_width
-    cor_h = config.corridor_height
-    init_z = cor_h / 2
-    half_w = cor_w / 4
-
-    # Build obstacle entities
-    obstacle_entities: list[dict[str, Any]] = []
-    for b in boxes:
-        dx, dy, dz = b.extent
-        obstacle_entities.append({
-            "name": b.label,
-            "morph_type": "Box",
-            "pos": b.center,
-            "size": (dx * 2, dy * 2, dz * 2),
-            "fixed": True,
-            "collision": True,
-        })
-
-    # Crash penalty scales with complexity
-    crash_penalty = -10.0 - 10.0 * config.complexity
-
-    # Roll/pitch termination gets stricter with complexity
-    term_angle = max(30.0, 90.0 - 60.0 * config.complexity)
-
-    return {
-        "num_envs": num_envs,
-        "dt": dt,
-        "cam_res": (128, 128),
-        "drone_init_pos": (0.3, 0.0, init_z),
-        "map_size": (cor_len + 1.0, cor_w + 1.0),
-        "obstacle_entities": obstacle_entities,
-        "episode_length_s": 10.0 + 20.0 * config.complexity,
-        "max_episode_length": round(1000 + 2000 * config.complexity),
-        "init_pos_range": {
-            "x": (-0.1, 0.1),
-            "y": (-half_w, half_w),
-            "z": (init_z - 0.1, init_z + 0.1),
-        },
-        "reward_scales": {
-            "target": 15.0,
-            "smooth": -0.0001,
-            "yaw": 0.0,
-            "angular": -0.0001,
-            "crash": crash_penalty,
-        },
-        "command_ranges": {
-            "x": (cor_len * 0.7, cor_len * 0.9),
-            "y": (-0.3 - 0.5 * config.complexity, 0.3 + 0.5 * config.complexity),
-            "z": (init_z - 0.2, init_z + 0.2),
-        },
-        "termination_conditions": {
-            "roll_deg": term_angle,
-            "pitch_deg": term_angle,
-            "ground_m": 0.08,
-            "x_m": cor_len + 0.5,
-            "y_m": cor_w / 2 + 0.5,
-            "z_m": cor_h + 0.3,
-        },
-        "world_summary": world_summary(config),
-    }
-
-
 def world_gin_overrides(config: WorldConfig) -> dict[str, object]:
-    """Return **Infinigen-specific** gin-compatible overrides for the world.
+    """Return Infinigen gin-compatible overrides for the world.
 
     Maps world config to scene-generation parameters that control
     Infinigen's procedural pipeline: grid resolution, object density,
     material properties, fog, clouds, and lighting.
-
-    **Infinigen only** — these are NOT Genesis simulation settings.
-    Genesis receives its configuration through separate bridge functions:
-
-    - :func:`world_to_genesis_entities` — 3D geometry for physics
-    - :func:`world_to_drone_env_config` — RL environment parameters
 
     Parameters
     ----------
