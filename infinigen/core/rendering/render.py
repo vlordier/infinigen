@@ -481,13 +481,21 @@ def render_image(
     dof_aperture_fstop=2.8,
     flat_shading=False,
     override_num_samples=None,
+    use_eevee_next_for_annotations=False,
 ):
     tic = time.time()
 
     for exclude in excludes:
         bpy.data.objects[exclude].hide_render = True
 
-    init.configure_cycles_devices()
+    using_eevee = flat_shading and use_eevee_next_for_annotations
+    if using_eevee:
+        # EEVEE Next is 10–50× faster than Cycles for flat annotation passes
+        # (depth, normals, object index) because flat random-color materials
+        # don't benefit from path tracing.
+        init.configure_eevee_next()
+    else:
+        init.configure_cycles_devices()
     set_displacement_mode()
 
     tmp_dir = frames_folder.parent.resolve() / "tmp"
@@ -496,7 +504,8 @@ def render_image(
 
     camrig_id, subcam_id = cam_util.get_id(camera)
 
-    if override_num_samples is not None:  # usually used for GT
+    if override_num_samples is not None and not using_eevee:
+        # override_num_samples is a Cycles-only property; skip for EEVEE
         bpy.context.scene.cycles.samples = override_num_samples
 
     if flat_shading:

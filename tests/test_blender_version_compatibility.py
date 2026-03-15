@@ -700,3 +700,78 @@ def test_nishita_lighting_gin_params_have_defaults():
     altitude_default = sig.parameters["altitude"].default
     assert ozone_default is not inspect.Parameter.empty
     assert altitude_default is not inspect.Parameter.empty
+
+
+# ---------------------------------------------------------------------------
+# EEVEE Next annotation passes – configure_eevee_next() (Blender 5.0 upgrade)
+# ---------------------------------------------------------------------------
+
+
+def test_configure_eevee_next_sets_engine():
+    """configure_eevee_next() must set the render engine to BLENDER_EEVEE_NEXT."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.render.engine == "BLENDER_EEVEE_NEXT"
+
+
+def test_configure_eevee_next_disables_shadows_by_default():
+    """configure_eevee_next() must disable shadows by default for faster annotation rendering."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.eevee.use_shadows is False
+
+
+def test_configure_eevee_next_single_taa_sample():
+    """configure_eevee_next() must use 1 TAA sample by default (sufficient for flat shading)."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.eevee.taa_render_samples == 1
+
+
+def test_configure_eevee_next_shadows_enabled_when_requested():
+    """configure_eevee_next(use_shadows=True) must enable shadows."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next(use_shadows=True)
+    assert bpy.context.scene.eevee.use_shadows is True
+
+
+def test_render_image_has_eevee_annotation_param():
+    """render_image must expose use_eevee_next_for_annotations as a gin parameter."""
+    import inspect
+
+    from infinigen.core.rendering.render import render_image
+
+    sig = inspect.signature(render_image.__wrapped__)
+    assert "use_eevee_next_for_annotations" in sig.parameters
+
+
+def test_configure_eevee_next_gin_params():
+    """configure_eevee_next must expose all relevant settings as gin parameters."""
+    import inspect
+
+    from infinigen.core.init import configure_eevee_next
+
+    sig = inspect.signature(configure_eevee_next.__wrapped__)
+    params = sig.parameters
+    assert "use_shadows" in params
+    assert "taa_render_samples" in params
+    assert "use_gtao" in params
+    assert "use_high_quality_normals" in params
+    assert "use_bloom" in params
+
+
+def test_configure_eevee_next_high_quality_normals_default():
+    """configure_eevee_next() must enable high-quality normals by default for accurate annotation."""
+    from infinigen.core.init import configure_eevee_next
+
+    configure_eevee_next.clear_config()
+    configure_eevee_next()
+    assert bpy.context.scene.eevee.use_high_quality_normals is True

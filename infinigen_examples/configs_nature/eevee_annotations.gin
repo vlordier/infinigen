@@ -1,0 +1,23 @@
+# EEVEE Next annotation-pass preset for Infinigen (Blender 5.0+)
+#
+# Switches the flat/GT render (depth, normals, object index, instance
+# segmentation) from Cycles ray tracing to EEVEE Next rasterization.
+# EEVEE Next renders flat random-color materials 10–50x faster than Cycles
+# because those materials require zero bounced lighting.
+#
+# Usage:
+#   python -m infinigen.launch ... --configs base eevee_annotations
+#
+# The full/Cycles render is not affected; only flat_shading=True renders
+# switch to EEVEE.
+
+flat/render_image.use_eevee_next_for_annotations = True
+
+# EEVEE Next annotation configuration:
+# - 1 TAA sample is enough for flat-shaded materials
+# - Shadows and AO are disabled (not needed for annotation)
+configure_eevee_next.taa_render_samples = 1
+configure_eevee_next.use_shadows = False
+configure_eevee_next.use_gtao = False
+configure_eevee_next.use_bloom = False
+configure_eevee_next.use_high_quality_normals = True
