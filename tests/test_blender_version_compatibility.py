@@ -1013,3 +1013,100 @@ def test_render_image_enable_render_time_pass_param():
     assert sig.parameters["enable_render_time_pass"].default is False, (
         "enable_render_time_pass must default to False"
     )
+
+
+# ---------------------------------------------------------------------------
+# P2: Repeat Zones & Switch Menu — Blender 5.0 node system additions
+# ---------------------------------------------------------------------------
+
+
+def test_nodes_repeat_input_defined():
+    """Nodes.RepeatInput must be defined in node_info (bl5.0 Repeat Zone)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "RepeatInput"), "Nodes.RepeatInput missing"
+    assert Nodes.RepeatInput == "GeometryNodeRepeatInput"
+
+
+def test_nodes_repeat_output_defined():
+    """Nodes.RepeatOutput must be defined in node_info (bl5.0 Repeat Zone)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "RepeatOutput"), "Nodes.RepeatOutput missing"
+    assert Nodes.RepeatOutput == "GeometryNodeRepeatOutput"
+
+
+def test_nodes_menu_switch_defined():
+    """Nodes.MenuSwitch must be defined in node_info (bl5.0 Menu Switch)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "MenuSwitch"), "Nodes.MenuSwitch missing"
+    assert Nodes.MenuSwitch == "GeometryNodeMenuSwitch"
+
+
+def test_nodes_foreach_geometry_element_defined():
+    """ForEachGeometryElement Input/Output must be defined (bl5.0)."""
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert hasattr(Nodes, "ForEachGeometryElementInput"), (
+        "Nodes.ForEachGeometryElementInput missing"
+    )
+    assert hasattr(Nodes, "ForEachGeometryElementOutput"), (
+        "Nodes.ForEachGeometryElementOutput missing"
+    )
+
+
+def test_blender5_zone_node_types_constant():
+    """BLENDER5_ZONE_NODE_TYPES must be a frozenset containing the zone node values."""
+    from infinigen.core.nodes.node_wrangler import BLENDER5_ZONE_NODE_TYPES
+    from infinigen.core.nodes.node_info import Nodes
+
+    assert isinstance(BLENDER5_ZONE_NODE_TYPES, frozenset), (
+        "BLENDER5_ZONE_NODE_TYPES must be a frozenset"
+    )
+    assert Nodes.RepeatInput in BLENDER5_ZONE_NODE_TYPES
+    assert Nodes.RepeatOutput in BLENDER5_ZONE_NODE_TYPES
+    assert Nodes.ForEachGeometryElementInput in BLENDER5_ZONE_NODE_TYPES
+    assert Nodes.ForEachGeometryElementOutput in BLENDER5_ZONE_NODE_TYPES
+
+
+def test_node_wrangler_has_new_repeat_zone():
+    """NodeWrangler must expose new_repeat_zone() helper (bl5.0)."""
+    import inspect
+
+    from infinigen.core.nodes.node_wrangler import NodeWrangler
+
+    assert hasattr(NodeWrangler, "new_repeat_zone"), (
+        "NodeWrangler.new_repeat_zone() missing"
+    )
+    sig = inspect.signature(NodeWrangler.new_repeat_zone)
+    assert "iterations" in sig.parameters, "new_repeat_zone: 'iterations' param missing"
+    assert sig.parameters["iterations"].default == 1, (
+        "new_repeat_zone: 'iterations' must default to 1"
+    )
+    assert "input_kwargs" in sig.parameters, (
+        "new_repeat_zone: 'input_kwargs' param missing"
+    )
+
+
+def test_node_wrangler_has_new_menu_switch():
+    """NodeWrangler must expose new_menu_switch() helper (bl5.0)."""
+    import inspect
+
+    from infinigen.core.nodes.node_wrangler import NodeWrangler
+
+    assert hasattr(NodeWrangler, "new_menu_switch"), (
+        "NodeWrangler.new_menu_switch() missing"
+    )
+    sig = inspect.signature(NodeWrangler.new_menu_switch)
+    assert "data_type" in sig.parameters, "new_menu_switch: 'data_type' param missing"
+    assert "items" in sig.parameters, "new_menu_switch: 'items' param missing"
+    assert "active_index" in sig.parameters, (
+        "new_menu_switch: 'active_index' param missing"
+    )
+    assert sig.parameters["data_type"].default == "GEOMETRY", (
+        "new_menu_switch: 'data_type' must default to 'GEOMETRY'"
+    )
+    assert sig.parameters["active_index"].default == 0, (
+        "new_menu_switch: 'active_index' must default to 0"
+    )

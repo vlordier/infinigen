@@ -27,6 +27,16 @@ from .utils import infer_input_socket, infer_output_socket
 
 logger = logging.getLogger(__name__)
 
+# Blender 5.0 zone node types — used by new_repeat_zone() and new_menu_switch()
+BLENDER5_ZONE_NODE_TYPES = frozenset(
+    {
+        Nodes.RepeatInput,
+        Nodes.RepeatOutput,
+        Nodes.ForEachGeometryElementInput,
+        Nodes.ForEachGeometryElementOutput,
+    }
+)
+
 
 class NodeMisuseWarning(UserWarning):
     pass
@@ -639,3 +649,76 @@ class NodeWrangler:
         return self.build_case(
             self.new_node(Nodes.Index), inputs + [-1], [True] * len(inputs) + [False]
         )
+
+    def new_repeat_zone(self, iterations=1, input_kwargs=None):
+        """Create a paired Repeat Zone (Blender 5.0+).
+
+        Returns (repeat_input, repeat_output).  Wire nodes *between* these two
+        to define the zone body.  ``iterations`` sets the loop count; use
+        ``input_kwargs`` to forward named values into the zone's first iteration.
+
+        Example::
+
+            inp, out = nw.new_repeat_zone(iterations=8)
+            accumulated = nw.new_node(
+                Nodes.Math,
+                [inp.outputs["Value"], inp.outputs["Index"]],
+                attrs={"operation": "ADD"},
+            )
+            nw.links.new(out.inputs["Value"], accumulated)
+        """
+        repeat_input = self._make_node(Nodes.RepeatInput)
+        repeat_output = self._make_node(Nodes.RepeatOutput)
+
+        # Blender 5.0 API: pair the two zone endpoints
+        if hasattr(repeat_input, "pair_with_output"):
+            repeat_input.pair_with_output(repeat_output)
+
+        # Set iteration count via the dedicated input or attribute
+        if hasattr(repeat_input, "inputs") and "Iterations" in repeat_input.inputs:
+            repeat_input.inputs["Iterations"].default_value = iterations
+        elif hasattr(repeat_input, "iterations"):
+            repeat_input.iterations = iterations
+
+        if input_kwargs:
+            for name, val in input_kwargs.items():
+                self.connect_input(
+                    infer_input_socket(repeat_input, name), val
+                )
+
+        return repeat_input, repeat_output
+
+    def new_menu_switch(self, data_type="GEOMETRY", items=None, active_index=0):
+        """Create a Menu Switch node (Blender 5.0+).
+
+        ``items`` is a list of ``(label, value)`` pairs; if omitted the node is
+        returned unmodified (Blender sets defaults).  ``active_index`` sets the
+        default-selected branch.
+
+        Example::
+
+            switch = nw.new_menu_switch(
+                data_type="FLOAT",
+                items=[("Wet", wet_node), ("Dry", dry_node), ("Snow", snow_node)],
+            )
+        """
+        node = self._make_node(Nodes.MenuSwitch)
+
+        if hasattr(node, "data_type"):
+            node.data_type = data_type
+
+        if items is not None and hasattr(node, "enum_items"):
+            # Clear default items first if possible
+            while node.enum_items:
+                node.enum_items.remove(node.enum_items[-1])
+            for label, val in items:
+                item = node.enum_items.new(label)
+                if val is not None:
+                    self.connect_input(
+                        infer_input_socket(node, label), val
+                    )
+
+        if hasattr(node, "active_index"):
+            node.active_index = active_index
+
+        return node

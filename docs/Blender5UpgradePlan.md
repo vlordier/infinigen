@@ -320,6 +320,8 @@ addressed by the bpy 5.0.1 upgrade in this PR.
 | **Sky ozone/altitude** | Hardcoded `clip_gaussian(...)` | Gin-configurable parameters | ✅ Done | `assets/lighting/sky_lighting.py` |
 | **Cycles denoiser** | OPTIX-only with silent failure | OPTIX → OIDN → disabled fallback chain | ✅ Done | `core/init.py` |
 | **Scatter density** | max_density=5000 hardcoded | `density_scale` + `max_density=10000` gin params | ✅ Done | `core/placement/instance_scatter.py` |
+| **Repeat Zones** | Not available | `RepeatInput/Output` in `Nodes` + `new_repeat_zone()` | ✅ Done | `core/nodes/node_info.py`, `node_wrangler.py` |
+| **Menu Switch** | Not available | `MenuSwitch` in `Nodes` + `new_menu_switch()` | ✅ Done | `core/nodes/node_info.py`, `node_wrangler.py` |
 | **Volume nodes** | Manual CUDA kernels | Native SDF Grid nodes | 📋 Optional | `terrain/` |
 | **Intel Mac wheel** | Available | Dropped in 5.0.x | ✅ Handled | `uv.lock` |
 
@@ -351,8 +353,8 @@ C.scene.render.engine = "BLENDER_EEVEE_NEXT"  # Blender 5.0+
 | Improved sky (Nishita multi-scatter) | ⭐⭐⭐ High (free improvement) | 🟢 Low | **P1 ✅ Implemented** |
 | Cycles sample reduction (improved denoiser) | ⭐⭐ Medium (throughput) | 🟢 Low | **P2 ✅ Implemented** |
 | Scatter density scaling (Massive Geometry) | ⭐⭐⭐ High (scene diversity) | 🟢 Low | **P2 ✅ Implemented** |
-| Repeat Zones for material octaves | ⭐⭐ Medium (compile speed) | 🟡 Medium | **P2** |
-| Switch Menu for material variants | ⭐⭐ Medium (diversity) | 🟡 Medium | **P2** |
+| Repeat Zones for material octaves | ⭐⭐ Medium (compile speed) | 🟡 Medium | **P2 ✅ Implemented** |
+| Switch Menu for material variants | ⭐⭐ Medium (diversity) | 🟡 Medium | **P2 ✅ Implemented** |
 | Render Time pass → adaptive budgeting | ⭐⭐ Medium (throughput) | 🔴 High | **P2** ✅ |
 | SDF Grid terrain (replace C++ mesher) | ⭐⭐⭐ High (realism) | 🔴 High | **P3** |
 | Volume grids for fog/clouds/haze | ⭐⭐⭐ High (diversity) | 🔴 High | **P3** |

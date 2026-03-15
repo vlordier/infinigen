@@ -279,6 +279,13 @@ class Nodes:
     OffsetPointinCurve = "GeometryNodeOffsetPointInCurve"
     SplineResolution = "GeometryNodeInputSplineResolution"
 
+    # bl5.0 additions — Repeat Zones & Switch Menu
+    RepeatInput = "GeometryNodeRepeatInput"
+    RepeatOutput = "GeometryNodeRepeatOutput"
+    MenuSwitch = "GeometryNodeMenuSwitch"
+    ForEachGeometryElementInput = "GeometryNodeForEachGeometryElementInput"
+    ForEachGeometryElementOutput = "GeometryNodeForEachGeometryElementOutput"
+
 
 """
 Blender doesnt have an automatic way of discovering what properties
