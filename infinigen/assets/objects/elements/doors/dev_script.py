@@ -61,15 +61,18 @@ dev_script.main(get_factory=get_factory, species=3, n=1, spacing=2,
 
 """
 
+import logging
+
 import bpy
 import mathutils
 import numpy as np
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
+
 
 def main(get_factory, species=9, n=16, spacing=4, one_row=False, **kwargs):
     import timeit
-
     start = timeit.default_timer()
 
     if one_row:
@@ -102,4 +105,4 @@ def main(get_factory, species=9, n=16, spacing=4, one_row=False, **kwargs):
             pbar.update(1)
         factory.finalize_assets(all_objs)
     time = timeit.default_timer() - start
-    print(f"{time:.2f}s for {n} objects, {time / (n):.2f} per object")
+    logger.info(f'{time:.2f}s for {n} objects, {time / n:.2f} per object')

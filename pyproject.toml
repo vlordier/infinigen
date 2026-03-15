@@ -178,6 +178,7 @@ select = [
     "TID252", # relative imports only allowed for siblings
     "B",      # flake8-bugbear: opinionated bug/design checks
     "RUF",    # ruff-specific rules
+    "T20",    # flake8-print: no print() or pprint()
 ]
 ignore = [
     "E501",   # over-length lines, formatter should handle it
@@ -192,6 +193,9 @@ ignore = [
     "B023",   # function defined inside loop – too common in shader/node builders
     "B028",   # no explicit stacklevel in warnings.warn
     "B905",   # zip() without strict= – 100+ call sites; adopt gradually
+
+    # ---- UP (pyupgrade) rules with too many violations to address at once ----
+    "UP038",  # isinstance(x, (A, B)) → isinstance(x, A | B) – 27 call sites
 
     # ---- RUF rules with too many violations or low signal-to-noise ----
     "RUF001", # ambiguous Unicode chars in string literals
@@ -229,6 +233,16 @@ ignore = [
 "infinigen_examples/generate_nature.py" = ["E402"]
 "tests/sim/test_joint_export.py" = ["E402"]
 "tests/sim/test_sim_export.py" = ["E402"]
+
+# These asset files have pre-existing unsorted import blocks.
+"infinigen/assets/objects/corals/diff_growth.py" = ["I001"]
+"infinigen/assets/objects/particles/lichen.py" = ["I001"]
+"infinigen/assets/objects/particles/particles.py" = ["I001"]
+"infinigen/assets/objects/underwater/seaweed.py" = ["I001"]
+
+# Benchmark and comparison scripts are CLI tools that use print() for output.
+"tests/run_benchmarks.py" = ["T20"]
+"tests/compare_benchmarks.py" = ["T20"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "parents"

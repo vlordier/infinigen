@@ -4,6 +4,7 @@
 
 # Authors: Alexander Raistrick
 
+import logging
 from collections import OrderedDict
 
 import gin
@@ -30,6 +31,8 @@ from infinigen.core.tags import Semantics, Subpart
 
 from . import util as cu
 from .semantics import home_asset_usage
+
+logger = logging.getLogger(__name__)
 
 
 def sample_home_constraint_params():
@@ -519,7 +522,7 @@ def home_furniture_constraints():
     params = sample_home_constraint_params()
 
     for k, v in params.items():
-        print(f"{home_furniture_constraints.__name__} params - {k}: {v}")
+        logger.info(f'{home_furniture_constraints.__name__} params - {k}: {v}')
 
     score_terms["furniture_fullness"] = rooms.mean(
         lambda r: (

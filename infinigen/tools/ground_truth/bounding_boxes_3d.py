@@ -22,9 +22,13 @@ except ImportError as e:
         "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
     ) from e
 
+import logging
+
 from infinigen.core.util.array_ops import unique_rows
 from infinigen.tools.compress_masks import recover
 from infinigen.tools.dataset_loader import get_frame_path
+
+logger = logging.getLogger(__name__)
 
 """
 Usage: python -m tools.ground_truth.bounding_boxes_3d <scene-folder> <frame-index> [--query <query>]
@@ -109,16 +113,14 @@ if __name__ == "__main__":
     # Complain if the query isn't valid/present
     unique_names = sorted({q["name"] for q in present_objects})
     if args.query is None:
-        print("`--query` not specified. Choices are:")
+        logger.info('`--query` not specified. Choices are:')
         for qn in unique_names:
-            print(f"- {qn}")
+            logger.info(f'- {qn}')
         sys.exit(0)
     elif not any((args.query.lower() in name.lower()) for name in unique_names):
-        print(
-            f'"{args.query}" doesn\'t match any object names in this image. Choices are:'
-        )
+        logger.info(f'''"{args.query}" doesn't match any object names in this image. Choices are:''')
         for qn in unique_names:
-            print(f"- {qn}")
+            logger.info(f'- {qn}')
         sys.exit(0)
 
     H, W, _ = image.shape
@@ -184,6 +186,6 @@ if __name__ == "__main__":
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image)
-    print(f"Wrote {args.output / 'A.png'}")
+    logger.info(f'Wrote {args.output / 'A.png'}')
     imwrite(args.output / "B.png", canvas)
-    print(f"Wrote {args.output / 'B.png'}")
+    logger.info(f'Wrote {args.output / 'B.png'}')

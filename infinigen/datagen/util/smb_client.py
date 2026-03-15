@@ -87,16 +87,16 @@ def download(remote_path: Path, dest_folder=None, verbose=False):
     if dest_folder is not None:
         dest_folder.mkdir(exist_ok=True, parents=True)
         statements.append(f"lcd {str(dest_folder)}")
-        print(f"Downloading {remote_path} to {dest_folder}")
+        logger.info(f'Downloading {remote_path} to {dest_folder}')
     else:
-        print(f"Downloading {remote_path} to working directory")
+        logger.info(f'Downloading {remote_path} to working directory')
 
     statements.append(f"mget {remote_path.name}")
 
     command = str.join("; ", statements)
 
     if verbose:
-        print(command)
+        logger.info(command)
     data = run_command(command, verbose=verbose)
 
     if dest_folder:
@@ -291,9 +291,9 @@ def process_one(p: list[Path]):
 
     def result(r):
         if args.verbose:
-            print(f"{p_summary} {r}")
+            logger.info(f'{p_summary} {r}')
         else:
-            print(r)
+            logger.info(r)
 
     if isinstance(res, types.GeneratorType):
         for r in res:

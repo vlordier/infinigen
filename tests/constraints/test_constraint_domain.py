@@ -5,10 +5,14 @@
 # Authors: Alexander Raistrick
 
 
+import logging
+
 from infinigen.core import tags as t
 from infinigen.core.constraints import constraint_language as cl
 from infinigen.core.constraints import reasoning as r
 from infinigen.core.tags import Semantics
+
+logger = logging.getLogger(__name__)
 
 
 def test_domain_obj():
@@ -150,7 +154,7 @@ def test_domain_construction_complex_2():
     dom.add_relation(*rd1)
     dom.add_relation(*rd2)
 
-    print("DOM RESULT", dom)
+    logger.info("%s %s", 'DOM RESULT', dom)
     assert dom.relations == [
         (cl.StableAgainst(), r.Domain({t.Semantics.Room, t.Semantics.DiningRoom}))
     ]

@@ -5,8 +5,8 @@
 # Authors: Alexander Raistrick
 
 import logging
+import pprint
 import typing
-from pprint import pprint
 
 import numpy as np
 
@@ -103,8 +103,8 @@ def find_assignments(
         return
 
     if isinstance(rel, cl.AnyRelation):
-        pprint(relations)
-        pprint([(rel, dom)] + remaining_relations)
+        logger.debug("%s", pprint.pformat(relations))
+        logger.debug("%s", pprint.pformat([(rel, dom)] + remaining_relations))
         raise ValueError(
             f"Got {rel} as first relation. Invalid! Maybe the program is underspecified?"
         )

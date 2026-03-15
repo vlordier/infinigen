@@ -4,11 +4,14 @@
 # Authors: Karhan Kayan
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
 
 import submitit
+
+logger = logging.getLogger(__name__)
 
 sys.path.append(str(Path(os.path.split(os.path.abspath(__file__))[0]) / ".."))
 
@@ -50,7 +53,7 @@ for asset in args.assets:
         cmd = f"{sys.executable} -m infinigen.assets.fluid.run_asset_cache -f {args.asset_folder}/ -a {asset} -s {args.start_frame} -d {args.simulation_duration}".split(
             " "
         )
-        print(cmd)
+        logger.info(cmd)
         executor = submitit.AutoExecutor(folder=str(Path(args.asset_folder) / "logs"))
         executor.update_parameters(
             mem_gb=16,

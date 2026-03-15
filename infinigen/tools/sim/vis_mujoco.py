@@ -5,6 +5,7 @@
 # Authors:
 # - Max Gonzalez Saez-Diez: Primary author
 
+import logging
 import shutil
 import subprocess
 import xml.etree.ElementTree as ET
@@ -17,6 +18,8 @@ import mujoco.viewer
 import numpy as np
 
 from infinigen.core.sim import sim_factory as sf
+
+logger = logging.getLogger(__name__)
 
 
 class MujocoAssetInitializer:
@@ -76,7 +79,7 @@ class MujocoAssetInitializer:
             and any(self.sim_asset_dir.glob("*.xml"))
         ):
             export_path = next((self.sim_asset_dir).glob("*.xml"))
-            print(f"Using cached MJCF for {self.asset_name} at: {export_path}")
+            logger.info(f'Using cached MJCF for {self.asset_name} at: {export_path}')
         else:
             try:
                 (
@@ -90,9 +93,9 @@ class MujocoAssetInitializer:
                     visual_only=(not self.collision_mesh),
                     **self.kwargs,
                 )
-                print(f"Generated MJCF for {self.asset_name} at: {export_path}")
+                logger.info(f'Generated MJCF for {self.asset_name} at: {export_path}')
             except Exception as e:
-                print(f"Failed to generate MJCF for {self.asset_name}: {e}")
+                logger.info(f'Failed to generate MJCF for {self.asset_name}: {e}')
                 raise
 
         # Read the XML file
@@ -373,9 +376,7 @@ class MujocoAssetInitializer:
 
         temp_path.unlink()
 
-        print(
-            f"Saved asset: {self.asset_name}, seed: {self.seed}, camera: {Path(out_file_path).stem} to {out_file_path}"
-        )
+        logger.info(f'Saved asset: {self.asset_name}, seed: {self.seed}, camera: {Path(out_file_path).stem} to {out_file_path}')
 
     def get_geom_aabb_world(
         self, model: Any, data: Any, geom_name: str

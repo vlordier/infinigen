@@ -4,9 +4,12 @@
 # Authors: Lahav Lipson
 
 import argparse
+import logging
 from pathlib import Path
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def show(x):
@@ -44,5 +47,5 @@ if __name__ == "__main__":
             d = compress(arr)
             assert show(arr) == show(recover(d))
             np.savez(file_path.with_suffix(".npz"), **d)
-            print(f"{file_path} -> {file_path.with_suffix('.npz')}")
+            logger.info(f'{file_path} -> {file_path.with_suffix('.npz')}')
             file_path.unlink()

@@ -212,9 +212,7 @@ def populate_collection(
     else:
         targets = [(p, detail.scatter_res_distance(), 0) for p in placeholders]
 
-    print(
-        f"Populating {len(targets)} placeholders for {factory=} out of {len(placeholders)} total"
-    )
+    logger.info(f'Populating {len(targets)} placeholders for factory={factory!r} out of {len(placeholders)} total')
 
     all_objs = []
     updated_pholders = []
