@@ -91,6 +91,20 @@ You can run the helper below from the repo root:
 scripts/install/check_bpy_runtime.sh
 ```
 
+To (re)create a local `.venv` with Python 3.11 and install the pinned `bpy`
+runtime automatically, use:
+
+```bash
+scripts/install/setup_local_bpy_env.sh
+```
+
+Equivalent Makefile helpers are also available:
+
+```bash
+make setup-local-bpy-env
+make check-bpy-runtime
+```
+
 Or with an explicit interpreter path:
 
 ```bash
