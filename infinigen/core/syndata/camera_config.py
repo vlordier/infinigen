@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any
 
 __all__ = [
     "ASPECT_1_1",
@@ -120,7 +119,7 @@ class CameraRigConfig:
         }
         return (*self.cameras, right_eye)
 
-    def gin_overrides(self) -> dict[str, Any]:
+    def gin_overrides(self) -> dict[str, int | list[dict[str, tuple[float, float, float]]]]:
         """Return gin bindings for Infinigen's camera rig system."""
         cams = self.effective_cameras
         return {

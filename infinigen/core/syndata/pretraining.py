@@ -30,7 +30,6 @@ Usage
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 
@@ -319,7 +318,7 @@ def flappy_frame_metadata(
     seed: int | None = None,
     frame_id: int = 0,
     scene_seed: int = 0,
-) -> dict[str, Any]:
+) -> dict[str, object]:
     """Generate a FrameMetadata-compatible dict for a flappy corridor.
 
     Combines :func:`generate_flappy_obstacles` with basic depth and

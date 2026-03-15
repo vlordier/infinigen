@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import enum
 from dataclasses import dataclass
-from typing import Any
 
 __all__ = [
     "EpisodeConfig",
@@ -105,7 +104,7 @@ class EpisodeConfig:
         """Episode duration in seconds."""
         return self.num_frames / self.fps
 
-    def gin_overrides(self) -> dict[str, Any]:
+    def gin_overrides(self) -> dict[str, int | list[int]]:
         """Return gin bindings for episode timing."""
         return {
             "execute_tasks.frame_range": list(self.frame_range),

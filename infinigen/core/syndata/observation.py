@@ -14,7 +14,6 @@ All helpers are pure Python — no ``bpy`` dependency.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 __all__ = [
     "ObservationConfig",
@@ -163,13 +162,13 @@ class ObservationConfig:
         """Total number of observation channels."""
         return len(self.channel_names)
 
-    def gin_overrides(self) -> dict[str, Any]:
+    def gin_overrides(self) -> dict[str, tuple[str, ...]]:
         """Return gin-compatible overrides for render-pass selection.
 
         Maps to Infinigen's ``full/render_image`` and ``flat/render_image``
         gin configuration patterns.
         """
-        overrides: dict[str, Any] = {}
+        overrides: dict[str, tuple[str, ...]] = {}
         # Flat passes (always enabled for RL — cheap to render)
         flat_passes = sorted(self.passes & PASSES_FLAT_AVAILABLE)
         if flat_passes:
