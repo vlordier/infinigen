@@ -79,12 +79,16 @@ def sharpen(x):
 
 
 def get_normal(z, grid_size):
-    dzdx = np.zeros_like(z)
-    dzdx[1:] = z[1:] - z[:-1]
-    dzdx[0] = dzdx[1]
-    dzdy = np.zeros_like(z)
-    dzdy[:, 1:] = z[:, 1:] - z[:, :-1]
-    dzdy[:, 0] = dzdx[:, 1]
-    n = np.stack((-dzdy, -dzdx, grid_size * np.ones_like(z)), -1)
-    n /= np.linalg.norm(n, axis=-1).reshape((n.shape[0], n.shape[1], 1))
+    dzdx = np.empty_like(z)
+    dzdx[1:-1] = (z[2:] - z[:-2]) * 0.5
+    dzdx[0] = z[1] - z[0]
+    dzdx[-1] = z[-1] - z[-2]
+
+    dzdy = np.empty_like(z)
+    dzdy[:, 1:-1] = (z[:, 2:] - z[:, :-2]) * 0.5
+    dzdy[:, 0] = z[:, 1] - z[:, 0]
+    dzdy[:, -1] = z[:, -1] - z[:, -2]
+
+    n = np.stack((-dzdy, -dzdx, np.full_like(z, grid_size)), axis=-1)
+    n /= np.linalg.norm(n, axis=-1, keepdims=True)
     return n

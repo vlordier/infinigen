@@ -12,8 +12,12 @@ import bpy
 import gin
 import numpy as np
 from mathutils import Euler, Vector, bvhtree
-from numpy.matlib import repmat
 from numpy.random import uniform as U
+
+try:
+    from scipy.spatial import cKDTree
+except ImportError:
+    cKDTree = None
 
 from infinigen.core.placement.animation_policy import PolicyError
 from infinigen.core.util.random import random_general
@@ -124,6 +128,9 @@ class RRT:
         self.step = U(*step_range)
         self.stride_range = stride_range
         self.vertices = {}
+        self._vertex_tree = None
+        self._vertex_coords = None
+        self._vertex_keys = None
         self.collision_check_dirs = []
 
         # create directions to check proximity to obstacles
@@ -162,6 +169,7 @@ class RRT:
 
         path = []
         self.vertices = {}
+        self._invalidate_vertex_cache()
         self.vertices[x0] = (None, 0.0)  # (parent, cost)
         iter = 0
         while iter < self.max_iter:
@@ -304,7 +312,26 @@ class RRT:
     def get_vertices(self):
         return np.array(list(self.vertices.keys()))
 
+    def _invalidate_vertex_cache(self):
+        self._vertex_tree = None
+        self._vertex_coords = None
+        self._vertex_keys = None
+
+    def _vertex_index(self):
+        if self._vertex_coords is not None and len(self._vertex_keys) == len(self.vertices):
+            return self._vertex_coords, self._vertex_keys, self._vertex_tree
+
+        keys = list(self.vertices.keys())
+        coords = np.asarray(keys, dtype=np.float64)
+        tree = cKDTree(coords) if cKDTree is not None and len(coords) > 0 else None
+        self._vertex_keys = keys
+        self._vertex_coords = coords
+        self._vertex_tree = tree
+        return coords, keys, tree
+
     def wireup(self, x, y):
+        if x not in self.vertices:
+            self._invalidate_vertex_cache()
         self.vertices[x] = (y, self.cost(y) + self.getDist(x, y))
 
     def getDist(self, pos1, pos2):
@@ -325,15 +352,20 @@ class RRT:
             return self.rand_node()
 
     def nearest(self, x):
-        V = self.get_vertices()
-        xr = repmat(x, len(V), 1)
-        dists = np.linalg.norm(xr - V, axis=1)
-        nearest = tuple(V[np.argmin(dists)])
-        return nearest
+        V, keys, tree = self._vertex_index()
+        if len(V) == 0:
+            return None
+        if tree is not None:
+            _, idx = tree.query(np.asarray(x, dtype=np.float64), k=1)
+            return keys[int(idx)]
+        dists = np.linalg.norm(V - np.asarray(x, dtype=np.float64), axis=1)
+        return keys[int(np.argmin(dists))]
 
     def neighborhood(self, x, radius=None, max_iter=10):
-        V = self.get_vertices()
+        V, _keys, tree = self._vertex_index()
         num_verts = len(V)
+        if num_verts == 0:
+            return np.array([])
 
         gamma = 5
         eta = self.step
@@ -347,9 +379,12 @@ class RRT:
         while len(nearpoints) == 0:
             if i > max_iter:
                 return np.array([])
-            xr = repmat(x, num_verts, 1)
-            inside = np.linalg.norm(xr - V, axis=1) < r
-            nearpoints = V[inside]
+            if tree is not None:
+                near_idx = tree.query_ball_point(np.asarray(x, dtype=np.float64), r)
+                nearpoints = V[np.asarray(near_idx, dtype=np.int64)] if len(near_idx) > 0 else []
+            else:
+                inside = np.linalg.norm(V - np.asarray(x, dtype=np.float64), axis=1) < r
+                nearpoints = V[inside]
             i += 1
             r += eta
 

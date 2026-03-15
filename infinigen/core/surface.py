@@ -10,6 +10,7 @@
 import string
 from inspect import signature
 
+import bmesh
 import bpy
 import numpy as np
 from mathutils import Vector
@@ -129,25 +130,28 @@ def new_attr_data(obj, attr, type, domain, data: np.array):
 
 def smooth_attribute(obj, name, iters=20, weight=0.05, verbose=False):
     data = read_attr_data(obj, name)
+    scalar_attr = data.ndim == 1
+    work_data = data[:, None] if scalar_attr else data
 
     edges = np.empty(len(obj.data.edges) * 2, dtype=int)
     obj.data.edges.foreach_get("vertices", edges)
     edges = edges.reshape(-1, 2)
 
     r = range(iters) if not verbose else trange(iters)
+    vertex_weight = np.ones(len(obj.data.vertices), dtype=np.float64)
+    edge_0 = edges[:, 0]
+    edge_1 = edges[:, 1]
+    if len(edges) > 0:
+        vertex_weight[edge_0] += weight
+        vertex_weight[edge_1] += weight
     for _ in r:
-        vertex_weight = np.ones(len(obj.data.vertices))
-        data_out = data.copy()
+        data_out = work_data.copy()
+        if len(edges) > 0:
+            data_out[edge_0] += work_data[edge_1] * weight
+            data_out[edge_1] += work_data[edge_0] * weight
+        work_data = data_out / vertex_weight[:, None]
 
-        data_out[edges[:, 0]] += data[edges[:, 1]] * weight
-        vertex_weight[edges[:, 0]] += weight
-
-        data_out[edges[:, 1]] += data[edges[:, 0]] * weight
-        vertex_weight[edges[:, 1]] += weight
-
-        data = data_out / vertex_weight[:, None]
-
-    write_attr_data(obj, name, data)
+    write_attr_data(obj, name, work_data[:, 0] if scalar_attr else work_data)
 
 
 def attribute_to_vertex_group(obj, attr, name=None, min_thresh=0, binary=False):
@@ -156,20 +160,31 @@ def attribute_to_vertex_group(obj, attr, name=None, min_thresh=0, binary=False):
 
     attr_data = read_attr_data(obj, attr)
 
-    if attr_data.shape[-1] != 1:
+    if attr_data.ndim > 1 and attr_data.shape[-1] != 1:
         raise ValueError(
             f"Could not convert non-scalar attribute {attr} to vertex group, expected 1 data dimension but "
             f"got {attr_data.shape=}"
         )
 
     group = obj.vertex_groups.new(name=name)
+    weights = np.asarray(attr_data, dtype=np.float64).reshape(-1)
+    indices = np.flatnonzero(weights > min_thresh)
 
     if binary:
-        group.add(np.where(attr_data > min_thresh)[0], 1.0, "ADD")
+        if len(indices) > 0:
+            group.add(indices.tolist(), 1.0, "ADD")
     else:
-        for i, v in enumerate(attr_data):
-            if v > min_thresh:
-                group.add([i], v, "ADD")
+        if len(indices) > 0:
+            deform_data = bmesh.new()
+            deform_data.from_mesh(obj.data)
+            deform_data.verts.ensure_lookup_table()
+            deform_layer = deform_data.verts.layers.deform.verify()
+            group_index = group.index
+            for i in indices.tolist():
+                deform_data.verts[i][deform_layer][group_index] = float(weights[i])
+            deform_data.to_mesh(obj.data)
+            deform_data.free()
+            obj.data.update()
 
     return group
 
