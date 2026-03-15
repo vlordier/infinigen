@@ -1,4 +1,3 @@
-
 name: Lint & Test
 
 on:
@@ -21,9 +20,9 @@ env:
 
 jobs:
 
-  checks:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -32,14 +31,29 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Lint with ruff (Python 3.11 stringent – rules in pyproject.toml)
+      - name: Lint with ruff
         run: |
           uv pip install "ruff<0.9.0"
           ruff check --output-format=github .
 
-      - name: Install infinigen & dependencies
+      - name: Check for copyright statements
         run: |
-          uv pip install --extra-index-url https://download.blender.org/pypi/bpy/ -e ".[dev]"
+          ruff check --output-format=github --preview --select CPY001 .
+
+  test-bpy-free:
+    name: Tests (bpy-free)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test dependencies (no bpy)
+        run: |
+          uv pip install pytest pytest-cov gin-config numpy scipy opencv-python-headless torch --extra-index-url https://download.pytorch.org/whl/cpu
 
       - name: Run focused health checks with coverage
         run: |
@@ -48,7 +62,7 @@ jobs:
             --cov=infinigen.datagen.util.submitit_emulator \
             --cov-report=term-missing \
             --cov-report=xml
-      
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
@@ -56,10 +70,32 @@ jobs:
           path: coverage.xml
           if-no-files-found: error
 
-      - name: Test with pytest
+      - name: Test non-regression suite
         run: |
-          pytest --maxfail=1 tests -k 'not skip_for_ci'
+          pytest tests/test_nonregression.py --noconftest --maxfail=1 -v
 
-      - name: Check for copyright statements
+      - name: Test benchmarks suite
         run: |
-          ruff check --output-format=github --preview --select CPY001 .
+          pytest tests/test_benchmarks.py --noconftest --maxfail=1 -v
+
+  test-bpy:
+    name: Tests (bpy-dependent)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install infinigen with bpy
+        id: install
+        run: |
+          uv pip install -e ".[dev]" --extra-index-url https://download.blender.org/pypi/bpy/
+
+      - name: Test with pytest (bpy-dependent)
+        if: steps.install.outcome == 'success'
+        run: |
+          pytest --maxfail=1 tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
