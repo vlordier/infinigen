@@ -231,8 +231,6 @@ ignore = [
 "infinigen_examples/generate_indoors.py" = ["E402"]
 "infinigen_examples/generate_material_balls.py" = ["E402"]
 "infinigen_examples/generate_nature.py" = ["E402"]
-
-# Sim tests use pytest.importorskip() before importing test dependencies.
 "tests/sim/test_joint_export.py" = ["E402"]
 "tests/sim/test_sim_export.py" = ["E402"]
 

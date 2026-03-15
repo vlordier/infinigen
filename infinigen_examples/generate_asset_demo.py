@@ -181,10 +181,10 @@ def compose_scene(
         pine_needle.apply(terrain_inview)
         pinecone.apply(terrain_inview)
         pebbles.apply(terrain_inview)
-    elif background == "TODO ADD MORE OPTIONS HERE":
-        pass
     else:
-        raise ValueError(f"Unrecognized {background=}")
+        raise ValueError(
+            f"Unrecognized {background=}. Supported values are None, 'grass', and 'pine_forest'."
+        )
 
 
 def main():

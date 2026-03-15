@@ -93,10 +93,12 @@ def check_problem_greedy_coverage(prob: cl.Problem, stages: dict[str, r.Domain])
         check_coverage_errors(b, coverage, stages)
 
 
-#
 def check_unfinalized_constraints(prob: cl.Problem):
-    # TODO
-    return []
+    for node, dom in iter_domains(prob):
+        if not r.domain_finalized(dom, check_anyrel=False, check_variable=True):
+            raise ValueError(
+                f"Constraint node had unfinalized domain. \n{node=} \n{dom=}"
+            )
 
 
 def check_contradictory_domains(prob: cl.Problem):

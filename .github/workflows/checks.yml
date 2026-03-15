@@ -18,6 +18,9 @@ env:
   INFINIGEN_INSTALL_TERRAIN: False
   INFINIGEN_INSTALL_CUSTOMGT: False
 
+permissions:
+  contents: read
+
 jobs:
 
   lint:
@@ -53,15 +56,30 @@ jobs:
 
       - name: Install test dependencies (no bpy)
         run: |
-          uv pip install pytest numpy scipy opencv-python-headless torch --extra-index-url https://download.pytorch.org/whl/cpu
+          uv pip install pytest pytest-cov gin-config numpy scipy opencv-python-headless torch --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run focused health checks with coverage
+        run: |
+          pytest --noconftest --maxfail=1 tests/test_repo_health.py \
+            --cov=infinigen.core.tags \
+            --cov=infinigen.datagen.util.submitit_emulator \
+            --cov-report=term-missing \
+            --cov-report=xml
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: error
 
       - name: Test non-regression suite
         run: |
-          pytest tests/test_nonregression.py --noconftest -v
+          pytest tests/test_nonregression.py --noconftest --maxfail=1 -v
 
       - name: Test benchmarks suite
         run: |
-          pytest tests/test_benchmarks.py --noconftest -v
+          pytest tests/test_benchmarks.py --noconftest --maxfail=1 -v
 
   test-bpy:
     name: Tests (bpy-dependent)
@@ -83,4 +101,4 @@ jobs:
       - name: Test with pytest (bpy-dependent)
         if: steps.install.outcome == 'success'
         run: |
-          pytest tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
+          pytest --maxfail=1 tests -k 'not skip_for_ci' --ignore=tests/test_nonregression.py --ignore=tests/test_benchmarks.py
