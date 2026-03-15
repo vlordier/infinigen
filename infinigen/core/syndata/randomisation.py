@@ -107,7 +107,7 @@ class DomainRandomiser:
         return {
             f.name: getattr(self, f.name).at(self.difficulty)
             for f in fields(self)
-            if f.type == "_Range"
+            if isinstance(getattr(self, f.name), _Range)
         }
 
     def gin_overrides(self) -> dict[str, object]:
