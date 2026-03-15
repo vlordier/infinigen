@@ -185,11 +185,11 @@ def eval_argument(nw, argument, default_value=1.0, **kwargs):
         return argument(nw, **{k: v for k, v in kwargs.items() if k in allowed_keys})
     elif isinstance(argument, str):
         return nw.expose_input(name=argument, attribute=argument, val=default_value)
-    elif isinstance(argument, (float, int)):
+    elif isinstance(argument, float | int):
         v = nw.new_node(Nodes.Value)
         v.outputs[0].default_value = argument
         return v
-    elif isinstance(argument, (tuple, Vector)):
+    elif isinstance(argument, tuple | Vector):
         v = nw.new_node(Nodes.Vector)
         v.vector = argument
         return v
@@ -254,7 +254,7 @@ def add_material(
         if (not reuse) and (name in bpy.data.materials):
             name += f"_{seed_generator(8)}"
         material = shaderfunc_to_material(shader_func, *input_args, **input_kwargs)
-    elif isinstance(selection, (str, t.Semantics)):
+    elif isinstance(selection, str | t.Semantics):
         if isinstance(selection, t.Semantics):
             selection = selection.value
         name = "MixedSurface"

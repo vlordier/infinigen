@@ -1,3 +1,6 @@
+import logging
+
+logger = logging.getLogger(__name__)
 # Copyright (C) 2025, Princeton University.
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory
 # of this source tree.
@@ -25,10 +28,7 @@ def sim_exporter_factory(exporter="mjcf", legacy=False, **kwargs):
 
             return export
         else:
-            print(
-                f"Exporter type {exporter} is not supported. Supported types \
-                    include [usd, mjcf, urdf]."
-            )
+            logger.info(f'Exporter type {exporter} is not supported. Supported types                     include [usd, mjcf, urdf].')
 
     else:
         if exporter in ["usd", "usda", "usdc"]:
@@ -41,10 +41,6 @@ def sim_exporter_factory(exporter="mjcf", legacy=False, **kwargs):
             return export
         elif exporter == "urdf":
             from infinigen.core.sim.exporters.legacy.urdf_exporter import export
-
             return export
         else:
-            print(
-                f"Exporter type {exporter} is not supported. Supported types \
-                    include [usd, mjcf, urdf]."
-            )
+            logger.info(f'Exporter type {exporter} is not supported. Supported types                     include [usd, mjcf, urdf].')

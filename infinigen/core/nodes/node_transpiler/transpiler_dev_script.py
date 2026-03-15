@@ -19,11 +19,14 @@
 7. You should see one python function printed for each material/geonodes on your object
 """
 
+import logging
 from pathlib import Path
 
 import bpy
 
 from infinigen.core.nodes.node_transpiler import transpiler
+
+logger = logging.getLogger(__name__)
 
 mode = "make_script"
 target = "object"
@@ -41,17 +44,17 @@ else:
     raise ValueError(f"Unrecognized {target=}")
 
 if mode == "print":
-    print("START")
-    print("\n")
-    print(res)
-    print("END")
+    logger.info('START')
+    logger.info('\n')
+    logger.info(res)
+    logger.info('END')
 elif mode == "make_script":
     res_debug = "import bpy\n" + res + "\napply(bpy.context.active_object)"
     script = bpy.data.texts.new("generated_surface_script")
     script.from_string(res_debug)
 elif mode == "write_file":
     filename = "generated_surface_script.py"
-    print(f"Writing generated script to {filename}")
+    logger.info(f'Writing generated script to {filename}')
     with Path(filename).open("w") as f:
         f.write(res)
 else:

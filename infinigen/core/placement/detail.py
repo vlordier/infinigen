@@ -50,7 +50,7 @@ def target_face_size(
             )
         eval_point = mathutils.Vector(obj)
         dist = np.linalg.norm(eval_point - camera.location)
-    elif isinstance(obj, (float, int)):
+    elif isinstance(obj, float | int):
         dist = obj
     else:
         raise ValueError(f"target_face_size() could not handle {obj=}, {type(obj)=}")

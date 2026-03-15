@@ -98,7 +98,7 @@ class State:
         return len(self.objs)
 
     def print(self):
-        print(f"State ({len(self.objs)} objs)")
+        logger.info(f'State ({len(self.objs)} objs)')
         order = sorted(self.objs.keys(), key=lambda s: s.split("_")[-1])
         for k in order:
             v = self.objs[k]
@@ -110,7 +110,7 @@ class State:
                 for tg in t.decompose_tags(v.tags)[0]
                 if not isinstance(tg, t.SpecificObject)
             }
-            print(f"  {v.obj.name} {semantics} [{relations}]")
+            logger.info(f'  {v.obj.name} {semantics} [{relations}]')
 
     def to_json(self, path: Path):
         JSON_SUPPORTED_TYPES = (int, float, str, bool, list, dict)

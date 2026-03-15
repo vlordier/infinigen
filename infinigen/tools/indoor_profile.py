@@ -4,12 +4,15 @@
 # Authors: David Yan
 
 import argparse
+import logging
 import re
 from collections import defaultdict
 from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 """
 The following function s attributed to FObersteiner from Stack Overflow at https://stackoverflow.com/a/64662985
@@ -73,8 +76,8 @@ def main(dir: Path):
             render_stats[column].dt.round("1s").map(lambda x: td_to_str(x))
         )
 
-    print(coarse_stats.sort_values("median", ascending=False))
-    print(render_stats.sort_values("median", ascending=False))
+    logger.info(coarse_stats.sort_values('median', ascending=False))
+    logger.info(render_stats.sort_values('median', ascending=False))
 
 
 def make_stats(data_df):

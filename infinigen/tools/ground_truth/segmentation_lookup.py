@@ -6,6 +6,7 @@
 import argparse
 import colorsys
 import json
+import logging
 import sys
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from numba.types import bool_
 from infinigen.core.util.array_ops import unique_rows
 from infinigen.tools.compress_masks import recover
 from infinigen.tools.dataset_loader import get_frame_path
+
+logger = logging.getLogger(__name__)
 
 try:
     from einops import pack, rearrange, repeat
@@ -108,16 +111,14 @@ if __name__ == "__main__":
     # Complain if the query isn't valid/present
     unique_names = sorted({q["name"] for q in present_objects})
     if args.query is None:
-        print("`--query` not specified. Choices are:")
+        logger.info('`--query` not specified. Choices are:')
         for qn in unique_names:
-            print(f"- {qn}")
+            logger.info(f'- {qn}')
         sys.exit(0)
     elif not any((args.query.lower() in name.lower()) for name in unique_names):
-        print(
-            f'"{args.query}" doesn\'t match any object names in this image. Choices are:'
-        )
+        logger.info(f'''"{args.query}" doesn't match any object names in this image. Choices are:''')
         for qn in unique_names:
-            print(f"- {qn}")
+            logger.info(f'- {qn}')
         sys.exit(0)
 
     # Mask the pixels with any relevant object
@@ -166,6 +167,6 @@ if __name__ == "__main__":
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image)
-    print(f"Wrote {args.output / 'A.png'}")
+    logger.info(f'Wrote {args.output / 'A.png'}')
     imwrite(args.output / "B.png", canvas)
-    print(f"Wrote {args.output / 'B.png'}")
+    logger.info(f'Wrote {args.output / 'B.png'}')

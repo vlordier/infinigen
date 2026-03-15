@@ -4,9 +4,12 @@
 # Authors: Karhan Kayan
 
 import csv
+import logging
 import os
 import random
 import sys
+
+logger = logging.getLogger(__name__)
 
 
 def select_random_files_to_csv(folder_path, k, output_directory):
@@ -31,7 +34,7 @@ def select_random_files_to_csv(folder_path, k, output_directory):
         for file in selected_files:
             writer.writerow([file])
 
-    print(f"CSV file created at {csv_file_path}")
+    logger.info(f'CSV file created at {csv_file_path}')
 
 
 if __name__ == "__main__":

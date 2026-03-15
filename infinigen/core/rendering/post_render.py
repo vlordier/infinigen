@@ -152,33 +152,31 @@ if __name__ == "__main__":
             if flow_color is not None:
                 output_path = args.flow_path.with_suffix(".png")
                 imwrite(output_path, flow_color)
-                print(f"Wrote {output_path}")
+                logger.info(f'Wrote {output_path}')
         except ModuleNotFoundError:
-            print(
-                "Flow visualization requires the 'flow_vis' package. Install it with 'pip install flow_vis'"
-            )
+            logger.info("Flow visualization requires the 'flow_vis' package. Install it with 'pip install flow_vis'")
             pass
 
     if args.normals_path is not None:
         normal_color = colorize_normals(load_normals(args.normals_path))
         output_path = args.normals_path.with_suffix(".png")
         imwrite(output_path, normal_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')
 
     if args.depth_path is not None:
         depth_color = colorize_depth(load_depth(args.depth_path))
         output_path = args.depth_path.with_suffix(".png")
         imwrite(output_path, depth_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')
 
     if args.uniq_inst_path is not None:
         mask_color = colorize_int_array(load_uniq_inst(args.uniq_inst_path))
         output_path = args.uniq_inst_path.with_suffix(".png")
         imwrite(output_path, mask_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')
 
     if args.seg_path is not None:
         mask_color = colorize_int_array(load_seg_mask(args.seg_path))
         output_path = args.seg_path.with_suffix(".png")
         imwrite(output_path, mask_color)
-        print(f"Wrote {output_path}")
+        logger.info(f'Wrote {output_path}')

@@ -4,6 +4,7 @@
 # Authors: Alexander Raistrick
 
 
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +12,8 @@ import numpy as np
 from infinigen.assets.utils.geometry import lofting
 from infinigen.core.nodes.node_transpiler.transpiler import indent
 from infinigen.core.util import blender as butil
+
+logger = logging.getLogger(__name__)
 
 
 def prefix():
@@ -61,7 +64,7 @@ def parse_part(nurbs_part, mesh_part, profiles_folder):
 
     path = Path(profiles_folder) / f"profile_{name}.npy"
     np.save(path, profiles_norm)
-    print(f"Saving {path}")
+    logger.info(f'Saving {path}')
     part_genome_kwargs["profile"] = f"np.load({repr(str(path))})"
 
     body = f"return {repr_function_call('PartGenome', part_genome_kwargs)}"
@@ -128,7 +131,7 @@ def parse_creature(nurbs_root, mesh_root, profiles_folder):
     atts = {}
     for nurbs_part, mesh_part in zip(nurbs_parts, mesh_parts):
         assert basename(nurbs_part) == basename(mesh_part)
-        print(f"Processing {basename(nurbs_part)}")
+        logger.info(f'Processing {basename(nurbs_part)}')
 
         name, new_code = parse_part(nurbs_part, mesh_part, profiles_folder)
         names.append(name)

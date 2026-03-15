@@ -7,6 +7,8 @@
 # - Abhishek Joshi: Updates for sim
 # - Max Gonzalez Saez-Diez: Updates for sim
 
+import logging
+
 import gin
 from numpy.random import randint, uniform
 
@@ -21,6 +23,8 @@ from infinigen.core.nodes.node_wrangler import Nodes, NodeWrangler
 from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.util import blender as butil
 from infinigen.core.util.random import weighted_sample
+
+logger = logging.getLogger(__name__)
 
 
 @node_utils.to_nodegroup(
@@ -3295,7 +3299,6 @@ class StovetopFactory(AssetFactory):
     def sample_parameters(self):
         # add code here to randomly sample from parameters
         from infinigen.assets.composition.material_assignments import metals
-
         button_type = weighted_sample(
             [(0, 0.15), (1, 0.15), (2, 0.4), (3, 0.2), (4, 0.2)]
         )
@@ -3542,7 +3545,7 @@ class StovetopFactory(AssetFactory):
             **material_params,
             **button_params,
         }
-        print(params)
+        logger.info(params)
 
         return params
 

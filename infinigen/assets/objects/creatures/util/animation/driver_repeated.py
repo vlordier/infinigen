@@ -28,7 +28,7 @@ def bend_bones_lerp(arma, bones, total, freq, rot=None, symmetric=True):
     bone_lengths = []
     for bone in bones:
         length = (
-            bone.bone["length"] if isinstance(bone.bone["length"], (int, float)) else 0
+            bone.bone["length"] if isinstance(bone.bone["length"], int | float) else 0
         )
         if length >= 0:
             bone_lengths.append((bone, length))

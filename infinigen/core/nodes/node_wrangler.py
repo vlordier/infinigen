@@ -313,9 +313,7 @@ class NodeWrangler:
                 input_socket.default_value = input_item
                 return
             except TypeError as e:
-                print(
-                    f"TypeError while assigning {input_item=} as default_value for {input_socket.name}"
-                )
+                logger.info(f'TypeError while assigning input_item={input_item!r} as default_value for {input_socket.name}')
                 raise e
 
         self.links.new(output_socket, input_socket)
