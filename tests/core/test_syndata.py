@@ -2219,3 +2219,171 @@ class TestObservationValidation:
     def test_exposure_jitter_zero_accepted(self):
         nm = SensorNoiseModel(exposure_jitter=0.0)
         assert nm.exposure_jitter == 0.0
+
+
+# ── Commit 4: Edge case tests ──────────────────────────────────────────────
+
+
+class TestCameraRigValidation:
+    """Test camera dict structure validation in CameraRigConfig."""
+
+    def test_camera_missing_loc_key(self):
+        with pytest.raises(ValueError, match="missing required key"):
+            CameraRigConfig(cameras=({"rot_euler": (0, 0, 0)},))
+
+    def test_camera_missing_rot_euler_key(self):
+        with pytest.raises(ValueError, match="missing required key"):
+            CameraRigConfig(cameras=({"loc": (0, 0, 0)},))
+
+    def test_camera_wrong_loc_length(self):
+        with pytest.raises(ValueError, match="3 elements"):
+            CameraRigConfig(cameras=({"loc": (0, 0), "rot_euler": (0, 0, 0)},))
+
+    def test_camera_wrong_rot_euler_length(self):
+        with pytest.raises(ValueError, match="3 elements"):
+            CameraRigConfig(cameras=({"loc": (0, 0, 0), "rot_euler": (0, 0, 0, 0)},))
+
+    def test_camera_not_dict(self):
+        with pytest.raises(TypeError, match="must be a dict"):
+            CameraRigConfig(cameras=("not_a_dict",))  # type: ignore[arg-type]
+
+
+class TestWorldConfigRoomSizeValidation:
+    """Test room_size_range positive-value validation."""
+
+    def test_room_size_range_negative_min(self):
+        from infinigen.core.syndata.world_gen import WorldConfig
+        with pytest.raises(ValueError, match="room_size_range.*positive"):
+            WorldConfig(complexity=0.5, room_size_range=(-1.0, 5.0))
+
+    def test_room_size_range_zero_min(self):
+        from infinigen.core.syndata.world_gen import WorldConfig
+        with pytest.raises(ValueError, match="room_size_range.*positive"):
+            WorldConfig(complexity=0.5, room_size_range=(0.0, 5.0))
+
+
+class TestDensityScalerEdgeCases:
+    """Test DensityScaler at boundary values."""
+
+    def test_difficulty_zero_gives_minimum(self):
+        ds = DensityScaler(difficulty=0.0)
+        assert ds.scatter_multiplier == ds.min_multiplier
+        assert ds.obstacle_count == ds.obstacle_min
+
+    def test_difficulty_one_gives_maximum(self):
+        ds = DensityScaler(difficulty=1.0)
+        assert ds.scatter_multiplier == ds.max_multiplier
+        assert ds.obstacle_count == ds.obstacle_max
+
+    def test_equal_min_max_multiplier(self):
+        ds = DensityScaler(difficulty=0.5, min_multiplier=0.5, max_multiplier=0.5)
+        assert ds.scatter_multiplier == 0.5
+
+    def test_quadratic_curve_slower_start(self):
+        linear = DensityScaler(difficulty=0.5, curve="linear")
+        quad = DensityScaler(difficulty=0.5, curve="quadratic")
+        assert quad.scatter_multiplier < linear.scatter_multiplier
+
+    def test_sqrt_curve_faster_start(self):
+        linear = DensityScaler(difficulty=0.5, curve="linear")
+        sqrt = DensityScaler(difficulty=0.5, curve="sqrt")
+        assert sqrt.scatter_multiplier > linear.scatter_multiplier
+
+    def test_gin_overrides_keys(self):
+        ds = DensityScaler(difficulty=0.5)
+        overrides = ds.gin_overrides()
+        assert "scatter_density_multiplier" in overrides
+        assert "instance_density_multiplier" in overrides
+        assert "obstacle_count" in overrides
+
+
+class TestFrameMetadataJsonEdgeCases:
+    """Test FrameMetadata JSON round-trip with edge values."""
+
+    def test_round_trip_with_infinity(self):
+        """Infinity nearest_obstacle_m survives JSON round-trip."""
+        import tempfile
+        md = FrameMetadata(nearest_obstacle_m=float("inf"), frame_id=42)
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            md.save_json(f.name)
+            loaded = FrameMetadata.load_json(f.name)
+        assert math.isinf(loaded.nearest_obstacle_m)
+        assert loaded.frame_id == 42
+
+    def test_round_trip_with_obstacles(self):
+        """BBox3D obstacles survive JSON round-trip."""
+        import tempfile
+        boxes = [
+            BBox3D(center=(1.0, 2.0, 3.0), extent=(0.5, 0.5, 0.5), label="test"),
+        ]
+        md = FrameMetadata(obstacles=boxes)
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            md.save_json(f.name)
+            loaded = FrameMetadata.load_json(f.name)
+        assert len(loaded.obstacles) == 1
+        assert loaded.obstacles[0].center == (1.0, 2.0, 3.0)
+        assert loaded.obstacles[0].label == "test"
+
+    def test_round_trip_with_depth_stats(self):
+        """DepthStats survives JSON round-trip."""
+        import tempfile
+        ds = DepthStats(min_m=0.5, max_m=50.0, mean_m=25.0, median_m=24.0, std_m=10.0)
+        md = FrameMetadata(depth_stats=ds)
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            md.save_json(f.name)
+            loaded = FrameMetadata.load_json(f.name)
+        assert loaded.depth_stats is not None
+        assert loaded.depth_stats.min_m == 0.5
+        assert loaded.depth_stats.max_m == 50.0
+
+    def test_round_trip_tuple_fields(self):
+        """Tuple fields (camera_position, velocity) restored from JSON lists."""
+        import tempfile
+        md = FrameMetadata(
+            camera_position=(1.5, 2.5, 3.5),
+            velocity=(0.1, 0.2, 0.3),
+            swarm_positions=[(10.0, 20.0, 30.0)],
+        )
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            md.save_json(f.name)
+            loaded = FrameMetadata.load_json(f.name)
+        assert isinstance(loaded.camera_position, tuple)
+        assert isinstance(loaded.velocity, tuple)
+        assert loaded.camera_position == (1.5, 2.5, 3.5)
+        assert loaded.swarm_positions[0] == (10.0, 20.0, 30.0)
+
+    def test_round_trip_with_extra(self):
+        """Extra dict survives JSON round-trip."""
+        import tempfile
+        md = FrameMetadata(extra={"weather": "clear", "lighting": "sunset"})
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
+            md.save_json(f.name)
+            loaded = FrameMetadata.load_json(f.name)
+        assert loaded.extra["weather"] == "clear"
+
+
+class TestDepthStatsEdgeCases:
+    """Test DepthStats.from_depth_array with edge inputs."""
+
+    def test_all_nan_returns_defaults(self):
+        arr = np.array([float("nan"), float("nan")])
+        ds = DepthStats.from_depth_array(arr)
+        assert ds == DepthStats()
+
+    def test_all_inf_returns_defaults(self):
+        arr = np.array([float("inf"), float("inf")])
+        ds = DepthStats.from_depth_array(arr)
+        assert ds == DepthStats()
+
+    def test_single_value(self):
+        arr = np.array([5.0])
+        ds = DepthStats.from_depth_array(arr)
+        assert ds.min_m == 5.0
+        assert ds.max_m == 5.0
+        assert ds.std_m == 0.0
+
+    def test_clipping_bounds(self):
+        arr = np.array([-10.0, 5.0, 20000.0])
+        ds = DepthStats.from_depth_array(arr, clip_min=0.0, clip_max=100.0)
+        assert ds.min_m == 0.0
+        assert ds.max_m == 100.0
