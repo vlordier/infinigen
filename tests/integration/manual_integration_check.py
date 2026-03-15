@@ -16,15 +16,70 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
 import pandas as pd
-from skimage.metrics import structural_similarity
 from skimage.restoration import estimate_sigma
 from tabulate import tabulate
 
+torch: Any | None
+torch_ssim: Any | None
+try:
+    import torch
+    from torchmetrics.functional.image import (
+        structural_similarity_index_measure as torch_ssim,
+    )
+except ImportError:
+    torch = None
+    torch_ssim = None
+
+skimage_structural_similarity: Any | None
+try:
+    from skimage.metrics import structural_similarity as skimage_structural_similarity
+except ImportError:
+    skimage_structural_similarity = None
+
 logger = logging.getLogger(__name__)
+
+
+def _preferred_torch_device():
+    if torch is None:
+        return None
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
+
+
+def _structural_similarity_score(reference: np.ndarray, candidate: np.ndarray) -> float:
+    reference = np.nan_to_num(reference, nan=0.0, posinf=1e6, neginf=-1e6)
+    candidate = np.nan_to_num(candidate, nan=0.0, posinf=1e6, neginf=-1e6)
+
+    if torch is not None and torch_ssim is not None:
+        device = _preferred_torch_device()
+        ref = torch.from_numpy(reference.astype(np.float32, copy=False)).to(device)
+        cand = torch.from_numpy(candidate.astype(np.float32, copy=False)).to(device)
+        if ref.ndim == 2:
+            ref = ref.unsqueeze(0).unsqueeze(0)
+            cand = cand.unsqueeze(0).unsqueeze(0)
+        elif ref.ndim == 3:
+            ref = ref.unsqueeze(0)
+            cand = cand.unsqueeze(0)
+        else:
+            raise ValueError(f"Unsupported SSIM input shape: {reference.shape}")
+        data_min = min(float(ref.min().cpu()), float(cand.min().cpu()))
+        data_max = max(float(ref.max().cpu()), float(cand.max().cpu()))
+        data_range = max(data_max - data_min, 1e-6)
+        return float(torch_ssim(cand, ref, data_range=data_range).detach().cpu())
+
+    if skimage_structural_similarity is None:
+        raise ImportError(
+            "SSIM requires either `torchmetrics` + `torch` or `scikit-image`."
+        )
+    return float(skimage_structural_similarity(reference, candidate))
 
 
 @dataclass
@@ -32,13 +87,13 @@ class Job:
     job_id: str
     name: str
     current_status: str
-    req_memory: str = None
+    req_memory: str | None = None
     max_memory_gb: float = -1
-    cpu: str = None
-    gpu: str = None
-    node: str = None
-    start_time: datetime = None
-    time_elapsed: timedelta = None
+    cpu: str | None = None
+    gpu: str | None = None
+    node: str | None = None
+    start_time: datetime | None = None
+    time_elapsed: timedelta | None = None
 
     def end_time(self):
         return self.start_time + self.time_elapsed
@@ -64,7 +119,7 @@ pd.options.display.width = None
 
 suffixes = ["B", "KB", "MB", "GB", "TB", "PB"]
 
-all_data = defaultdict(dict)
+all_data: defaultdict[str, dict[str, Any]] = defaultdict(dict)
 
 """
 The following function s attributed to Sridhar Ratnakumar from Stack Overflow at https://stackoverflow.com/a/1094933
@@ -561,8 +616,7 @@ def test_gt(dir):
                 opengl_depth, dsize=(blender_depth.shape[1], blender_depth.shape[0])
             )
 
-            score, diff = structural_similarity(blender_depth, opengl_depth, full=True)
-            similarity[scene] = score * 100
+            similarity[scene] = _structural_similarity_score(blender_depth, opengl_depth) * 100
 
         fine_folder = next(Path(scene_path).glob("fine*"))
         tags = json.load(open(os.path.join(fine_folder, "MaskTag.json")))
