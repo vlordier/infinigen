@@ -786,7 +786,7 @@ def _make_wall(
     dz: float,
     label: str,
 ) -> BBox3D:
-    """Helper: create a wall BBox3D with half-extents."""
+    """Create a wall/surface BBox3D at position ``(x, y, z)`` with half-extents ``(dx, dy, dz)``."""
     return BBox3D(
         center=(x, y, z),
         extent=(dx, dy, dz),
@@ -805,7 +805,24 @@ def _generate_corridor(
 ) -> list[BBox3D]:
     """Generate a straight corridor with column-gap obstacles.
 
-    Returns floor, ceiling, side walls, and column obstacles.
+    Produces floor, ceiling, two side walls, and column-gap obstacles
+    along the corridor axis.  Supports both X-aligned and Y-aligned
+    directions for branching corridors.
+
+    Parameters
+    ----------
+    config : WorldConfig
+        World parameters (corridor dimensions, column count, gap height).
+    rng : np.random.Generator
+        Random number generator for obstacle placement.
+    origin : tuple[float, float, float]
+        Starting position of the corridor.
+    direction : tuple[float, float, float]
+        Axis-aligned direction vector (X or Y).
+    length : float | None
+        Override corridor length.  If *None*, uses ``config.effective_corridor_length``.
+    label_prefix : str
+        Prefix for box labels (e.g. ``"main"``, ``"branch_0"``).
     """
     boxes: list[BBox3D] = []
     ox, oy, oz = origin
@@ -924,7 +941,21 @@ def _generate_room(
     label_prefix: str = "room",
     has_ceiling: bool = True,
 ) -> list[BBox3D]:
-    """Generate a rectangular room with floor, walls, and optional ceiling."""
+    """Generate a rectangular room with floor, four walls, and optional ceiling.
+
+    Parameters
+    ----------
+    rng : np.random.Generator
+        Random number generator (reserved for future furniture randomisation).
+    center : tuple[float, float, float]
+        Room centre ``(x, y, z)`` in world coordinates.
+    size : tuple[float, float, float]
+        Full room dimensions ``(width, depth, height)``.
+    label_prefix : str
+        Label prefix for box identification (e.g. ``"room_0"``).
+    has_ceiling : bool
+        If *False*, the room is open-topped (visible from above).
+    """
     boxes: list[BBox3D] = []
     cx, cy, cz = center
     sx, sy, sz = size
@@ -977,7 +1008,19 @@ def _generate_debris(
     count: int,
     label_prefix: str = "debris",
 ) -> list[BBox3D]:
-    """Scatter small debris boxes within the given bounds."""
+    """Scatter small debris boxes randomly within an axis-aligned bounding region.
+
+    Parameters
+    ----------
+    rng : np.random.Generator
+        Random number generator for position and size sampling.
+    bounds_min, bounds_max : tuple[float, float, float]
+        Axis-aligned bounding region for debris placement.
+    count : int
+        Number of debris boxes to generate.
+    label_prefix : str
+        Label prefix for identification (e.g. ``"debris"``).
+    """
     boxes: list[BBox3D] = []
     bmin = np.array(bounds_min)
     bmax = np.array(bounds_max)

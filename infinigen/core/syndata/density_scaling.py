@@ -84,6 +84,12 @@ class DensityScaler:
             raise ValueError(msg)
 
     def _t(self) -> float:
+        """Apply the interpolation curve to the difficulty value.
+
+        Returns a transformed difficulty in [0, 1] shaped by the
+        selected curve: linear (identity), quadratic (slow start),
+        or sqrt (fast start).
+        """
         d = self.difficulty
         if self.curve == "quadratic":
             return d * d

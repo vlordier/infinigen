@@ -72,6 +72,7 @@ class StageGraph:
     stages: tuple[Stage, ...] = field(default_factory=lambda: _DEFAULT_STAGES)
 
     def _by_name(self) -> dict[str, Stage]:
+        """Build a name → Stage lookup dict for dependency resolution."""
         return {s.name: s for s in self.stages}
 
     def parallel_groups(self) -> list[list[str]]:
