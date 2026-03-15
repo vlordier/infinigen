@@ -43,6 +43,14 @@ __all__ = [
 ]
 
 # ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_MIN_GAP_HEIGHT: float = 0.2  # Minimum flyable gap height (metres)
+_FLOOR_HALF_THICKNESS: float = 0.05  # Half-thickness of floor/ceiling slabs
+_GAP_MARGIN: float = 0.05  # Margin between gap edge and floor/ceiling
+
+# ---------------------------------------------------------------------------
 # Flappy-bird column config
 # ---------------------------------------------------------------------------
 
@@ -105,8 +113,8 @@ class FlappyColumnConfig:
         if self.num_columns < 0:
             msg = f"num_columns must be non-negative, got {self.num_columns}"
             raise ValueError(msg)
-        if self.gap_height < 0.2:
-            msg = f"gap_height must be >= 0.2, got {self.gap_height}"
+        if self.gap_height < _MIN_GAP_HEIGHT:
+            msg = f"gap_height must be >= {_MIN_GAP_HEIGHT}, got {self.gap_height}"
             raise ValueError(msg)
         if self.gap_height_variation < 0:
             msg = f"gap_height_variation must be non-negative, got {self.gap_height_variation}"
@@ -259,8 +267,8 @@ def generate_flappy_obstacles(
             )
             gap_z = float(np.clip(
                 gap_z + jitter,
-                half_gap + 0.05,
-                config.corridor_height - half_gap - 0.05,
+                half_gap + _GAP_MARGIN,
+                config.corridor_height - half_gap - _GAP_MARGIN,
             ))
 
         # Lower column: from ground (z=0) to gap bottom
@@ -286,15 +294,14 @@ def generate_flappy_obstacles(
             ))
 
     # Floor and ceiling
-    floor_half_thick = 0.05
     obstacles.append(BBox3D(
-        center=(config.corridor_length / 2, 0.0, -floor_half_thick),
-        extent=(config.corridor_length / 2, config.corridor_width / 2, floor_half_thick),
+        center=(config.corridor_length / 2, 0.0, -_FLOOR_HALF_THICKNESS),
+        extent=(config.corridor_length / 2, config.corridor_width / 2, _FLOOR_HALF_THICKNESS),
         label="floor",
     ))
     obstacles.append(BBox3D(
-        center=(config.corridor_length / 2, 0.0, config.corridor_height + floor_half_thick),
-        extent=(config.corridor_length / 2, config.corridor_width / 2, floor_half_thick),
+        center=(config.corridor_length / 2, 0.0, config.corridor_height + _FLOOR_HALF_THICKNESS),
+        extent=(config.corridor_length / 2, config.corridor_width / 2, _FLOOR_HALF_THICKNESS),
         label="ceiling",
     ))
 

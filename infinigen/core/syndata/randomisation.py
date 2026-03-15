@@ -15,7 +15,7 @@ All helpers are pure Python / NumPy — no ``bpy`` dependency.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 import numpy as np
 
@@ -104,22 +104,11 @@ class DomainRandomiser:
 
     def ranges(self) -> dict[str, tuple[float, float]]:
         """Return all randomisation ranges at the current difficulty."""
-        result: dict[str, tuple[float, float]] = {}
-        for name in (
-            "sun_elevation",
-            "sun_intensity",
-            "exposure",
-            "cloud_density",
-            "fog_density",
-            "wind_speed",
-            "camera_rotation_jitter_deg",
-            "camera_translation_jitter_m",
-            "material_roughness_offset",
-            "material_color_hue_shift",
-        ):
-            r: _Range = getattr(self, name)
-            result[name] = r.at(self.difficulty)
-        return result
+        return {
+            f.name: getattr(self, f.name).at(self.difficulty)
+            for f in fields(self)
+            if f.type == "_Range"
+        }
 
     def gin_overrides(self) -> dict[str, object]:
         """Return a dict of logical overrides derived from current ranges.
