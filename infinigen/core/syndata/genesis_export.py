@@ -942,7 +942,7 @@ def to_genesis_script(config: GenesisSceneConfig) -> str:
 
     **Bridge layer: Infinigen → Genesis World.**
 
-    The generated script ``import genesis``, initialises the backend,
+    The generated script imports ``genesis``, initialises the backend,
     creates a scene with all entities/cameras/lights, builds it, and
     runs a simulation loop.  Genesis handles the physics, rendering,
     and episode management natively — this script is the entry-point.
