@@ -498,6 +498,69 @@ def configure_color_management(
 
 
 @gin.configurable
+def configure_render_time_pass(
+    enabled: bool = False,
+    log_on_enable: bool = True,
+) -> bool:
+    """Enable the Blender 5.0 Render Time pass on the active view layer.
+
+    The **Render Time** pass (introduced in Blender 5.0) records the per-pixel
+    render time in seconds as a greyscale EXR layer (socket name ``RenderTime``
+    in the compositor ``Render Layers`` node).  This is the pass that Blender
+    uses internally to build its render-cost heatmap in the viewport.
+
+    Infinigen's compositor output already routes any pass listed in
+    ``passes_to_save`` to a file slot, so enabling this pass automatically
+    produces a ``RenderTime<frame>.exr`` file alongside depth, normals, and
+    other GT data.  The resulting heatmap can be used to:
+
+    - Identify expensive scene regions (complex foliage, volumetric fog,
+      subsurface scattering) during dataset inspection.
+    - Drive per-scene adaptive sample budgeting: if the measured render time
+      for a given region exceeds a threshold, reduce ``num_samples`` for that
+      quality tier.
+    - Feed complexity signals back to the ``SceneBudget`` scheduler to stay
+      within a per-frame wall-clock budget.
+
+    The pass is disabled by default so that it has **zero overhead** for
+    existing pipelines.  Activate it by adding ``render_time_pass.gin`` to any
+    run's config stack, or by overriding ``configure_render_time_pass.enabled``
+    in a custom gin binding.
+
+    Args:
+        enabled: When ``True``, sets
+            ``bpy.context.scene.view_layers["ViewLayer"].cycles.use_pass_render_time = True``
+            so that Cycles populates the ``RenderTime`` socket.  When ``False``
+            (default) the pass is not enabled and no extra render overhead is
+            incurred.
+        log_on_enable: Emit an ``INFO``-level log message when the pass is
+            activated.  Useful for confirming gin configuration is applied.
+
+    Returns:
+        Whether the render time pass is now enabled on the active view layer.
+    """
+    if not enabled:
+        return False
+
+    viewlayer = bpy.context.scene.view_layers["ViewLayer"]
+    viewlayer.cycles.use_pass_render_time = True
+
+    if log_on_enable:
+        logger.info(
+            "Render Time pass enabled — RenderTime EXR will be saved alongside "
+            "other render passes.  Useful for per-pixel cost budgeting."
+        )
+
+    return True
+
+
+# Pass descriptor used when the render time pass is wired into the compositor.
+# Format: (viewlayer_pass_name, compositor_socket_name) — matches the
+# passes_to_save list format consumed by render.configure_compositor_output().
+RENDER_TIME_PASS_DESCRIPTOR = ("render_time", "RenderTime")
+
+
+@gin.configurable
 def configure_blender(
     render_engine="CYCLES",
     motion_blur=False,

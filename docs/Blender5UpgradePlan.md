@@ -353,7 +353,7 @@ C.scene.render.engine = "BLENDER_EEVEE_NEXT"  # Blender 5.0+
 | Scatter density scaling (Massive Geometry) | ⭐⭐⭐ High (scene diversity) | 🟢 Low | **P2 ✅ Implemented** |
 | Repeat Zones for material octaves | ⭐⭐ Medium (compile speed) | 🟡 Medium | **P2** |
 | Switch Menu for material variants | ⭐⭐ Medium (diversity) | 🟡 Medium | **P2** |
-| Render Time pass → adaptive budgeting | ⭐⭐ Medium (throughput) | 🔴 High | **P2** |
+| Render Time pass → adaptive budgeting | ⭐⭐ Medium (throughput) | 🔴 High | **P2** ✅ |
 | SDF Grid terrain (replace C++ mesher) | ⭐⭐⭐ High (realism) | 🔴 High | **P3** |
 | Volume grids for fog/clouds/haze | ⭐⭐⭐ High (diversity) | 🔴 High | **P3** |
 | Bundles for asset parameter passing | ⭐ Low (DX) | 🔴 High | **P4** |

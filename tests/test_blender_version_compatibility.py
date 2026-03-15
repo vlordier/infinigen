@@ -933,3 +933,83 @@ def test_scatter_density_scale_applies():
     # density_scale default is 1.0, max_density default >= 10000
     assert sig.parameters["density_scale"].default == 1.0
     assert sig.parameters["max_density"].default >= SCATTER_MAX_DENSITY_DEFAULT
+
+
+# ---------------------------------------------------------------------------
+# Render Time Pass (P2) — Blender 5.0 per-pixel cost heatmap
+# ---------------------------------------------------------------------------
+
+
+def test_configure_render_time_pass_exists():
+    """configure_render_time_pass must exist in core.init."""
+    import importlib
+
+    m = importlib.import_module("infinigen.core.init")
+    assert hasattr(m, "configure_render_time_pass"), (
+        "configure_render_time_pass missing from infinigen.core.init"
+    )
+    assert callable(m.configure_render_time_pass)
+
+
+def test_configure_render_time_pass_is_gin_configurable():
+    """configure_render_time_pass must be decorated with @gin.configurable."""
+    from infinigen.core.init import configure_render_time_pass
+
+    assert hasattr(configure_render_time_pass, "__wrapped__"), (
+        "configure_render_time_pass is not gin-configurable — missing @gin.configurable"
+    )
+
+
+def test_configure_render_time_pass_gin_params():
+    """configure_render_time_pass must expose enabled and log_on_enable parameters."""
+    import inspect
+
+    from infinigen.core.init import configure_render_time_pass
+
+    sig = inspect.signature(configure_render_time_pass.__wrapped__)
+    params = sig.parameters
+    assert "enabled" in params, "enabled gin parameter missing"
+    assert "log_on_enable" in params, "log_on_enable gin parameter missing"
+
+
+def test_configure_render_time_pass_default_disabled():
+    """configure_render_time_pass.enabled must default to False (zero overhead by default)."""
+    import inspect
+
+    from infinigen.core.init import configure_render_time_pass
+
+    sig = inspect.signature(configure_render_time_pass.__wrapped__)
+    assert sig.parameters["enabled"].default is False, (
+        "configure_render_time_pass.enabled defaults to True — "
+        "this would add overhead to every render by default"
+    )
+
+
+def test_render_time_pass_descriptor_exists():
+    """RENDER_TIME_PASS_DESCRIPTOR must be a 2-tuple matching the compositor convention."""
+    from infinigen.core.init import RENDER_TIME_PASS_DESCRIPTOR
+
+    assert isinstance(RENDER_TIME_PASS_DESCRIPTOR, tuple), (
+        "RENDER_TIME_PASS_DESCRIPTOR must be a tuple"
+    )
+    assert len(RENDER_TIME_PASS_DESCRIPTOR) == 2, (
+        "RENDER_TIME_PASS_DESCRIPTOR must have exactly 2 elements (pass_name, socket_name)"
+    )
+    pass_name, socket_name = RENDER_TIME_PASS_DESCRIPTOR
+    assert pass_name == "render_time", f"Expected 'render_time', got {pass_name!r}"
+    assert socket_name == "RenderTime", f"Expected 'RenderTime', got {socket_name!r}"
+
+
+def test_render_image_enable_render_time_pass_param():
+    """render_image must expose enable_render_time_pass as a gin parameter."""
+    import inspect
+
+    from infinigen.core.rendering.render import render_image
+
+    sig = inspect.signature(render_image.__wrapped__)
+    assert "enable_render_time_pass" in sig.parameters, (
+        "enable_render_time_pass parameter missing from render_image"
+    )
+    assert sig.parameters["enable_render_time_pass"].default is False, (
+        "enable_render_time_pass must default to False"
+    )

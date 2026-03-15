@@ -1,0 +1,33 @@
+# render_time_pass.gin
+#
+# Enables the Blender 5.0 Render Time pass for per-pixel cost analysis.
+#
+# The Render Time pass records, for each pixel, the number of seconds Cycles
+# spent sampling it.  The result is saved as a greyscale EXR layer named
+# ``RenderTime<frame>.exr`` alongside the existing depth, normal, and other
+# render pass outputs.
+#
+# Typical uses:
+#
+#   1.  Identifying expensive scene regions during dataset inspection
+#       (complex foliage, volumetric fog, subsurface materials).
+#
+#   2.  Driving per-scene adaptive sample budgeting: measure render cost,
+#       then reduce ``configure_render_cycles.num_samples`` for cheaper
+#       quality tiers.
+#
+#   3.  Feeding per-frame render-cost signals back to the complexity
+#       scheduler so that the pipeline stays within a wall-clock budget.
+#
+# Usage: pass this gin file alongside any existing config stack, e.g.
+#
+#   python -m infinigen.datagen.manage_jobs ... \
+#       --configs base.gin render_time_pass.gin
+#
+# The render_time pass is Cycles-only.  When ``eevee_annotations.gin`` is
+# also loaded, the flat/annotation render (EEVEE) is not affected -- the
+# render time pass is only injected into the full/Cycles render.
+
+full/render_image.enable_render_time_pass = True
+configure_render_time_pass.enabled = True
+configure_render_time_pass.log_on_enable = True
