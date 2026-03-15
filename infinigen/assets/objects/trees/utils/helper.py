@@ -43,7 +43,7 @@ def config_rendering(
     """
 
     if renderer == "eevee":
-        C.scene.render.engine = "BLENDER_EEVEE"
+        C.scene.render.engine = "BLENDER_EEVEE_NEXT"
         C.scene.eevee.taa_render_samples = render_samples
 
     elif renderer == "cycles":

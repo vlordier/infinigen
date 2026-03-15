@@ -63,7 +63,7 @@ def process(scene_folder: Path):
 
     bpy.context.scene.render.filepath = str(scene_folder / "Image_EEVEE")
     enable_gpu()
-    bpy.context.scene.render.engine = "BLENDER_EEVEE"
+    bpy.context.scene.render.engine = "BLENDER_EEVEE_NEXT"
     bpy.ops.render.render(write_still=True)
 
     butil.save_blend(scene_folder / "eevee.blend")
