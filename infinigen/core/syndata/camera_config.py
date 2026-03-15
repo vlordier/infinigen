@@ -14,7 +14,7 @@ All helpers are pure Python — no ``bpy`` dependency.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 __all__ = [
     "ASPECT_1_1",
@@ -50,6 +50,9 @@ class DroneCamera:
     aspect_ratio: float = ASPECT_4_3
     sensor_height_mm: float = 18.0
 
+    # Pre-computed (set in __post_init__)
+    _focal_length_mm: float = field(init=False, repr=False)
+
     def __post_init__(self) -> None:
         if not 10.0 <= self.fov_deg <= 180.0:
             msg = f"fov_deg must be in [10, 180], got {self.fov_deg}"
@@ -60,12 +63,16 @@ class DroneCamera:
         if self.sensor_height_mm <= 0:
             msg = f"sensor_height_mm must be positive, got {self.sensor_height_mm}"
             raise ValueError(msg)
+        sensor_width = self.sensor_height_mm * self.aspect_ratio
+        object.__setattr__(
+            self, "_focal_length_mm",
+            sensor_width / (2.0 * math.tan(math.radians(self.fov_deg / 2.0))),
+        )
 
     @property
     def focal_length_mm(self) -> float:
-        """Compute focal length from FoV and sensor size."""
-        sensor_width = self.sensor_height_mm * self.aspect_ratio
-        return sensor_width / (2.0 * math.tan(math.radians(self.fov_deg / 2.0)))
+        """Focal length derived from FoV and sensor size (pre-computed)."""
+        return self._focal_length_mm
 
 
 @dataclass(frozen=True)

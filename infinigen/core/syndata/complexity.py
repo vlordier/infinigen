@@ -63,6 +63,10 @@ class CurriculumConfig:
 
     # Derived values (populated by __post_init__)
     _progress: float = field(init=False, repr=False)
+    _subdiv_level: int = field(init=False, repr=False)
+    _texture_resolution: int = field(init=False, repr=False)
+    _object_count: int = field(init=False, repr=False)
+    _scatter_density: float = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.total_stages < 1:
@@ -88,7 +92,28 @@ class CurriculumConfig:
             raise ValueError(msg)
         # Exponential ease-in: slow ramp then fast increase
         linear = self.stage / max(self.total_stages - 1, 1)
-        object.__setattr__(self, "_progress", math.pow(linear, self.exponent))
+        p = math.pow(linear, self.exponent)
+        object.__setattr__(self, "_progress", p)
+
+        # Pre-compute derived values to avoid repeated calculation
+        object.__setattr__(
+            self, "_subdiv_level",
+            round(self.min_subdiv + p * (self.max_subdiv - self.min_subdiv)),
+        )
+        raw_tex = self.min_texture_res + p * (self.max_texture_res - self.min_texture_res)
+        po2 = int(2 ** round(math.log2(max(raw_tex, 1))))
+        object.__setattr__(
+            self, "_texture_resolution",
+            max(self.min_texture_res, min(po2, self.max_texture_res)),
+        )
+        object.__setattr__(
+            self, "_object_count",
+            round(self.min_objects + p * (self.max_objects - self.min_objects)),
+        )
+        object.__setattr__(
+            self, "_scatter_density",
+            max(self.min_scatter_density, p),
+        )
 
     # ---- derived properties -------------------------------------------------
 
@@ -100,7 +125,7 @@ class CurriculumConfig:
     @property
     def subdiv_level(self) -> int:
         """Subdivision level for this stage (integer)."""
-        return round(self.min_subdiv + self._progress * (self.max_subdiv - self.min_subdiv))
+        return self._subdiv_level
 
     @property
     def texture_resolution(self) -> int:
@@ -109,19 +134,17 @@ class CurriculumConfig:
         The result is clamped to ``[min_texture_res, max_texture_res]`` so it
         never overshoots the configured bounds.
         """
-        raw = self.min_texture_res + self._progress * (self.max_texture_res - self.min_texture_res)
-        po2 = int(2 ** round(math.log2(max(raw, 1))))
-        return max(self.min_texture_res, min(po2, self.max_texture_res))
+        return self._texture_resolution
 
     @property
     def object_count(self) -> int:
         """Target number of scene objects for this stage."""
-        return round(self.min_objects + self._progress * (self.max_objects - self.min_objects))
+        return self._object_count
 
     @property
     def scatter_density(self) -> float:
         """Scatter-density multiplier in [min_scatter_density, 1] for this stage."""
-        return max(self.min_scatter_density, self._progress)
+        return self._scatter_density
 
 
 def curriculum_overrides(cfg: CurriculumConfig) -> dict[str, object]:
