@@ -20,51 +20,66 @@ from typing import Any
 # Preset definitions
 # ---------------------------------------------------------------------------
 
+def _make_preset(
+    w: int,
+    h: int,
+    num_samples: int,
+    min_samples: int,
+    adaptive_threshold: float,
+    time_limit: int,
+    denoise: bool,
+    exposure: float,
+    motion_blur: bool,
+    volume_scatter: bool,
+) -> dict[str, Any]:
+    """Build a preset dict with resolution *and* camera-intrinsics sync.
+
+    Infinigen's ``get_sensor_coords`` has its own ``H`` / ``W`` gin
+    bindings that **must** match ``execute_tasks.generate_resolution``.
+    Failing to sync them silently produces wrong depth / projection
+    data — fatal for any vision-based RL agent.
+    """
+    return {
+        "configure_render_cycles.num_samples": num_samples,
+        "configure_render_cycles.min_samples": min_samples,
+        "configure_render_cycles.adaptive_threshold": adaptive_threshold,
+        "configure_render_cycles.time_limit": time_limit,
+        "configure_render_cycles.denoise": denoise,
+        "configure_render_cycles.exposure": exposure,
+        "execute_tasks.generate_resolution": (w, h),
+        # Camera intrinsics must match render resolution
+        "get_sensor_coords.H": h,
+        "get_sensor_coords.W": w,
+        "configure_blender.motion_blur": motion_blur,
+        "render.volume_scatter": volume_scatter,
+    }
+
+
 _PRESETS: dict[str, dict[str, Any]] = {
-    "preview": {
-        "configure_render_cycles.num_samples": 16,
-        "configure_render_cycles.min_samples": 4,
-        "configure_render_cycles.adaptive_threshold": 0.1,
-        "configure_render_cycles.time_limit": 5,
-        "configure_render_cycles.denoise": False,
-        "configure_render_cycles.exposure": 0.8,
-        "execute_tasks.generate_resolution": (128, 128),
-        "render.motion_blur": False,
-        "render.volume_scatter": False,
-    },
-    "fast": {
-        "configure_render_cycles.num_samples": 64,
-        "configure_render_cycles.min_samples": 8,
-        "configure_render_cycles.adaptive_threshold": 0.05,
-        "configure_render_cycles.time_limit": 15,
-        "configure_render_cycles.denoise": True,
-        "configure_render_cycles.exposure": 1.0,
-        "execute_tasks.generate_resolution": (256, 256),
-        "render.motion_blur": False,
-        "render.volume_scatter": False,
-    },
-    "medium": {
-        "configure_render_cycles.num_samples": 128,
-        "configure_render_cycles.min_samples": 16,
-        "configure_render_cycles.adaptive_threshold": 0.02,
-        "configure_render_cycles.time_limit": 30,
-        "configure_render_cycles.denoise": True,
-        "configure_render_cycles.exposure": 1.0,
-        "execute_tasks.generate_resolution": (512, 512),
-        "render.motion_blur": True,
-        "render.volume_scatter": True,
-    },
-    "high": {
-        "configure_render_cycles.num_samples": 512,
-        "configure_render_cycles.min_samples": 32,
-        "configure_render_cycles.adaptive_threshold": 0.005,
-        "configure_render_cycles.time_limit": 120,
-        "configure_render_cycles.denoise": True,
-        "configure_render_cycles.exposure": 1.0,
-        "execute_tasks.generate_resolution": (1024, 1024),
-        "render.motion_blur": True,
-        "render.volume_scatter": True,
-    },
+    "preview": _make_preset(
+        w=128, h=128, num_samples=16, min_samples=4,
+        adaptive_threshold=0.1, time_limit=5,
+        denoise=False, exposure=0.8,
+        motion_blur=False, volume_scatter=False,
+    ),
+    "fast": _make_preset(
+        w=256, h=256, num_samples=64, min_samples=8,
+        adaptive_threshold=0.05, time_limit=15,
+        denoise=True, exposure=1.0,
+        motion_blur=False, volume_scatter=False,
+    ),
+    "medium": _make_preset(
+        w=512, h=512, num_samples=128, min_samples=16,
+        adaptive_threshold=0.02, time_limit=30,
+        denoise=True, exposure=1.0,
+        motion_blur=True, volume_scatter=True,
+    ),
+    "high": _make_preset(
+        w=1024, h=1024, num_samples=512, min_samples=32,
+        adaptive_threshold=0.005, time_limit=120,
+        denoise=True, exposure=1.0,
+        motion_blur=True, volume_scatter=True,
+    ),
 }
 
 VALID_PRESETS = frozenset(_PRESETS)
@@ -108,4 +123,42 @@ def drone_preset(
             msg = f"resolution too large: {resolution_override} (max 8192×8192)"
             raise ValueError(msg)
         overrides["execute_tasks.generate_resolution"] = resolution_override
+        overrides["get_sensor_coords.H"] = h
+        overrides["get_sensor_coords.W"] = w
     return overrides
+
+
+def to_gin_bindings(overrides: dict[str, Any]) -> list[str]:
+    """Convert an overrides dict to a list of gin-parseable binding strings.
+
+    Each returned string is a valid gin binding such as
+    ``"configure_render_cycles.num_samples = 64"``.  Strings are quoted,
+    tuples become parenthesised, booleans become ``True``/``False``.
+
+    Parameters
+    ----------
+    overrides : dict[str, Any]
+        Dict of ``"scope/function.param"`` → value pairs, as returned by
+        :func:`drone_preset`, :meth:`DomainRandomiser.gin_overrides`, etc.
+
+    Returns
+    -------
+    list[str]
+        Gin binding strings ready for ``gin.parse_config``.
+    """
+    lines: list[str] = []
+    for key, value in sorted(overrides.items()):
+        lines.append(f"{key} = {_gin_repr(value)}")
+    return lines
+
+
+def _gin_repr(value: Any) -> str:
+    """Format a Python value as a gin-compatible literal."""
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, str):
+        return repr(value)
+    if isinstance(value, tuple):
+        inner = ", ".join(_gin_repr(v) for v in value)
+        return f"({inner})"
+    return str(value)

@@ -13,12 +13,28 @@ import numpy as np
 import pytest
 
 # ── Module imports (all bpy-free) ──────────────────────────────────────────
+from infinigen.core.syndata.camera_config import (
+    ASPECT_4_3,
+    CameraRigConfig,
+    DroneCamera,
+)
 from infinigen.core.syndata.complexity import CurriculumConfig, curriculum_overrides
 from infinigen.core.syndata.density_scaling import DensityScaler
+from infinigen.core.syndata.episode import EpisodeConfig
 from infinigen.core.syndata.metadata import BBox3D, DepthStats, FrameMetadata
 from infinigen.core.syndata.metrics import SceneBudget
+from infinigen.core.syndata.observation import (
+    PASSES_MINIMAL,
+    PASSES_NAVIGATION,
+    ObservationConfig,
+    SensorNoiseModel,
+)
 from infinigen.core.syndata.parallel_stages import Stage, StageGraph
-from infinigen.core.syndata.quality_presets import VALID_PRESETS, drone_preset
+from infinigen.core.syndata.quality_presets import (
+    VALID_PRESETS,
+    drone_preset,
+    to_gin_bindings,
+)
 from infinigen.core.syndata.randomisation import DomainRandomiser
 from infinigen.core.syndata.resolution import resolution_for_stage
 from infinigen.core.syndata.validation import SceneValidator
@@ -587,3 +603,325 @@ class TestIntegration:
         loaded = FrameMetadata.load_json(path)
         assert loaded.curriculum_stage == 5
         assert loaded.obstacles[0].label == "drone_target"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  11. Camera intrinsics sync (pipeline-critical fix)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestCameraIntrinsicsSync:
+    """Verify that quality presets always sync get_sensor_coords.H/W
+    with execute_tasks.generate_resolution — without this, depth maps
+    and 3D projections are silently wrong."""
+
+    @pytest.mark.parametrize("name", sorted(VALID_PRESETS))
+    def test_preset_syncs_intrinsics(self, name):
+        overrides = drone_preset(name)
+        w, h = overrides["execute_tasks.generate_resolution"]
+        assert overrides["get_sensor_coords.H"] == h
+        assert overrides["get_sensor_coords.W"] == w
+
+    def test_resolution_override_syncs_intrinsics(self):
+        overrides = drone_preset("fast", resolution_override=(640, 480))
+        assert overrides["get_sensor_coords.H"] == 480
+        assert overrides["get_sensor_coords.W"] == 640
+
+    def test_motion_blur_key_uses_correct_gin_name(self):
+        overrides = drone_preset("medium")
+        assert "configure_blender.motion_blur" in overrides
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  12. Gin binding generation
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestGinBindings:
+    def test_basic_types(self):
+        lines = to_gin_bindings({"foo.bar": 42, "baz.qux": True})
+        assert "baz.qux = True" in lines
+        assert "foo.bar = 42" in lines
+
+    def test_tuple_formatting(self):
+        lines = to_gin_bindings({"res": (256, 256)})
+        assert "res = (256, 256)" in lines
+
+    def test_string_quoting(self):
+        lines = to_gin_bindings({"mode": "fast"})
+        assert "mode = 'fast'" in lines
+
+    def test_false_boolean(self):
+        lines = to_gin_bindings({"flag": False})
+        assert "flag = False" in lines
+
+    def test_sorted_output(self):
+        lines = to_gin_bindings({"z": 1, "a": 2, "m": 3})
+        keys = [l.split(" = ")[0] for l in lines]
+        assert keys == sorted(keys)
+
+    def test_roundtrip_preset_to_gin(self):
+        """All preset values should produce valid gin strings."""
+        for name in VALID_PRESETS:
+            overrides = drone_preset(name)
+            lines = to_gin_bindings(overrides)
+            assert len(lines) > 0
+            for line in lines:
+                assert " = " in line
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  13. Observation space
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestObservation:
+    def test_default_channels(self):
+        obs = ObservationConfig()
+        names = obs.channel_names
+        assert "R" in names  # RGB included by default
+        assert obs.num_channels >= 4  # R, G, B + at least depth
+
+    def test_no_rgb(self):
+        obs = ObservationConfig(include_rgb=False)
+        assert "R" not in obs.channel_names
+        assert obs.num_channels >= 1  # at least the passes
+
+    def test_minimal_passes(self):
+        obs = ObservationConfig(passes=PASSES_MINIMAL)
+        overrides = obs.gin_overrides()
+        # Should export flat passes
+        assert isinstance(overrides, dict)
+
+    def test_navigation_passes(self):
+        obs = ObservationConfig(passes=PASSES_NAVIGATION)
+        names = obs.channel_names
+        assert "z" in names
+        assert "normal" in names
+        assert "object_index" in names
+
+    def test_invalid_depth_clip(self):
+        with pytest.raises(ValueError, match="depth_clip_m"):
+            ObservationConfig(depth_clip_m=-10)
+
+
+class TestSensorNoise:
+    def test_default_is_clean(self):
+        noise = SensorNoiseModel()
+        assert noise.gaussian_std == 0.0
+        assert noise.salt_pepper_prob == 0.0
+
+    def test_drone_default_scales_with_difficulty(self):
+        easy = SensorNoiseModel.drone_default(0.0)
+        hard = SensorNoiseModel.drone_default(1.0)
+        assert easy.gaussian_std < hard.gaussian_std
+        assert easy.motion_blur_px < hard.motion_blur_px
+
+    def test_invalid_noise_params(self):
+        with pytest.raises(ValueError, match="gaussian_std"):
+            SensorNoiseModel(gaussian_std=-1)
+        with pytest.raises(ValueError, match="salt_pepper_prob"):
+            SensorNoiseModel(salt_pepper_prob=2.0)
+        with pytest.raises(ValueError, match="motion_blur_px"):
+            SensorNoiseModel(motion_blur_px=-5)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  14. Camera configuration
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestDroneCamera:
+    def test_focal_length_90fov(self):
+        cam = DroneCamera(fov_deg=90.0, aspect_ratio=ASPECT_4_3)
+        # focal length should be positive and finite
+        assert 0 < cam.focal_length_mm < 100
+
+    def test_invalid_fov(self):
+        with pytest.raises(ValueError, match="fov_deg"):
+            DroneCamera(fov_deg=5)  # too narrow
+        with pytest.raises(ValueError, match="fov_deg"):
+            DroneCamera(fov_deg=200)  # too wide
+
+    def test_wide_angle(self):
+        narrow = DroneCamera(fov_deg=60)
+        wide = DroneCamera(fov_deg=150)
+        assert wide.focal_length_mm < narrow.focal_length_mm
+
+
+class TestCameraRig:
+    def test_monocular(self):
+        rig = CameraRigConfig.monocular(n_drones=3)
+        assert rig.n_rigs == 3
+        assert len(rig.effective_cameras) == 1
+
+    def test_stereo(self):
+        rig = CameraRigConfig.stereo(baseline_m=0.065)
+        assert len(rig.effective_cameras) == 2
+        # Second camera should be offset by baseline
+        left = rig.effective_cameras[0]["loc"]
+        right = rig.effective_cameras[1]["loc"]
+        assert right[0] - left[0] == pytest.approx(0.065)
+
+    def test_gin_overrides(self):
+        rig = CameraRigConfig.stereo(baseline_m=0.1, n_drones=2)
+        overrides = rig.gin_overrides()
+        assert overrides["camera.spawn_camera_rigs.n_camera_rigs"] == 2
+        assert len(overrides["camera.spawn_camera_rigs.camera_rig_config"]) == 2
+
+    def test_invalid_n_rigs(self):
+        with pytest.raises(ValueError, match="n_rigs"):
+            CameraRigConfig(n_rigs=0)
+
+    def test_no_stereo_baseline(self):
+        rig = CameraRigConfig.monocular()
+        assert len(rig.effective_cameras) == 1
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  15. Episode configuration
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestEpisode:
+    def test_single_frame(self):
+        ep = EpisodeConfig.single_frame()
+        assert ep.num_frames == 1
+        assert ep.frame_range == (1, 1)
+        assert ep.duration_seconds == pytest.approx(1 / 24)
+
+    def test_short_trajectory(self):
+        ep = EpisodeConfig.short_trajectory(num_frames=30, fps=10)
+        assert ep.frame_range == (1, 30)
+        assert ep.duration_seconds == pytest.approx(3.0)
+
+    def test_navigation_episode(self):
+        ep = EpisodeConfig.navigation_episode(num_frames=120)
+        assert ep.trajectory == "rrt"
+        assert ep.end_frame == 120
+
+    def test_gin_overrides(self):
+        ep = EpisodeConfig(num_frames=60, fps=30)
+        overrides = ep.gin_overrides()
+        assert overrides["execute_tasks.frame_range"] == [1, 60]
+        assert overrides["execute_tasks.fps"] == 30
+
+    def test_invalid_frames(self):
+        with pytest.raises(ValueError, match="num_frames"):
+            EpisodeConfig(num_frames=0)
+
+    def test_invalid_fps(self):
+        with pytest.raises(ValueError, match="fps"):
+            EpisodeConfig(fps=0)
+        with pytest.raises(ValueError, match="fps"):
+            EpisodeConfig(fps=200)
+
+    def test_invalid_trajectory(self):
+        with pytest.raises(ValueError, match="trajectory"):
+            EpisodeConfig(trajectory="teleport")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  16. Enriched metadata (velocity, obstacles, swarm)
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestEnrichedMetadata:
+    def test_velocity_default(self):
+        meta = FrameMetadata()
+        assert meta.velocity == (0.0, 0.0, 0.0)
+
+    def test_nearest_obstacle_default_inf(self):
+        import math
+        meta = FrameMetadata()
+        assert math.isinf(meta.nearest_obstacle_m)
+
+    def test_swarm_positions(self):
+        meta = FrameMetadata(
+            swarm_positions=[(1.0, 2.0, 3.0), (4.0, 5.0, 6.0)],
+        )
+        assert len(meta.swarm_positions) == 2
+
+    def test_json_roundtrip_with_new_fields(self, tmp_path):
+        meta = FrameMetadata(
+            frame_id=7,
+            velocity=(1.5, -0.3, 0.0),
+            nearest_obstacle_m=2.5,
+            swarm_positions=[(10, 20, 30), (40, 50, 60)],
+        )
+        path = tmp_path / "enriched.json"
+        meta.save_json(path)
+        loaded = FrameMetadata.load_json(path)
+        assert loaded.velocity == (1.5, -0.3, 0.0)
+        assert loaded.nearest_obstacle_m == pytest.approx(2.5)
+        assert len(loaded.swarm_positions) == 2
+        assert loaded.swarm_positions[0] == (10, 20, 30)
+
+    def test_json_roundtrip_infinity_obstacle(self, tmp_path):
+        """nearest_obstacle_m=inf must survive JSON serialisation."""
+        meta = FrameMetadata(nearest_obstacle_m=float("inf"))
+        path = tmp_path / "inf_test.json"
+        meta.save_json(path)
+        loaded = FrameMetadata.load_json(path)
+        import math
+        assert math.isinf(loaded.nearest_obstacle_m)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  17. Full UAV swarm integration
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestUAVSwarmIntegration:
+    """End-to-end test: configure a full UAV swarm training pipeline."""
+
+    def test_full_swarm_config(self):
+        """Build a complete config for a 4-drone swarm curriculum."""
+        total_stages = 8
+        for stage_idx in range(total_stages):
+            cfg = CurriculumConfig(stage=stage_idx, total_stages=total_stages)
+
+            # Preset selection based on difficulty
+            preset_name = "preview" if cfg.progress < 0.5 else "fast"
+            preset = drone_preset(preset_name)
+
+            # Camera: stereo rig for 4 drones
+            rig = CameraRigConfig.stereo(baseline_m=0.065, n_drones=4)
+
+            # Episode: longer episodes at higher difficulty
+            ep_frames = max(1, int(30 * (1 + cfg.progress)))
+            episode = EpisodeConfig(num_frames=ep_frames, fps=10, trajectory="random_walk")
+
+            # Observation: add more passes as training progresses
+            if cfg.progress < 0.3:
+                obs = ObservationConfig(passes=PASSES_MINIMAL)
+            else:
+                obs = ObservationConfig(passes=PASSES_NAVIGATION)
+
+            # Sensor noise scales with difficulty
+            noise = SensorNoiseModel.drone_default(cfg.progress)
+
+            # All overrides should be valid
+            assert preset["get_sensor_coords.H"] == preset["execute_tasks.generate_resolution"][1]
+            assert rig.n_rigs == 4
+            assert episode.num_frames >= 1
+            assert obs.num_channels >= 1
+            assert noise.gaussian_std >= 0
+
+    def test_gin_bindings_composable(self):
+        """All gin_overrides methods should produce to_gin_bindings-able dicts."""
+        preset = drone_preset("fast")
+        rig = CameraRigConfig.monocular()
+        episode = EpisodeConfig.short_trajectory()
+
+        # Merge all overrides
+        all_overrides: dict = {}
+        all_overrides.update(preset)
+        all_overrides.update(rig.gin_overrides())
+        all_overrides.update(episode.gin_overrides())
+
+        # Should produce valid gin bindings
+        lines = to_gin_bindings(all_overrides)
+        assert len(lines) > 5
+        for line in lines:
+            assert " = " in line

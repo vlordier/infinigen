@@ -14,6 +14,7 @@ All helpers are pure Python / NumPy — no ``bpy`` dependency.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -104,6 +105,15 @@ class FrameMetadata:
         Fraction of the frame area that is traversable (0–1).
     curriculum_stage : int
         Curriculum stage that generated this frame.
+    velocity : tuple[float, float, float]
+        Agent velocity ``(vx, vy, vz)`` in m/s.  Zero for static frames.
+    nearest_obstacle_m : float
+        Distance to the nearest obstacle surface in metres.
+        ``inf`` if no obstacles are in range.  Critical for collision
+        avoidance reward shaping.
+    swarm_positions : list[tuple[float, float, float]]
+        World positions of other agents in the swarm.  Empty list for
+        single-agent scenarios.
     extra : dict[str, Any]
         Arbitrary additional metadata.
     """
@@ -116,11 +126,22 @@ class FrameMetadata:
     depth_stats: DepthStats | None = None
     traversability_ratio: float = 1.0
     curriculum_stage: int = 0
+    velocity: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    nearest_obstacle_m: float = float("inf")
+    swarm_positions: list[tuple[float, float, float]] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialise to a JSON-compatible dict."""
-        return asdict(self)
+        """Serialise to a JSON-compatible dict.
+
+        ``float('inf')`` is serialised as the string ``"Infinity"`` so
+        that standard JSON parsers don't choke.
+        """
+        d = asdict(self)
+        # JSON has no infinity literal — encode as string
+        if math.isinf(d.get("nearest_obstacle_m", 0)):
+            d["nearest_obstacle_m"] = "Infinity"
+        return d
 
     def save_json(self, path: str | Path) -> None:
         """Write metadata to a JSON file."""
@@ -133,4 +154,19 @@ class FrameMetadata:
         obstacles = [BBox3D(**o) for o in data.pop("obstacles", [])]
         ds = data.pop("depth_stats", None)
         depth_stats = DepthStats(**ds) if ds else None
-        return FrameMetadata(obstacles=obstacles, depth_stats=depth_stats, **data)
+        # Restore infinity from string encoding
+        nom = data.get("nearest_obstacle_m")
+        if nom == "Infinity":
+            data["nearest_obstacle_m"] = float("inf")
+        # JSON deserialises tuples as lists — convert them back
+        for key in ("camera_position", "camera_rotation_euler", "velocity"):
+            if key in data and isinstance(data[key], list):
+                data[key] = tuple(data[key])
+        sp = data.pop("swarm_positions", [])
+        swarm_positions = [tuple(p) for p in sp]
+        return FrameMetadata(
+            obstacles=obstacles,
+            depth_stats=depth_stats,
+            swarm_positions=swarm_positions,
+            **data,
+        )
