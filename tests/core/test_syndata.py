@@ -50,6 +50,7 @@ from infinigen.core.syndata.world_gen import (
     VisualStyle,
     WorldConfig,
     generate_world,
+    overlay_hints_for_complexity,
     world_gin_overrides,
     world_summary,
     world_to_frame_metadata,
@@ -1819,3 +1820,27 @@ class TestInfinigenOverlayHints:
         assert h_low.environment_type == "corridor"
         h_high = InfinigenOverlayHints.from_complexity(1.5)
         assert h_high.material_complexity == "subsurface"
+
+
+class TestOverlayHintsForComplexity:
+    """Tests for the overlay_hints_for_complexity convenience function."""
+
+    def test_returns_hints(self):
+        h = overlay_hints_for_complexity(0.5)
+        assert isinstance(h, InfinigenOverlayHints)
+
+    def test_matches_from_complexity(self):
+        for c in [0.0, 0.1, 0.3, 0.5, 0.7, 0.9, 1.0]:
+            h1 = overlay_hints_for_complexity(c)
+            h2 = InfinigenOverlayHints.from_complexity(c)
+            assert h1 == h2
+
+    def test_low_complexity(self):
+        h = overlay_hints_for_complexity(0.05)
+        assert h.environment_type == "corridor"
+        assert h.material_complexity == "flat"
+
+    def test_high_complexity(self):
+        h = overlay_hints_for_complexity(0.95)
+        assert h.material_complexity == "subsurface"
+        assert h.texture_resolution == 4096

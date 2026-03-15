@@ -1118,6 +1118,34 @@ def generate_world(config: WorldConfig) -> list[BBox3D]:
 # ---------------------------------------------------------------------------
 
 
+def overlay_hints_for_complexity(complexity: float) -> InfinigenOverlayHints:
+    """Return Infinigen overlay hints for a given complexity value.
+
+    Convenience wrapper around :meth:`InfinigenOverlayHints.from_complexity`
+    for use without constructing a full :class:`WorldConfig`.
+
+    Parameters
+    ----------
+    complexity : float
+        Complexity value in [0, 1].
+
+    Returns
+    -------
+    InfinigenOverlayHints
+        Hints describing which Infinigen asset categories and render
+        quality to use at the given complexity level.
+
+    Examples
+    --------
+    >>> hints = overlay_hints_for_complexity(0.5)
+    >>> hints.environment_type
+    'indoor'
+    >>> hints.enabled_furniture
+    True
+    """
+    return InfinigenOverlayHints.from_complexity(complexity)
+
+
 def world_summary(config: WorldConfig) -> dict[str, Any]:
     """Return a human-readable summary of the world configuration.
 
