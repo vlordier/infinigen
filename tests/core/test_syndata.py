@@ -925,3 +925,206 @@ class TestUAVSwarmIntegration:
         assert len(lines) > 5
         for line in lines:
             assert " = " in line
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  18. Fixes for review comments
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestDomainRandomiserSample:
+    """Tests for DomainRandomiser.sample() and seed reproducibility."""
+
+    def test_sample_returns_all_params(self):
+        r = DomainRandomiser(difficulty=0.5, seed=42)
+        s = r.sample()
+        assert len(s) == 10
+        for name in r.ranges():
+            assert name in s
+
+    def test_sample_within_ranges(self):
+        r = DomainRandomiser(difficulty=0.5, seed=42)
+        ranges = r.ranges()
+        s = r.sample()
+        for name, val in s.items():
+            lo, hi = ranges[name]
+            assert lo <= val <= hi, f"{name}: {val} not in [{lo}, {hi}]"
+
+    def test_sample_reproducible_with_seed(self):
+        s1 = DomainRandomiser(difficulty=0.5, seed=42).sample()
+        s2 = DomainRandomiser(difficulty=0.5, seed=42).sample()
+        assert s1 == s2
+
+    def test_sample_different_seeds_differ(self):
+        s1 = DomainRandomiser(difficulty=0.5, seed=42).sample()
+        s2 = DomainRandomiser(difficulty=0.5, seed=99).sample()
+        assert s1 != s2
+
+    def test_sample_none_seed_works(self):
+        r = DomainRandomiser(difficulty=0.5, seed=None)
+        s = r.sample()
+        assert len(s) == 10
+
+
+class TestSceneBudgetValidation:
+    """Tests for SceneBudget.__post_init__ input validation."""
+
+    def test_negative_poly_count_raises(self):
+        with pytest.raises(ValueError, match="poly_count"):
+            SceneBudget(poly_count=-1)
+
+    def test_negative_texture_pixels_raises(self):
+        with pytest.raises(ValueError, match="texture_pixels"):
+            SceneBudget(texture_pixels=-100)
+
+    def test_zero_num_lights_raises(self):
+        with pytest.raises(ValueError, match="num_lights"):
+            SceneBudget(num_lights=0)
+
+    def test_zero_num_samples_raises(self):
+        with pytest.raises(ValueError, match="num_samples"):
+            SceneBudget(num_samples=0)
+
+    def test_zero_resolution_raises(self):
+        with pytest.raises(ValueError, match="resolution"):
+            SceneBudget(resolution=(0, 256))
+        with pytest.raises(ValueError, match="resolution"):
+            SceneBudget(resolution=(256, -1))
+
+
+class TestValidationDepthStatsKeys:
+    """Depth check should require both min_m and max_m."""
+
+    def test_missing_min_m_fails(self):
+        v = SceneValidator(min_depth_range_m=1.0)
+        results = v.validate({"depth_stats": {"max_m": 50.0}})
+        depth_check = next(r for r in results if r.name == "depth_range")
+        assert not depth_check.passed
+        assert "min_m" in depth_check.message
+
+    def test_missing_max_m_fails(self):
+        v = SceneValidator(min_depth_range_m=1.0)
+        results = v.validate({"depth_stats": {"min_m": 0.5}})
+        depth_check = next(r for r in results if r.name == "depth_range")
+        assert not depth_check.passed
+        assert "max_m" in depth_check.message
+
+    def test_both_present_ok(self):
+        v = SceneValidator(min_depth_range_m=1.0)
+        results = v.validate({"depth_stats": {"min_m": 0.5, "max_m": 50.0}})
+        depth_check = next(r for r in results if r.name == "depth_range")
+        assert depth_check.passed
+
+    def test_empty_depth_stats_fails(self):
+        v = SceneValidator(min_depth_range_m=1.0)
+        results = v.validate({"depth_stats": {}})
+        depth_check = next(r for r in results if r.name == "depth_range")
+        assert not depth_check.passed
+        assert "min_m" in depth_check.message
+        assert "max_m" in depth_check.message
+
+
+class TestBBox3DTupleRoundTrip:
+    """BBox3D center/extent must come back as tuples after JSON round-trip."""
+
+    def test_bbox_tuples_preserved(self, tmp_path):
+        meta = FrameMetadata(
+            frame_id=1,
+            obstacles=[BBox3D(center=(1.0, 2.0, 3.0), extent=(4.0, 5.0, 6.0), label="wall")],
+        )
+        path = tmp_path / "bbox_test.json"
+        meta.save_json(path)
+        loaded = FrameMetadata.load_json(path)
+        obs = loaded.obstacles[0]
+        assert isinstance(obs.center, tuple), f"center is {type(obs.center)}"
+        assert isinstance(obs.extent, tuple), f"extent is {type(obs.extent)}"
+        assert obs.center == (1.0, 2.0, 3.0)
+        assert obs.extent == (4.0, 5.0, 6.0)
+        assert obs.label == "wall"
+
+
+class TestTextureResolutionClamping:
+    """texture_resolution must never exceed max_texture_res."""
+
+    def test_non_po2_max_clamped(self):
+        cfg = CurriculumConfig(
+            stage=9, total_stages=10,
+            min_texture_res=64, max_texture_res=3000,
+        )
+        assert cfg.texture_resolution <= 3000
+
+    def test_non_po2_min_respected(self):
+        cfg = CurriculumConfig(
+            stage=0, total_stages=10,
+            min_texture_res=100, max_texture_res=2048,
+        )
+        assert cfg.texture_resolution >= 100
+
+
+class TestScatterDensityValidation:
+    """min_scatter_density must be in (0, 1]."""
+
+    def test_negative_scatter_density_raises(self):
+        with pytest.raises(ValueError, match="min_scatter_density"):
+            CurriculumConfig(stage=0, total_stages=5, min_scatter_density=-0.1)
+
+    def test_zero_scatter_density_raises(self):
+        with pytest.raises(ValueError, match="min_scatter_density"):
+            CurriculumConfig(stage=0, total_stages=5, min_scatter_density=0.0)
+
+    def test_scatter_density_over_one_raises(self):
+        with pytest.raises(ValueError, match="min_scatter_density"):
+            CurriculumConfig(stage=0, total_stages=5, min_scatter_density=1.5)
+
+
+class TestResolutionClamping:
+    """resolution_for_stage must respect [min_res, max_res]."""
+
+    def test_non_po2_max_clamped(self):
+        w, h = resolution_for_stage(9, 10, min_res=64, max_res=1500)
+        assert min(w, h) <= 1500
+
+    def test_non_po2_min_respected(self):
+        w, h = resolution_for_stage(0, 10, min_res=100, max_res=2048)
+        assert w >= 100
+        assert h >= 100
+
+
+class TestStageGraphValidation:
+    """StageGraph should distinguish missing deps from cycles."""
+
+    def test_duplicate_stage_names_raises(self):
+        stages = (
+            Stage(name="a"),
+            Stage(name="a"),
+        )
+        g = StageGraph(stages=stages)
+        with pytest.raises(ValueError, match="Duplicate"):
+            g.parallel_groups()
+
+    def test_unknown_dependency_raises(self):
+        stages = (
+            Stage(name="a", depends_on=frozenset({"nonexistent"})),
+        )
+        g = StageGraph(stages=stages)
+        with pytest.raises(ValueError, match="unknown"):
+            g.parallel_groups()
+
+    def test_cycle_still_detected(self):
+        stages = (
+            Stage(name="a", depends_on=frozenset({"b"})),
+            Stage(name="b", depends_on=frozenset({"a"})),
+        )
+        g = StageGraph(stages=stages)
+        with pytest.raises(RuntimeError, match="Cycle"):
+            g.parallel_groups()
+
+    def test_docstring_example_matches(self):
+        g = StageGraph()
+        waves = g.parallel_groups()
+        assert waves == [
+            ["coarse"],
+            ["fine_terrain", "populate"],
+            ["export", "mesh_save", "render"],
+            ["ground_truth"],
+        ]

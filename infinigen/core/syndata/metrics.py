@@ -54,6 +54,24 @@ class SceneBudget:
     _MS_PER_SAMPLE_PER_MPIX: float = 0.35  # rough GPU throughput
     _VRAM_SAFETY_FACTOR: float = 1.5  # account for caches & intermediates
 
+    def __post_init__(self) -> None:
+        if self.poly_count < 0:
+            msg = f"poly_count must be >= 0, got {self.poly_count}"
+            raise ValueError(msg)
+        if self.texture_pixels < 0:
+            msg = f"texture_pixels must be >= 0, got {self.texture_pixels}"
+            raise ValueError(msg)
+        if self.num_lights < 1:
+            msg = f"num_lights must be >= 1, got {self.num_lights}"
+            raise ValueError(msg)
+        if self.num_samples < 1:
+            msg = f"num_samples must be >= 1, got {self.num_samples}"
+            raise ValueError(msg)
+        w, h = self.resolution
+        if w < 1 or h < 1:
+            msg = f"resolution components must be positive, got {self.resolution}"
+            raise ValueError(msg)
+
     @property
     def estimated_vram_mb(self) -> float:
         """Conservative VRAM estimate in MiB (includes safety factor)."""

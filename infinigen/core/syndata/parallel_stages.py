@@ -64,7 +64,7 @@ class StageGraph:
     --------
     >>> g = StageGraph()
     >>> g.parallel_groups()
-    [['coarse'], ['populate', 'fine_terrain'], ['render', 'mesh_save', 'export'], ['ground_truth']]
+    [['coarse'], ['fine_terrain', 'populate'], ['export', 'mesh_save', 'render'], ['ground_truth']]
     """
 
     stages: tuple[Stage, ...] = field(default_factory=lambda: _DEFAULT_STAGES)
@@ -78,8 +78,39 @@ class StageGraph:
         Each wave contains stages whose dependencies are all satisfied by
         earlier waves.  Within a wave, stages are independent and can run
         in parallel.
+
+        Raises
+        ------
+        ValueError
+            If duplicate stage names are found or if a stage depends on a
+            name that is not present in the graph.
+        RuntimeError
+            If a genuine cycle prevents topological ordering.
         """
         by_name = self._by_name()
+
+        # Validate: check for duplicate stage names
+        if len(by_name) < len(self.stages):
+            seen: set[str] = set()
+            dupes: list[str] = []
+            for s in self.stages:
+                if s.name in seen:
+                    dupes.append(s.name)
+                seen.add(s.name)
+            msg = f"Duplicate stage name(s): {dupes}"
+            raise ValueError(msg)
+
+        # Validate: check all depends_on entries reference existing stages
+        all_names = set(by_name)
+        for s in self.stages:
+            unknown = s.depends_on - all_names
+            if unknown:
+                msg = (
+                    f"Stage '{s.name}' depends on unknown stage(s): "
+                    f"{sorted(unknown)}"
+                )
+                raise ValueError(msg)
+
         remaining = set(by_name)
         completed: set[str] = set()
         waves: list[list[str]] = []
@@ -92,7 +123,10 @@ class StageGraph:
             )
             if not wave:
                 cycle_deps = {
-                    name: sorted(by_name[name].depends_on)
+                    name: {
+                        "depends_on": sorted(by_name[name].depends_on),
+                        "unsatisfied": sorted(by_name[name].depends_on - completed),
+                    }
                     for name in remaining
                 }
                 msg = f"Cycle detected in stage dependencies: {cycle_deps}"

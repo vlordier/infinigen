@@ -78,6 +78,9 @@ class CurriculumConfig:
         if self.exponent <= 0:
             msg = f"exponent must be positive, got {self.exponent}"
             raise ValueError(msg)
+        if not 0.0 < self.min_scatter_density <= 1.0:
+            msg = f"min_scatter_density must be in (0, 1], got {self.min_scatter_density}"
+            raise ValueError(msg)
         # Exponential ease-in: slow ramp then fast increase
         linear = self.stage / max(self.total_stages - 1, 1)
         object.__setattr__(self, "_progress", math.pow(linear, self.exponent))
@@ -96,9 +99,14 @@ class CurriculumConfig:
 
     @property
     def texture_resolution(self) -> int:
-        """Texture resolution (px) for this stage, rounded to nearest power-of-2."""
+        """Texture resolution (px) for this stage, rounded to nearest power-of-2.
+
+        The result is clamped to ``[min_texture_res, max_texture_res]`` so it
+        never overshoots the configured bounds.
+        """
         raw = self.min_texture_res + self._progress * (self.max_texture_res - self.min_texture_res)
-        return int(2 ** round(math.log2(max(raw, 1))))
+        po2 = int(2 ** round(math.log2(max(raw, 1))))
+        return max(self.min_texture_res, min(po2, self.max_texture_res))
 
     @property
     def object_count(self) -> int:

@@ -17,6 +17,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+import numpy as np
+
 
 @dataclass
 class _Range:
@@ -121,8 +123,14 @@ class DomainRandomiser:
         """Return a dict of logical overrides derived from current ranges.
 
         Keys are *logical* parameter names; downstream tooling maps them to
-        actual Gin bindings.  Each value is the *upper bound* of its range,
-        representing the maximum perturbation amplitude for this difficulty.
+        actual Gin bindings.  Values are:
+
+        * full ``(lo, hi)`` ranges for parameters that support random sampling
+          (e.g. ``lighting.sun_elevation_range``),
+        * the *upper bound* (max perturbation amplitude) for parameters that
+          are scalar limits (e.g. ``weather.fog_density``),
+        * the *midpoint* for parameters best expressed as a central value
+          (e.g. ``configure_render_cycles.exposure``).
         """
         r = self.ranges()
         return {
@@ -137,6 +145,24 @@ class DomainRandomiser:
             "material.roughness_variance": r["material_roughness_offset"][1],
             "material.hue_shift_deg": r["material_color_hue_shift"][1],
         }
+
+    def sample(self) -> dict[str, float]:
+        """Draw one random sample from each range using the configured seed.
+
+        Returns a dict mapping parameter names to concrete float values,
+        each uniformly drawn from its ``(lo, hi)`` range at the current
+        difficulty.
+
+        The RNG is re-seeded on every call so that the same
+        ``DomainRandomiser`` instance produces the same sample.  To get
+        different samples, create new instances with different ``seed``
+        values.
+        """
+        rng = np.random.default_rng(self.seed)
+        result: dict[str, float] = {}
+        for name, (lo, hi) in self.ranges().items():
+            result[name] = float(rng.uniform(lo, hi))
+        return result
 
     @staticmethod
     def from_curriculum_progress(progress: float, *, seed: int | None = None) -> DomainRandomiser:

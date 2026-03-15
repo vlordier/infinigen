@@ -154,7 +154,14 @@ class FrameMetadata:
     def load_json(path: str | Path) -> FrameMetadata:
         """Load metadata from a JSON file."""
         data = json.loads(Path(path).read_text())
-        obstacles = [BBox3D(**o) for o in data.pop("obstacles", [])]
+        obstacles = [
+            BBox3D(
+                center=tuple(o.get("center", (0, 0, 0))),
+                extent=tuple(o.get("extent", (1, 1, 1))),
+                label=o.get("label", "unknown"),
+            )
+            for o in data.pop("obstacles", [])
+        ]
         ds = data.pop("depth_stats", None)
         depth_stats = DepthStats(**ds) if ds else None
         # Restore infinity from string encoding

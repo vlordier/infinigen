@@ -77,6 +77,8 @@ def resolution_for_stage(
     log_min = math.log2(min_res)
     log_max = math.log2(max_res)
     short_side = int(2 ** round(log_min + t * (log_max - log_min)))
+    # Clamp to configured bounds (round-to-po2 can overshoot)
+    short_side = max(min_res, min(short_side, max_res))
 
     if aspect_ratio >= 1.0:
         width = int(2 ** round(math.log2(short_side * aspect_ratio)))

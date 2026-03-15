@@ -103,14 +103,30 @@ class SceneValidator:
         # ---- depth range ----------------------------------------------------
         ds = metadata.get("depth_stats")
         if ds is not None:
-            depth_range = ds.get("max_m", 0) - ds.get("min_m", 0)
-            results.append(
-                ValidationResult(
-                    name="depth_range",
-                    passed=depth_range >= self.min_depth_range_m,
-                    message=f"depth range {depth_range:.1f} m (need >= {self.min_depth_range_m})",
+            has_min = "min_m" in ds
+            has_max = "max_m" in ds
+            if has_min and has_max:
+                depth_range = ds["max_m"] - ds["min_m"]
+                results.append(
+                    ValidationResult(
+                        name="depth_range",
+                        passed=depth_range >= self.min_depth_range_m,
+                        message=f"depth range {depth_range:.1f} m (need >= {self.min_depth_range_m})",
+                    )
                 )
-            )
+            else:
+                missing = []
+                if not has_min:
+                    missing.append("min_m")
+                if not has_max:
+                    missing.append("max_m")
+                results.append(
+                    ValidationResult(
+                        name="depth_range",
+                        passed=False,
+                        message=f"depth_stats missing required key(s): {', '.join(missing)}",
+                    )
+                )
 
         # ---- traversability -------------------------------------------------
         trav = metadata.get("traversability_ratio")
