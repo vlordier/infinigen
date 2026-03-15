@@ -6,9 +6,6 @@ on:
       - main
     tags:
       - '*'
-  pull_request:
-    branches:
-      - main
 
 jobs:
   build_sdist_purepy:
