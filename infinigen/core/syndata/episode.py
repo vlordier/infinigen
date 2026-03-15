@@ -13,6 +13,7 @@ All helpers are pure Python — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,23 +24,33 @@ __all__ = [
     "TRAJECTORY_RANDOM_WALK",
     "TRAJECTORY_RRT",
     "TRAJECTORY_STATIC",
+    "TrajectoryType",
     "VALID_TRAJECTORIES",
 ]
 
-# Trajectory modes that Infinigen supports via camera animation policies
-TRAJECTORY_STATIC = "static"  # single viewpoint
-TRAJECTORY_RANDOM_WALK = "random_walk"  # Brownian motion
-TRAJECTORY_ORBIT = "orbit"  # circular path around a point
-TRAJECTORY_RRT = "rrt"  # rapidly-exploring random tree (obstacle-aware)
-TRAJECTORY_FOLLOW = "follow"  # follow a target object
 
-VALID_TRAJECTORIES = frozenset({
-    TRAJECTORY_STATIC,
-    TRAJECTORY_RANDOM_WALK,
-    TRAJECTORY_ORBIT,
-    TRAJECTORY_RRT,
-    TRAJECTORY_FOLLOW,
-})
+class TrajectoryType(enum.Enum):
+    """Camera trajectory modes supported by Infinigen's animation policies.
+
+    Using an enum prevents typos and gives IDE autocompletion for valid
+    trajectory values.
+    """
+
+    STATIC = "static"  # single viewpoint
+    RANDOM_WALK = "random_walk"  # Brownian motion
+    ORBIT = "orbit"  # circular path around a point
+    RRT = "rrt"  # rapidly-exploring random tree (obstacle-aware)
+    FOLLOW = "follow"  # follow a target object
+
+
+# Backwards-compatible string constants
+TRAJECTORY_STATIC = TrajectoryType.STATIC.value
+TRAJECTORY_RANDOM_WALK = TrajectoryType.RANDOM_WALK.value
+TRAJECTORY_ORBIT = TrajectoryType.ORBIT.value
+TRAJECTORY_RRT = TrajectoryType.RRT.value
+TRAJECTORY_FOLLOW = TrajectoryType.FOLLOW.value
+
+VALID_TRAJECTORIES = frozenset(t.value for t in TrajectoryType)
 
 
 @dataclass(frozen=True)

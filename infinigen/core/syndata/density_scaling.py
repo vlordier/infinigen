@@ -13,11 +13,23 @@ All helpers are pure Python — no ``bpy`` dependency.
 
 from __future__ import annotations
 
+import enum
 import math
 from dataclasses import dataclass
 from typing import ClassVar
 
-__all__ = ["DensityScaler"]
+__all__ = ["DensityScaler", "InterpolationCurve"]
+
+
+class InterpolationCurve(enum.Enum):
+    """Interpolation curve types for density scaling.
+
+    Using an enum prevents typos and gives IDE autocompletion.
+    """
+
+    LINEAR = "linear"
+    QUADRATIC = "quadratic"
+    SQRT = "sqrt"
 
 
 @dataclass(frozen=True)
@@ -38,6 +50,7 @@ class DensityScaler:
         Maximum obstacle count at difficulty = 1.
     curve : str
         Interpolation curve: ``"linear"``, ``"quadratic"``, or ``"sqrt"``.
+        Can also be an :class:`InterpolationCurve` enum member.
     """
 
     difficulty: float = 0.5
@@ -47,15 +60,19 @@ class DensityScaler:
     obstacle_max: int = 50
     curve: str = "linear"
 
-    _CURVES: ClassVar[frozenset[str]] = frozenset({"linear", "quadratic", "sqrt"})
+    _CURVES: ClassVar[frozenset[str]] = frozenset(c.value for c in InterpolationCurve)
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.difficulty <= 1.0:
             msg = "difficulty must be in [0.0, 1.0]"
             raise ValueError(msg)
-        if self.curve not in self._CURVES:
+        # Accept both string and InterpolationCurve enum values
+        curve_val = self.curve.value if isinstance(self.curve, InterpolationCurve) else self.curve
+        if curve_val not in self._CURVES:
             msg = f"curve must be one of {sorted(self._CURVES)}"
             raise ValueError(msg)
+        if curve_val != self.curve:
+            object.__setattr__(self, "curve", curve_val)
         if self.min_multiplier < 0:
             msg = f"min_multiplier must be non-negative, got {self.min_multiplier}"
             raise ValueError(msg)
