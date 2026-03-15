@@ -337,6 +337,25 @@ class InfinigenOverlayHints:
             "lighting_complexity": self.lighting_complexity,
         }
 
+    def __repr__(self) -> str:
+        """Concise representation showing environment type and enabled assets."""
+        enabled = [
+            name for name, val in [
+                ("vegetation", self.enabled_vegetation),
+                ("furniture", self.enabled_furniture),
+                ("vehicles", self.enabled_vehicles),
+                ("dynamic", self.enabled_dynamic_objects),
+                ("weather", self.enabled_weather),
+                ("pedestrians", self.enabled_pedestrians),
+            ] if val
+        ]
+        assets_str = ", ".join(enabled) if enabled else "none"
+        return (
+            f"InfinigenOverlayHints(env={self.environment_type!r}, "
+            f"tex={self.texture_resolution}, subdiv={self.subdiv_level}, "
+            f"assets=[{assets_str}])"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Visual style config
@@ -403,6 +422,14 @@ class VisualStyle:
         if self.point_light_count < 0:
             msg = f"point_light_count must be non-negative, got {self.point_light_count}"
             raise ValueError(msg)
+
+    def __repr__(self) -> str:
+        """Concise representation showing key visual parameters."""
+        return (
+            f"VisualStyle(sat={self.wall_color_saturation:.2f}, "
+            f"rough={self.floor_roughness:.2f}, fog={self.fog_density:.2f}, "
+            f"lights={self.point_light_count})"
+        )
 
 
 # ---------------------------------------------------------------------------

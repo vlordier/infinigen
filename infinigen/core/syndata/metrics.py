@@ -117,3 +117,11 @@ class SceneBudget:
             "estimated_vram_mb": round(self.estimated_vram_mb, 1),
             "estimated_render_seconds": round(self.estimated_render_seconds, 2),
         }
+
+    def __repr__(self) -> str:
+        """Concise representation showing key budget metrics."""
+        return (
+            f"SceneBudget(polys={self.poly_count}, "
+            f"vram≈{self.estimated_vram_mb:.0f}MiB, "
+            f"render≈{self.estimated_render_seconds:.1f}s)"
+        )
