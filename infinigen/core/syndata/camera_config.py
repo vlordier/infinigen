@@ -114,6 +114,20 @@ class CameraRigConfig:
         if len(self.cameras) < 1:
             msg = "cameras must contain at least one camera"
             raise ValueError(msg)
+        for idx, cam in enumerate(self.cameras):
+            if not isinstance(cam, dict):
+                msg = f"cameras[{idx}] must be a dict, got {type(cam).__name__}"
+                raise TypeError(msg)
+            if "loc" not in cam or "rot_euler" not in cam:
+                missing = {"loc", "rot_euler"} - cam.keys()
+                msg = f"cameras[{idx}] missing required key(s): {sorted(missing)}"
+                raise ValueError(msg)
+            if len(cam["loc"]) != 3:
+                msg = f"cameras[{idx}]['loc'] must have 3 elements, got {len(cam['loc'])}"
+                raise ValueError(msg)
+            if len(cam["rot_euler"]) != 3:
+                msg = f"cameras[{idx}]['rot_euler'] must have 3 elements, got {len(cam['rot_euler'])}"
+                raise ValueError(msg)
 
     @property
     def effective_cameras(self) -> tuple[dict[str, tuple[float, float, float]], ...]:

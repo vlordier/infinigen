@@ -538,6 +538,9 @@ class WorldConfig:
         if self.room_size_range[0] > self.room_size_range[1]:
             msg = f"room_size_range min ({self.room_size_range[0]}) > max ({self.room_size_range[1]})"
             raise ValueError(msg)
+        if self.room_size_range[0] <= 0:
+            msg = f"room_size_range values must be positive, got {self.room_size_range}"
+            raise ValueError(msg)
         if self.gap_height is not None and self.gap_height < _MIN_GAP:
             msg = f"gap_height must be >= {_MIN_GAP}, got {self.gap_height}"
             raise ValueError(msg)
