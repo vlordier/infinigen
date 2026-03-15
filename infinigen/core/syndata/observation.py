@@ -16,6 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 __all__ = [
+    "ALL_KNOWN_PASSES",
     "ObservationConfig",
     "PASSES_FLAT_AVAILABLE",
     "PASSES_FULL",
@@ -64,6 +65,13 @@ PASSES_FULL: frozenset[str] = frozenset({
     PASS_DIFFUSE_DIRECT, PASS_DIFFUSE_COLOR,
 })
 
+#: All known render pass names — used for input validation.
+ALL_KNOWN_PASSES: frozenset[str] = frozenset({
+    PASS_RGB, PASS_DEPTH, PASS_NORMAL, PASS_FLOW,
+    PASS_OBJECT_INDEX, PASS_MATERIAL_INDEX,
+    PASS_DIFFUSE_DIRECT, PASS_DIFFUSE_COLOR,
+})
+
 
 @dataclass(frozen=True, slots=True)
 class SensorNoiseModel:
@@ -101,6 +109,9 @@ class SensorNoiseModel:
             raise ValueError(msg)
         if self.motion_blur_px < 0:
             msg = f"motion_blur_px must be non-negative, got {self.motion_blur_px}"
+            raise ValueError(msg)
+        if self.exposure_jitter < 0:
+            msg = f"exposure_jitter must be non-negative, got {self.exposure_jitter}"
             raise ValueError(msg)
 
     @staticmethod
@@ -145,6 +156,13 @@ class ObservationConfig:
     def __post_init__(self) -> None:
         if self.depth_clip_m <= 0:
             msg = f"depth_clip_m must be positive, got {self.depth_clip_m}"
+            raise ValueError(msg)
+        unknown_passes = self.passes - ALL_KNOWN_PASSES
+        if unknown_passes:
+            msg = (
+                f"Unknown render pass(es): {sorted(unknown_passes)}. "
+                f"Valid passes: {sorted(ALL_KNOWN_PASSES)}"
+            )
             raise ValueError(msg)
 
     @property
