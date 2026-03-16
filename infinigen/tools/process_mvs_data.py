@@ -30,21 +30,22 @@ def from_homog(x):
     return x[..., :-1] / x[..., [-1]]
 
 
-_coords_cache: Dict[Tuple[str, int, int, int], torch.Tensor] = {}
+_coords_cache: Dict[Tuple[str, int, int], torch.Tensor] = {}
 
 
 def coords_grid(batch, ht, wd, device):
-    key = (str(device), int(batch), int(ht), int(wd))
+    key = (str(device), int(ht), int(wd))
     cached = _coords_cache.get(key)
-    if cached is not None:
+    if cached is None:
+        coords = torch.meshgrid(
+            torch.arange(ht, device=device), torch.arange(wd, device=device), indexing="ij"
+        )
+        coords = torch.stack(coords[::-1], dim=0).float()
+        cached = coords.unsqueeze(0)
+        _coords_cache[key] = cached
+    if batch == 1:
         return cached
-    coords = torch.meshgrid(
-        torch.arange(ht, device=device), torch.arange(wd, device=device), indexing="ij"
-    )
-    coords = torch.stack(coords[::-1], dim=0).float()
-    grid = coords[None].repeat(batch, 1, 1, 1)
-    _coords_cache[key] = grid
-    return grid
+    return cached.expand(batch, -1, -1, -1)
 
 
 def reproject(depth1, pose1, pose2, K1, K2):
@@ -96,16 +97,16 @@ def bilinear_sampler(img, coords, mode="bilinear", mask=False):
 def check_cycle_consistency(flow_01, flow_10, threshold=1, device=None):
     if device is None:
         device = get_torch_device()
-    with torch.no_grad():
+    with torch.inference_mode():
         flow_01 = torch.as_tensor(flow_01, device=device).permute(2, 0, 1)[None].float()
         flow_10 = torch.as_tensor(flow_10, device=device).permute(2, 0, 1)[None].float()
-    H, W = flow_01.shape[-2:]
-    coords = coords_grid(1, H, W, flow_01.device)
-    coords1 = coords + flow_01
-    flow_reprojected = bilinear_sampler(flow_10, coords1.permute(0, 2, 3, 1))
-    cycle = flow_reprojected + flow_01
-    cycle = torch.norm(cycle, dim=1)
-    mask = (cycle < threshold).float()
+        H, W = flow_01.shape[-2:]
+        coords = coords_grid(1, H, W, flow_01.device)
+        coords1 = coords + flow_01
+        flow_reprojected = bilinear_sampler(flow_10, coords1.permute(0, 2, 3, 1))
+        cycle = flow_reprojected + flow_01
+        cycle = torch.norm(cycle, dim=1)
+        mask = (cycle < threshold).float()
     return mask[0].cpu().numpy()
 
 
