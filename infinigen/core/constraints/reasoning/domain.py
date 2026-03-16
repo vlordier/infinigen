@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import copy
-import itertools
 import logging
 from dataclasses import dataclass, field
 
@@ -301,13 +300,14 @@ class Domain:
             lazydebug(logger, lambda: f"tag contradiction {self.tags}, {other.tags}")
             return False
 
-        # no relations can contradict eachother
-        for ard, brd in itertools.product(self.relations, other.relations):
-            if ard is brd:
-                continue
-            if not reldom_compatible(ard, brd):
-                lazydebug(logger, lambda: f"found incompatible {ard} {brd}")
-                return False
+        # no relations can contradict each other
+        for ard in self.relations:
+            for brd in other.relations:
+                if ard is brd:
+                    continue
+                if not reldom_compatible(ard, brd):
+                    lazydebug(logger, lambda: f"found incompatible {ard} {brd}")
+                    return False
 
         # any relations actually known to be present must intersect
         a_pos = [

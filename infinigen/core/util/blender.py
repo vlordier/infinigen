@@ -1032,12 +1032,14 @@ def purge_empty_materials(obj):
 
 
 def global_polygon_normal(obj, polygon, rev_normal=False):
-    loc, rot, scale = obj.matrix_world.decompose()
-    rot = rot.to_matrix()
-    normal = rot @ polygon.normal
+    # Quaternion rotation avoids full matrix decomposition in hot call sites.
+    normal = obj.matrix_world.to_quaternion() @ polygon.normal
     if rev_normal:
         normal = -normal
-    return normal / np.linalg.norm(normal)
+    norm = normal.length
+    if norm == 0:
+        return normal
+    return normal / norm
 
 
 def global_vertex_coordinates(obj, local_vertex) -> Vector:

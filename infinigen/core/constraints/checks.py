@@ -5,7 +5,6 @@
 # Authors: Alexander Raistrick
 
 import copy
-import itertools
 import logging
 import typing
 
@@ -115,13 +114,20 @@ def validate_stages(stages: dict[str, r.Domain]):
         if d.is_recursive():
             raise ValueError(f"{k=} had recursive domain")
 
-    for (k1, d1), (k2, d2) in itertools.product(stages.items(), stages.items()):
-        inter = d1.intersects(d2)
-        if inter != (k1 == k2):
+    stage_items = list(stages.items())
+    for i, (k1, d1) in enumerate(stage_items):
+        # Self-intersection must be non-empty.
+        if not d1.intersects(d1):
             raise ValueError(
-                f"User provided greedy stages with keys {k1=} {k2=} which had non-empty intersection! "
-                " please define greedy stages which are mutually exclusive."
+                f"User provided greedy stage {k1=} with empty self-intersection!"
             )
+
+        for k2, d2 in stage_items[i + 1 :]:
+            if d1.intersects(d2):
+                raise ValueError(
+                    f"User provided greedy stages with keys {k1=} {k2=} which had non-empty intersection! "
+                " please define greedy stages which are mutually exclusive."
+                )
 
 
 def check_all(

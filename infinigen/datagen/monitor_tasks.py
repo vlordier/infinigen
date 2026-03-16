@@ -6,7 +6,6 @@
 # - Lahav Lipson: stereo version, local rendering
 # - Hei Law: initial version
 
-import itertools
 import logging
 import subprocess
 from functools import partial
@@ -220,91 +219,93 @@ def iterate_scene_tasks(
     subcams = range(n_subcams)
 
     running_views = 0
-    for cam_rig, view_frame in itertools.product(cam_rigs, view_frames):
-        logger.debug(f"Checking {seed=} {cam_rig=} {view_frame=}")
+    for cam_rig in cam_rigs:
+        for view_frame in view_frames:
+            logger.debug(f"Checking {seed=} {cam_rig=} {view_frame=}")
 
-        view_frame_range = [
-            view_frame,
-            min(frame_range[1], view_frame + view_block_size - 1),
-        ]
-        view_overrides = [
-            f"execute_tasks.frame_range=[{view_frame_range[0]},{view_frame_range[1]}]",
-            f"execute_tasks.camera_id=[{cam_rig},{0}]",
-        ]
+            view_frame_range = [
+                view_frame,
+                min(frame_range[1], view_frame + view_block_size - 1),
+            ]
+            view_overrides = [
+                f"execute_tasks.frame_range=[{view_frame_range[0]},{view_frame_range[1]}]",
+                f"execute_tasks.camera_id=[{cam_rig},{0}]",
+            ]
 
-        view_idxs = dict(cam_rig=cam_rig, frame=view_frame)
-        view_tasks_iter = iterate_sequential_tasks(
-            view_dependent_tasks,
-            get_task_state,
-            overrides=args.overrides + view_overrides,
-            configs=global_configs,
-            output_indices=view_idxs,
-        )
+            view_idxs = dict(cam_rig=cam_rig, frame=view_frame)
+            view_tasks_iter = iterate_sequential_tasks(
+                view_dependent_tasks,
+                get_task_state,
+                overrides=args.overrides + view_overrides,
+                configs=global_configs,
+                output_indices=view_idxs,
+            )
 
-        state = JobState.Succeeded
-        for state, *rest in view_tasks_iter:
-            yield state, *rest
+            state = JobState.Succeeded
+            for state, *rest in view_tasks_iter:
+                yield state, *rest
 
-        if state not in CONCLUDED_JOBSTATES:
-            if viewdep_paralell:
+            if state not in CONCLUDED_JOBSTATES:
+                if viewdep_paralell:
+                    running_views += 1
+                    continue
+                else:
+                    return
+            elif state == JobState.Failed and not monitor_all:
+                return
+
+            running_blocks = 0
+            for subcam in subcams:
+                for resample_idx in resamples:
+                    for cam_frame in range(
+                        view_frame_range[0], view_frame_range[1] + 1, cam_block_size
+                    ):
+                        cam_frame_range = [
+                            cam_frame,
+                            min(view_frame_range[1], cam_frame + cam_block_size - 1),
+                        ]  # blender frame_end is INCLUSIVE
+                        cam_overrides = [
+                            f"execute_tasks.frame_range=[{cam_frame_range[0]},{cam_frame_range[1]}]",
+                            f"execute_tasks.camera_id=[{cam_rig},{subcam}]",
+                            f"execute_tasks.resample_idx={resample_idx}",
+                            f"execute_tasks.point_trajectory_src_frame={point_trajectory_src_frame}",
+                        ]
+
+                        camdep_indices = dict(
+                            cam_rig=cam_rig,
+                            frame=cam_frame,
+                            subcam=subcam,
+                            resample=resample_idx,
+                        )
+                        # extra semi-redundant info needed for openglgt mostly
+                        extra_indices = dict(
+                            view_first_frame=view_frame_range[0],
+                            last_view_frame=view_frame_range[1],
+                            last_cam_frame=cam_frame_range[1],
+                        )
+                        camera_dep_iter = iterate_sequential_tasks(
+                            camera_dependent_tasks,
+                            get_task_state,
+                            overrides=args.overrides + cam_overrides,
+                            configs=global_configs,
+                            input_indices=view_idxs if len(view_dependent_tasks) else None,
+                            output_indices={**camdep_indices, **extra_indices},
+                        )
+                        state = JobState.Succeeded
+                        for state, *rest in camera_dep_iter:
+                            yield state, *rest
+                        if state not in CONCLUDED_JOBSTATES:
+                            if camdep_paralell:
+                                running_blocks += 1
+                                continue
+                            else:
+                                return
+                        elif state == JobState.Failed and not monitor_all:
+                            return
+
+            if running_blocks > 0:
                 running_views += 1
                 continue
-            else:
-                return
-        elif state == JobState.Failed and not monitor_all:
-            return
-
-        running_blocks = 0
-        for subcam, resample_idx in itertools.product(subcams, resamples):
-            for cam_frame in range(
-                view_frame_range[0], view_frame_range[1] + 1, cam_block_size
-            ):
-                cam_frame_range = [
-                    cam_frame,
-                    min(view_frame_range[1], cam_frame + cam_block_size - 1),
-                ]  # blender frame_end is INCLUSIVE
-                cam_overrides = [
-                    f"execute_tasks.frame_range=[{cam_frame_range[0]},{cam_frame_range[1]}]",
-                    f"execute_tasks.camera_id=[{cam_rig},{subcam}]",
-                    f"execute_tasks.resample_idx={resample_idx}",
-                    f"execute_tasks.point_trajectory_src_frame={point_trajectory_src_frame}",
-                ]
-
-                camdep_indices = dict(
-                    cam_rig=cam_rig,
-                    frame=cam_frame,
-                    subcam=subcam,
-                    resample=resample_idx,
-                )
-                # extra semi-redundant info needed for openglgt mostly
-                extra_indices = dict(
-                    view_first_frame=view_frame_range[0],
-                    last_view_frame=view_frame_range[1],
-                    last_cam_frame=cam_frame_range[1],
-                )
-                camera_dep_iter = iterate_sequential_tasks(
-                    camera_dependent_tasks,
-                    get_task_state,
-                    overrides=args.overrides + cam_overrides,
-                    configs=global_configs,
-                    input_indices=view_idxs if len(view_dependent_tasks) else None,
-                    output_indices={**camdep_indices, **extra_indices},
-                )
-                state = JobState.Succeeded
-                for state, *rest in camera_dep_iter:
-                    yield state, *rest
-                if state not in CONCLUDED_JOBSTATES:
-                    if camdep_paralell:
-                        running_blocks += 1
-                        continue
-                    else:
-                        return
-                elif state == JobState.Failed and not monitor_all:
-                    return
-
-        if running_blocks > 0:
-            running_views += 1
-            continue
 
     if running_views > 0:
         return
