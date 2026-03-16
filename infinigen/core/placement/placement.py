@@ -155,35 +155,65 @@ def filter_populate_targets(
     vis_cull: float,
     verbose: bool,
 ) -> list[tuple[bpy.types.Object, float, float]]:
-    if verbose:
-        placeholders = tqdm(placeholders)
+    checked_placeholders = []
+    point_sets = []
+    point_counts = []
 
-    results = []
-
-    for _i, p in enumerate(placeholders):
+    for p in placeholders:
         classname, *_ = parse_asset_name(p.name)
-
         if classname is None:
             raise ValueError(f"Could not parse {p.name=}, got {classname=}")
+        pts = get_placeholder_points(p)
+        checked_placeholders.append(p)
+        point_sets.append(pts)
+        point_counts.append(len(pts))
 
+    results = []
+    max_points_per_batch = 200_000
+    n = len(checked_placeholders)
+    iterator = range(0, n)
+    if verbose:
+        iterator = tqdm(iterator)
+
+    i = 0
+    while i < n:
+        batch_points = 0
+        j = i
+        while j < n and (batch_points + point_counts[j] <= max_points_per_batch or j == i):
+            batch_points += point_counts[j]
+            j += 1
+
+        batch_concat = np.concatenate(point_sets[i:j], axis=0)
         mask, min_dists, min_vis_dists = split_in_view.compute_inview_distances(
-            get_placeholder_points(p),
+            batch_concat,
             cameras,
             dist_max=dist_cull,
             vis_margin=vis_cull,
             verbose=False,
         )
 
-        dist = min_dists.min()
-        vis_dist = min_vis_dists.min()
+        start = 0
+        for k in range(i, j):
+            cnt = point_counts[k]
+            end = start + cnt
+            p_mask = mask[start:end]
+            p_min_dists = min_dists[start:end]
+            p_min_vis_dists = min_vis_dists[start:end]
 
-        if not mask.any():
-            logger.debug(
-                f"{p.name=} culled, not in view of any camera. {dist=} {vis_dist=}"
-            )
-            continue
+            dist = p_min_dists.min()
+            vis_dist = p_min_vis_dists.min()
+            p = checked_placeholders[k]
 
-        results.append((p, dist, vis_dist))
+            if not p_mask.any():
+                logger.debug(
+                    f"{p.name=} culled, not in view of any camera. {dist=} {vis_dist=}"
+                )
+            else:
+                results.append((p, dist, vis_dist))
+
+            start = end
+
+        i = j
 
     return results
 
@@ -221,7 +251,7 @@ def populate_collection(
         targets = tqdm(targets)
 
     for i, (p, dist, vis_dist) in enumerate(targets):
-        classname, inst_seed, *_ = parse_asset_name(p.name)
+        _classname, inst_seed, *_ = parse_asset_name(p.name)
 
         if cache_system:
             if (
