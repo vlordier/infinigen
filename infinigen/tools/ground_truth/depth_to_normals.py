@@ -7,23 +7,18 @@ import argparse
 import logging
 import shutil
 from pathlib import Path
+from typing import Dict, Tuple
 
 import cv2
 import imageio
 import numpy as np
+import torch
 from imageio.v3 import imread, imwrite
-from numpy.linalg import inv
 
+from infinigen.core.util.device import get_torch_device, setup_torch_runtime
 from infinigen.tools.dataset_loader import get_frame_path
 
 logger = logging.getLogger(__name__)
-
-try:
-    from einops import einsum
-except ImportError as e:
-    raise ImportError(
-        "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
-    ) from e
 
 """
 Usage: python -m tools.ground_truth.depth_to_normals <scene-folder> <frame-index>
@@ -35,21 +30,33 @@ Output:
 """
 
 
-def unproject(depth, K):
+_coord_cache: Dict[Tuple[str, int, int], torch.Tensor] = {}
+
+
+def unproject_torch(depth, K_inv):
     H, W = depth.shape
-    x, y = np.meshgrid(np.arange(W), np.arange(H), indexing="xy")
-    img_coords = np.stack((x, y, np.ones_like(x)), axis=-1).astype(np.float64)
-    return einsum(depth, img_coords, inv(K), "H W, H W j, i j -> H W i")
+    key = (str(depth.device), int(H), int(W))
+    img_coords = _coord_cache.get(key)
+    if img_coords is None:
+        yy, xx = torch.meshgrid(
+            torch.arange(H, device=depth.device, dtype=depth.dtype),
+            torch.arange(W, device=depth.device, dtype=depth.dtype),
+            indexing="ij",
+        )
+        img_coords = torch.stack((xx, yy, torch.ones_like(xx)), dim=-1)
+        _coord_cache[key] = img_coords
+    return depth.unsqueeze(-1) * torch.matmul(img_coords, K_inv.T)
 
 
-def normalize(v):
-    return v / np.linalg.norm(v, axis=-1, keepdims=True)
+def normalize_torch(v, eps=1e-8):
+    return v / torch.linalg.norm(v, dim=-1, keepdim=True).clamp_min(eps)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("folder", type=Path)
     parser.add_argument("frame", type=int)
+    parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--output", type=Path, default=Path("testbed"))
     args = parser.parse_args()
 
@@ -67,20 +74,26 @@ if __name__ == "__main__":
     image = imread(image_path)
     depth = np.load(depth_path)
     K = np.load(camview_path)["K"]
-    cam_coords = unproject(depth, K)
 
-    cam_coords = cam_coords * np.array([1.0, -1.0, -1])
+    device = get_torch_device(args.device)
+    setup_torch_runtime(device)
 
-    mask = ~np.isinf(depth)
-    depth[~mask] = -1
+    depth_t = torch.as_tensor(depth, dtype=torch.float32, device=device)
+    K_t = torch.as_tensor(K, dtype=torch.float32, device=device)
+    K_inv = torch.linalg.inv(K_t)
+    cam_coords = unproject_torch(depth_t, K_inv)
+    cam_coords = cam_coords * torch.tensor([1.0, -1.0, -1.0], device=device)
 
-    vy = normalize(cam_coords[1:, 1:] - cam_coords[:-1, 1:])
-    vx = normalize(cam_coords[1:, 1:] - cam_coords[1:, :-1])
-    cross_prod = np.cross(vy, vx)
-    normals = normalize(cross_prod)
+    mask = ~torch.isinf(depth_t)
+
+    vy = normalize_torch(cam_coords[1:, 1:] - cam_coords[:-1, 1:])
+    vx = normalize_torch(cam_coords[1:, 1:] - cam_coords[1:, :-1])
+    cross_prod = torch.cross(vy, vx, dim=-1)
+    normals = normalize_torch(cross_prod)
+    normals = torch.nan_to_num(normals)
     normals[~mask[1:, 1:]] = 0
 
-    normals_color = np.round((normals + 1) * (255 / 2)).astype(np.uint8)
+    normals_color = torch.round((normals + 1) * (255 / 2)).to(torch.uint8).cpu().numpy()
     target_shape = imageio.imread(normal_path).shape[:2][::-1]
     normals_color = cv2.resize(normals_color, target_shape)
 
