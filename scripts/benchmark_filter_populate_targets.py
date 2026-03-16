@@ -275,6 +275,18 @@ def _get_cameras(camera_collection_name: str | None):
     return cams
 
 
+def _configure_cameras_for_full_mode(cameras: list[bpy.types.Object]):
+    if _IMPORT_ERROR is not None:
+        return
+    try:
+        from infinigen.core.placement import camera as cam_mod
+
+        for cam in cameras:
+            cam_mod.adjust_camera_sensor(cam)
+    except Exception as e:  # pragma: no cover - depends on scene and optional internals
+        logger.warning("Could not auto-adjust camera sensors for full mode: %s", e)
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
@@ -285,6 +297,8 @@ def main():
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--frame-start", type=int, default=None)
     parser.add_argument("--frame-end", type=int, default=None)
+    parser.add_argument("--require-full-infinigen", action="store_true")
+    parser.add_argument("--run-label", type=str, default="")
     parser.add_argument("--output", type=Path, default=Path("/tmp/filter_populate_targets_bench.json"))
     argv = sys.argv
     if "--" in argv:
@@ -293,14 +307,30 @@ def main():
         argv = []
     args = parser.parse_args(argv)
 
+    torch_backend = "none"
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch_backend = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            torch_backend = "mps"
+        else:
+            torch_backend = "cpu"
+    except Exception:
+        torch_backend = "none"
+
     if _IMPORT_ERROR is not None:
         logger.warning("Using fallback benchmark mode due to import error: %s", _IMPORT_ERROR)
+        if args.require_full_infinigen:
+            raise RuntimeError(f"Full infinigen mode required but unavailable: {_IMPORT_ERROR}")
 
     if args.placeholder_collection is None:
         args.placeholder_collection = _find_placeholder_collection_name()
     placeholders_col = _get_collection(args.placeholder_collection)
     placeholders = [o for o in placeholders_col.objects if o.parent is None]
     cameras = _get_cameras(args.camera_collection)
+    _configure_cameras_for_full_mode(cameras)
 
     if not placeholders:
         raise ValueError(f"No placeholders found in collection: {args.placeholder_collection}")
@@ -335,6 +365,7 @@ def main():
     )
 
     report = {
+        "run_label": args.run_label,
         "placeholder_collection": args.placeholder_collection,
         "camera_collection": args.camera_collection,
         "num_placeholders": len(placeholders),
@@ -343,6 +374,7 @@ def main():
         "frame_start": int(args.frame_start),
         "frame_end": int(args.frame_end),
         "mode": "full-infinigen" if _IMPORT_ERROR is None else "fallback",
+        "torch_backend": torch_backend,
         "dist_cull": float(args.dist_cull),
         "vis_cull": float(args.vis_cull),
         "legacy_seconds_median": legacy_t,
