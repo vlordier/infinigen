@@ -69,23 +69,28 @@ def get_mask_torch(depth, flow, dst_depth, device):
     dst_depth_t = dst_depth_t[None, None]
     denom_x = max(W - 1, 1)
     denom_y = max(H - 1, 1)
-    mask = torch.zeros((H, W), dtype=torch.bool, device=device)
-    for dy, dx in ((0.0, 0.0), (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)):
-        sx = target_xy[..., 0] + dx
-        sy = target_xy[..., 1] + dy
-        gx = 2.0 * sx / float(denom_x) - 1.0
-        gy = 2.0 * sy / float(denom_y) - 1.0
-        grid = torch.stack((gx, gy), dim=-1)[None]
-        sampled = F.grid_sample(
-            dst_depth_t,
-            grid,
-            mode="bilinear",
-            padding_mode="zeros",
-            align_corners=True,
-        )[0, 0]
-        mask |= (target_z >= 0) & (target_z <= sampled)
+    offsets = torch.tensor(
+        ((0.0, 0.0), (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)),
+        dtype=torch.float32,
+        device=device,
+    )
+    sx = target_xy[..., 0].unsqueeze(0) + offsets[:, 0].view(-1, 1, 1)
+    sy = target_xy[..., 1].unsqueeze(0) + offsets[:, 1].view(-1, 1, 1)
+    gx = 2.0 * sx / float(denom_x) - 1.0
+    gy = 2.0 * sy / float(denom_y) - 1.0
+    grid = torch.stack((gx, gy), dim=-1)
 
-    return mask.cpu().numpy()
+    sampled = F.grid_sample(
+        dst_depth_t.expand(offsets.shape[0], -1, -1, -1),
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=True,
+    )[:, 0]
+
+    valid = target_z >= 0
+    mask = valid & (target_z.unsqueeze(0) <= sampled)
+    return mask.any(dim=0).cpu().numpy()
 
 
 def get_mask(depth, flow, dst_depth):
