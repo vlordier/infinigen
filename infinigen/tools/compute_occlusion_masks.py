@@ -16,6 +16,7 @@ from infinigen.core.util.device import get_torch_device, setup_torch_runtime
 
 _grid_cache: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
 _torch_grid_cache: dict[tuple[str, int, int], torch.Tensor] = {}
+_offset_cache_torch: dict[str, torch.Tensor] = {}
 
 
 def _get_base_grid(H, W):
@@ -56,6 +57,20 @@ def _torch_base_grid(H, W, device):
     return cached
 
 
+def _torch_neighbor_offsets(device):
+    key = str(device)
+    cached = _offset_cache_torch.get(key)
+    if cached is not None:
+        return cached
+    cached = torch.tensor(
+        ((0.0, 0.0), (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)),
+        dtype=torch.float32,
+        device=device,
+    )
+    _offset_cache_torch[key] = cached
+    return cached
+
+
 def get_mask_torch(depth, flow, dst_depth, device):
     depth_t = torch.as_tensor(depth, device=device, dtype=torch.float32)
     flow_t = torch.as_tensor(flow, device=device, dtype=torch.float32)
@@ -69,11 +84,7 @@ def get_mask_torch(depth, flow, dst_depth, device):
     dst_depth_t = dst_depth_t[None, None]
     denom_x = max(W - 1, 1)
     denom_y = max(H - 1, 1)
-    offsets = torch.tensor(
-        ((0.0, 0.0), (1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)),
-        dtype=torch.float32,
-        device=device,
-    )
+    offsets = _torch_neighbor_offsets(device)
     sx = target_xy[..., 0].unsqueeze(0) + offsets[:, 0].view(-1, 1, 1)
     sy = target_xy[..., 1].unsqueeze(0) + offsets[:, 1].view(-1, 1, 1)
     gx = 2.0 * sx / float(denom_x) - 1.0

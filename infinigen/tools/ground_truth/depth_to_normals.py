@@ -8,10 +8,10 @@ import logging
 import shutil
 from pathlib import Path
 
-import cv2
 import imageio
 import numpy as np
 import torch
+import torch.nn.functional as F
 from imageio.v3 import imread, imwrite
 
 from infinigen.core.util.device import get_torch_device, setup_torch_runtime
@@ -92,9 +92,15 @@ if __name__ == "__main__":
     normals = torch.nan_to_num(normals)
     normals[~mask[1:, 1:]] = 0
 
-    normals_color = torch.round((normals + 1) * (255 / 2)).to(torch.uint8).cpu().numpy()
-    target_shape = imageio.imread(normal_path).shape[:2][::-1]
-    normals_color = cv2.resize(normals_color, target_shape)
+    normals_color_t = torch.round((normals + 1) * (255 / 2)).to(torch.uint8)
+    target_shape = imageio.imread(normal_path).shape[:2]
+    normals_color_t = F.interpolate(
+        normals_color_t.permute(2, 0, 1).unsqueeze(0).to(torch.float32),
+        size=(target_shape[0], target_shape[1]),
+        mode="bilinear",
+        align_corners=False,
+    )[0].permute(1, 2, 0).round().clamp(0, 255).to(torch.uint8)
+    normals_color = normals_color_t.cpu().numpy()
 
     imwrite(args.output / "A.png", image)
     logger.info(f"Wrote {args.output / 'A.png'}")
