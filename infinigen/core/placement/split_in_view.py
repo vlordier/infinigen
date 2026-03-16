@@ -8,7 +8,7 @@ import logging
 
 import bpy
 import numpy as np
-from mathutils import Matrix, Vector
+from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 from tqdm import trange
 
@@ -105,13 +105,13 @@ def compute_vis_dists(points: np.array, cam: bpy.types.Object):
     clamped_d = np.maximum(d, 0)
 
     K_inv_T = np.linalg.inv(K).T
-    RT_4x4_inv_T = np.array(Matrix(RT).to_4x4().inverted()).T
-    clipped_pos = (
-        homogenize((homogenize(clamped_uv) * clamped_d[:, None]) @ K_inv_T)
-        @ RT_4x4_inv_T
-    )
+    # Closed-form rigid-body inverse: for RT=[R|t], inv([R t;0 1]) = [R^T -R^T@t; 0 1]
+    R, t = RT[:3, :3], RT[:3, 3]
+    # Back-project: cam-space pts -> world-space pts (row-vector convention)
+    pts_cam = (homogenize(clamped_uv) * clamped_d[:, None]) @ K_inv_T  # (N, 3)
+    clipped_pos_3d = pts_cam @ R - (R.T @ t)  # (N, 3)
 
-    vis_dist = np.linalg.norm(points[:, :-1] - clipped_pos[:, :-1], axis=-1)
+    vis_dist = np.linalg.norm(points[:, :-1] - clipped_pos_3d, axis=-1)
 
     return d, vis_dist
 
