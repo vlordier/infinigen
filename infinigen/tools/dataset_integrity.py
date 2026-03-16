@@ -53,6 +53,14 @@ _MIN_SIZES: dict[str, int] = {
 }
 
 
+def _hash_file(path: Path, algorithm: str, chunk_size: int = 1 << 20) -> str:
+    h = hashlib.new(algorithm)
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def check_frame_continuity(scene_folder: str | Path) -> list[str]:
     """Verify that frame indices form a contiguous sequence with no gaps.
 
@@ -135,13 +143,16 @@ def check_file_sizes(
     if not frames_dir.is_dir():
         return issues
 
-    for p in sorted(frames_dir.rglob("*")):
+    for p in frames_dir.rglob("*"):
         if not p.is_file():
             continue
         threshold = sizes.get(p.suffix.lower())
-        if threshold is not None and p.stat().st_size < threshold:
+        if threshold is None:
+            continue
+        size = p.stat().st_size
+        if size < threshold:
             issues.append(
-                f"File too small ({p.stat().st_size} bytes < {threshold}): "
+                f"File too small ({size} bytes < {threshold}): "
                 f"{p.relative_to(scene_folder)}"
             )
 
@@ -245,12 +256,8 @@ def generate_checksum_manifest(
     for p in sorted(frames_dir.rglob("*")):
         if not p.is_file():
             continue
-        h = hashlib.new(algorithm)
-        with p.open("rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                h.update(chunk)
         rel = str(p.relative_to(scene_folder))
-        checksums[rel] = h.hexdigest()
+        checksums[rel] = _hash_file(p, algorithm)
 
     with output_file.open("w") as f:
         json.dump(checksums, f, indent=2, sort_keys=True)
@@ -301,11 +308,7 @@ def verify_checksum_manifest(
         if not full_path.is_file():
             issues.append(f"File missing: {rel_path}")
             continue
-        h = hashlib.new(algorithm)
-        with full_path.open("rb") as f:
-            for chunk in iter(lambda: f.read(65536), b""):
-                h.update(chunk)
-        actual = h.hexdigest()
+        actual = _hash_file(full_path, algorithm)
         if actual != expected_hash:
             issues.append(
                 f"Checksum mismatch for {rel_path}: "

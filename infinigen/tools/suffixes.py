@@ -46,4 +46,4 @@ def parse_suffix(s):
     if len(s_parts) != len(SUFFIX_ORDERING):
         return None
 
-    return {SUFFIX_ORDERING[i]: int(s_parts[i]) for i in range(len(s_parts))}
+    return {key: int(value) for key, value in zip(SUFFIX_ORDERING, s_parts)}
