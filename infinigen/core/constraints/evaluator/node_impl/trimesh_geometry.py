@@ -1285,15 +1285,11 @@ def coplanarity_cost(scene, a: str | list[str]):
     # Order objects by principal axis
     ordered_objects = iu.order_objects_by_principal_axis(a_objs)
 
-    all_total_costs = []  # To store the sum of angle and distance costs for each optimal matching
-
-    # Iterate over pairs of consecutive objects
-    for i in range(len(ordered_objects) - 1):
-        all_total_costs.append(
-            coplanarity_cost_pair(
-                scene, ordered_objects[i].name, ordered_objects[i + 1].name
-            )
-        )
+    # Sum pair costs for consecutive objects along the principal axis ordering.
+    all_total_costs = [
+        coplanarity_cost_pair(scene, a_obj.name, b_obj.name)
+        for a_obj, b_obj in zip(ordered_objects[:-1], ordered_objects[1:])
+    ]
 
     # Calculate the final cost as the sum of the remaining costs
     final_cost = sum(all_total_costs) / len(a_objs)

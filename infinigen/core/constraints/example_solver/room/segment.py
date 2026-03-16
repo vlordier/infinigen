@@ -158,10 +158,15 @@ class SegmentMaker:
     def divide_segments(self):
         segments = {0: self.contour}
         for _ in range(self.n_boxes):
-            keys, values = zip(*segments.items())
-            prob = np.array([self.divide_box_fn(v) for v in values])
+            items = list(segments.items())
+            keys = [k for k, _ in items]
+            prob = np.fromiter(
+                (self.divide_box_fn(v) for _, v in items),
+                dtype=float,
+                count=len(items),
+            )
             for _ in range(self.n_box_trials):
-                k = np.random.choice(list(keys), p=prob / prob.sum())
+                k = np.random.choice(keys, p=prob / prob.sum())
                 x, y, xx, yy = segments[k].bounds
                 w, h = xx - x, yy - y
                 r = uniform(0.25, 0.75)
@@ -228,14 +233,21 @@ class SegmentMaker:
                         attached[l].add(k)
 
         while len(segments) > len(self.graph):
-            prob = np.array([1 / (len(attached[c]) + 1) for c in shared_edges.keys()])
-            k = np.random.choice(list(shared_edges.keys()), p=prob / prob.sum())
+            keys = list(shared_edges.keys())
+            prob = np.fromiter(
+                (1.0 / (len(attached[c]) + 1) for c in keys),
+                dtype=float,
+                count=len(keys),
+            )
+            k = np.random.choice(keys, p=prob / prob.sum())
             candidates = self.constants.filter(shared_edges[k], 1e-6)
-            prob = np.array(
-                [
+            prob = np.fromiter(
+                (
                     len(attached[c].difference(attached[k])) ** 2 + 0.5
                     for c in candidates
-                ]
+                ),
+                dtype=float,
+                count=len(candidates),
             )
             n = np.random.choice(candidates, p=prob / prob.sum())
             self.merge_segment(segments, shared_edges, attached, k, n)

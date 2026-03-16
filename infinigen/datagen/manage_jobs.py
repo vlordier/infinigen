@@ -649,6 +649,10 @@ def jobs_to_launch_next(
     started_counts = np.array([inflight(s) for s in scenes])
     started_uniq, curr_per_started = np.unique(started_counts, return_counts=True)
     started_uniq = list(started_uniq)
+    per_started = {
+        int(started): int(count)
+        for started, count in zip(started_uniq, curr_per_started)
+    }
 
     logging.debug(f"Pipeline state: {list(zip(started_uniq, curr_per_started))}")
 
@@ -658,11 +662,7 @@ def jobs_to_launch_next(
         seed = scene["seed"]
 
         started_if_launch = inflight(scene) + 1
-        stuck_at_next = (
-            curr_per_started[started_uniq.index(started_if_launch)]
-            if started_if_launch in started_uniq
-            else 0
-        )
+        stuck_at_next = per_started.get(started_if_launch, 0)
 
         if max_stuck_at_task is not None and stuck_at_next >= max_stuck_at_task:
             logging.debug(
