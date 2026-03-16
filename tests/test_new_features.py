@@ -16,6 +16,7 @@ import importlib
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -356,6 +357,99 @@ class TestOcMesherBackendProtocol:
         assert resolved["device"] == "cuda"
         assert resolved["dtype"] == "float16"
         assert resolved["batch_size"] == 64
+        assert resolved["stream_policy"] == "sync"
+
+    def test_batched_evaluate_contract_uses_evaluate_batch(self):
+        mod = _get_backend_protocol()
+        calls = []
+
+        class DummyKernel:
+            def evaluate_batch(self, xyz):
+                calls.append(len(xyz))
+                return {"sdf": np.full((len(xyz),), len(calls), dtype=np.float32)}
+
+            def __call__(self, _xyz):
+                raise AssertionError("fallback __call__ should not be used")
+
+        kernels = mod.build_ocmesher_sdf_kernels(
+            [DummyKernel()],
+            field_key="sdf",
+            batch_size=3,
+        )
+        values = kernels[0](np.zeros((8, 3), dtype=np.float32))
+
+        assert calls == [3, 3, 2]
+        assert values.shape == (8,)
+        assert np.all(values[:3] == 1)
+        assert np.all(values[3:6] == 2)
+        assert np.all(values[6:] == 3)
+
+    def test_stream_policy_auto_is_guarded_to_sync_when_cuda_unavailable(self):
+        mod = _get_backend_protocol()
+
+        class DummyBackend:
+            DEFAULT_CAPABILITIES = {
+                "supports_async": True,
+                "supports_cuda": False,
+                "default_stream_policy": "auto",
+            }
+
+            def __init__(self, cameras, bounds, *, device=None, stream_policy=None):
+                pass
+
+        resolved = mod.resolve_ocmesher_runtime_kwargs(
+            DummyBackend,
+            {},
+            env={},
+            device_hint="cuda",
+        )
+
+        assert resolved["device"] == "cuda"
+        assert resolved["stream_policy"] == "sync"
+
+    def test_stream_policy_auto_kept_for_mps_when_supported(self):
+        mod = _get_backend_protocol()
+
+        class DummyBackend:
+            DEFAULT_CAPABILITIES = {
+                "supports_async": True,
+                "supports_mps": True,
+                "default_stream_policy": "auto",
+            }
+
+            def __init__(self, cameras, bounds, *, device=None, stream_policy=None):
+                pass
+
+        resolved = mod.resolve_ocmesher_runtime_kwargs(
+            DummyBackend,
+            {},
+            env={},
+            device_hint="mps",
+        )
+
+        assert resolved["device"] == "mps"
+        assert resolved["stream_policy"] == "auto"
+
+    def test_stream_policy_env_auto_guarded_on_cpu(self):
+        mod = _get_backend_protocol()
+
+        class DummyBackend:
+            DEFAULT_CAPABILITIES = {
+                "supports_async": True,
+                "default_stream_policy": "auto",
+            }
+
+            def __init__(self, cameras, bounds, *, device=None, stream_policy=None):
+                pass
+
+        resolved = mod.resolve_ocmesher_runtime_kwargs(
+            DummyBackend,
+            {},
+            env={"INFINIGEN_OCMESHER_STREAM_POLICY": "auto"},
+            device_hint="cpu",
+        )
+
+        assert resolved["device"] == "cpu"
         assert resolved["stream_policy"] == "sync"
 
     def test_output_directory_skip_when_none(self):

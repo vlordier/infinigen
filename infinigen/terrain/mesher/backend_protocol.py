@@ -186,6 +186,8 @@ def resolve_ocmesher_runtime_kwargs(
     ):
         resolved["device"] = requested_device
 
+    active_device = resolved.get("device")
+
     requested_dtype = env_map.get("INFINIGEN_OCMESHER_DTYPE")
     if (
         requested_dtype is not None
@@ -193,6 +195,13 @@ def resolve_ocmesher_runtime_kwargs(
         and _class_accepts_kwarg("dtype")
     ):
         resolved["dtype"] = requested_dtype
+    elif (
+        active_device == "mps"
+        and "dtype" not in resolved
+        and _class_accepts_kwarg("dtype")
+    ):
+        # Keep float32 end-to-end on MPS unless explicitly overridden.
+        resolved["dtype"] = "float32"
     elif (
         "dtype" not in resolved
         and _class_accepts_kwarg("dtype")
@@ -209,11 +218,35 @@ def resolve_ocmesher_runtime_kwargs(
                 except ValueError:
                     pass
                 break
-    elif isinstance(caps.get("max_batch"), int) and caps["max_batch"] > 0:
-        for key in ("max_batch", "batch_size", "sdf_batch_size"):
-            if key not in resolved and _class_accepts_kwarg(key):
-                resolved[key] = caps["max_batch"]
-                break
+    else:
+        default_batch: int | None = None
+        if active_device == "mps" and isinstance(caps.get("max_batch_mps"), int):
+            if caps["max_batch_mps"] > 0:
+                default_batch = caps["max_batch_mps"]
+        elif isinstance(caps.get("max_batch"), int) and caps["max_batch"] > 0:
+            default_batch = caps["max_batch"]
+
+        if default_batch is not None:
+            for key in ("max_batch", "batch_size", "sdf_batch_size"):
+                if key not in resolved and _class_accepts_kwarg(key):
+                    resolved[key] = default_batch
+                    break
+
+    def _device_can_use_async_stream() -> bool:
+        if active_device == "cuda":
+            return bool(caps.get("supports_cuda", True)) and bool(
+                caps.get("supports_async", False)
+            )
+        if active_device == "mps":
+            return bool(caps.get("supports_mps", True)) and bool(
+                caps.get("supports_async", False)
+            )
+        return False
+
+    def _guard_stream_policy(value: str) -> str:
+        if value == "auto" and not _device_can_use_async_stream():
+            return "sync"
+        return value
 
     stream_policy = env_map.get("INFINIGEN_OCMESHER_STREAM_POLICY")
     if (
@@ -221,14 +254,65 @@ def resolve_ocmesher_runtime_kwargs(
         and "stream_policy" not in resolved
         and _class_accepts_kwarg("stream_policy")
     ):
-        resolved["stream_policy"] = stream_policy
+        resolved["stream_policy"] = _guard_stream_policy(stream_policy)
     elif "stream_policy" not in resolved and _class_accepts_kwarg("stream_policy"):
         if isinstance(caps.get("default_stream_policy"), str):
-            resolved["stream_policy"] = caps["default_stream_policy"]
-        elif bool(caps.get("supports_async", False)):
+            resolved["stream_policy"] = _guard_stream_policy(
+                caps["default_stream_policy"]
+            )
+        elif _device_can_use_async_stream():
             resolved["stream_policy"] = "auto"
 
     return _filter_supported_kwargs(resolved)
+
+
+def _extract_kernel_field(output: Any, field_key: Any) -> Any:
+    if isinstance(output, dict):
+        if field_key not in output:
+            raise KeyError(f"Kernel output missing required field {field_key}")
+        return output[field_key]
+    return output
+
+
+def _evaluate_kernel_field(
+    kernel: Any,
+    xyz: np.ndarray,
+    *,
+    field_key: Any,
+    batch_size: int | None,
+) -> Any:
+    eval_batch = getattr(kernel, "evaluate_batch", None)
+    if callable(eval_batch):
+        if batch_size is not None and batch_size > 0 and len(xyz) > batch_size:
+            chunks: list[np.ndarray] = []
+            for start in range(0, len(xyz), batch_size):
+                chunk_xyz = xyz[start : start + batch_size]
+                chunk_output = eval_batch(chunk_xyz)
+                chunks.append(np.asarray(_extract_kernel_field(chunk_output, field_key)))
+            return np.concatenate(chunks, axis=0)
+        return _extract_kernel_field(eval_batch(xyz), field_key)
+
+    return _extract_kernel_field(kernel(xyz), field_key)
+
+
+def build_ocmesher_sdf_kernels(
+    kernels: list[Any],
+    *,
+    field_key: Any,
+    batch_size: int | None = None,
+) -> list[Any]:
+    """Build backend-compatible SDF callables with optional batch-evaluate path."""
+    return [
+        (
+            lambda x, k0=k: _evaluate_kernel_field(
+                k0,
+                x,
+                field_key=field_key,
+                batch_size=batch_size,
+            )
+        )
+        for k in kernels
+    ]
 
 
 def serialize_ocmesher_self_test_payload(result: Mapping[str, Any]) -> dict[str, Any]:

@@ -51,6 +51,7 @@ from infinigen.terrain.mesher import (
     UniformMesher,
 )
 from infinigen.terrain.mesher.backend_protocol import (
+    build_ocmesher_sdf_kernels,
     collect_ocmesher_backend_capabilities,
     normalize_ocmesher_result,
     resolve_ocmesher_runtime_kwargs,
@@ -257,6 +258,10 @@ def process_surface_input(_input, default):
 class OcMesher(UntexturedOcMesher):
     def __init__(self, cameras, bounds, **kwargs):
         runtime_kwargs = _resolve_ocmesher_runtime_kwargs(UntexturedOcMesher, kwargs)
+        self._sdf_batch_size = runtime_kwargs.get(
+            "sdf_batch_size",
+            runtime_kwargs.get("batch_size", runtime_kwargs.get("max_batch")),
+        )
         UntexturedOcMesher.__init__(
             self,
             get_caminfo(cameras)[0],
@@ -266,7 +271,11 @@ class OcMesher(UntexturedOcMesher):
         _log_ocmesher_backend_capabilities_once(self, runtime_kwargs)
 
     def __call__(self, kernels):
-        sdf_kernels = [(lambda x, k0=k: k0(x)[Vars.SDF]) for k in kernels]
+        sdf_kernels = build_ocmesher_sdf_kernels(
+            kernels,
+            field_key=Vars.SDF,
+            batch_size=self._sdf_batch_size,
+        )
         result = UntexturedOcMesher.__call__(self, sdf_kernels)
         meshes, in_view_tags = normalize_ocmesher_result(
             result,
@@ -284,6 +293,10 @@ class OcMesher(UntexturedOcMesher):
 class CollectiveOcMesher(UntexturedOcMesher):
     def __init__(self, cameras, bounds, **kwargs):
         runtime_kwargs = _resolve_ocmesher_runtime_kwargs(UntexturedOcMesher, kwargs)
+        self._sdf_batch_size = runtime_kwargs.get(
+            "sdf_batch_size",
+            runtime_kwargs.get("batch_size", runtime_kwargs.get("max_batch")),
+        )
         UntexturedOcMesher.__init__(
             self,
             get_caminfo(cameras)[0],
@@ -293,8 +306,13 @@ class CollectiveOcMesher(UntexturedOcMesher):
         _log_ocmesher_backend_capabilities_once(self, runtime_kwargs)
 
     def __call__(self, kernels):
+        kernel_fns = build_ocmesher_sdf_kernels(
+            kernels,
+            field_key=Vars.SDF,
+            batch_size=self._sdf_batch_size,
+        )
         sdf_kernels = [
-            lambda x: np.stack([k(x)[Vars.SDF] for k in kernels], -1).min(axis=-1)
+            lambda x: np.stack([k(x) for k in kernel_fns], -1).min(axis=-1)
         ]
         result = UntexturedOcMesher.__call__(self, sdf_kernels)
         meshes, in_view_tags = normalize_ocmesher_result(
