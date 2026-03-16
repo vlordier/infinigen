@@ -187,3 +187,42 @@ def device_capabilities(device=None) -> dict:
         )
 
     return info
+
+
+def setup_torch_runtime(device=None) -> dict:
+    """Apply backend-specific PyTorch runtime tuning.
+
+    Returns a small summary dict of applied settings.
+    """
+    import torch
+
+    if device is None:
+        device = get_torch_device()
+
+    summary = {"backend": device.type}
+
+    # Improve matmul kernels where supported.
+    try:
+        torch.set_float32_matmul_precision("high")
+        summary["matmul_precision"] = "high"
+    except Exception:
+        summary["matmul_precision"] = "default"
+
+    if device.type == "cuda":
+        if hasattr(torch.backends, "cudnn"):
+            torch.backends.cudnn.benchmark = True
+            summary["cudnn_benchmark"] = True
+        return summary
+
+    if device.type == "cpu":
+        threads = optimal_num_threads(device)
+        torch.set_num_threads(threads)
+        summary["num_threads"] = threads
+        if hasattr(torch, "set_num_interop_threads"):
+            interop = max(1, threads // 2)
+            torch.set_num_interop_threads(interop)
+            summary["num_interop_threads"] = interop
+        return summary
+
+    # MPS / other accelerators: precision hint is the main portable knob.
+    return summary

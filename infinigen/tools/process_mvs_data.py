@@ -15,6 +15,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
+from infinigen.core.util.device import get_torch_device, setup_torch_runtime
 from infinigen.tools.suffixes import parse_suffix
 
 
@@ -28,12 +29,21 @@ def from_homog(x):
     return x[..., :-1] / x[..., [-1]]
 
 
+_coords_cache = {}
+
+
 def coords_grid(batch, ht, wd, device):
+    key = (str(device), int(batch), int(ht), int(wd))
+    cached = _coords_cache.get(key)
+    if cached is not None:
+        return cached
     coords = torch.meshgrid(
-        torch.arange(ht, device=device), torch.arange(wd, device=device)
+        torch.arange(ht, device=device), torch.arange(wd, device=device), indexing="ij"
     )
     coords = torch.stack(coords[::-1], dim=0).float()
-    return coords[None].repeat(batch, 1, 1, 1)
+    grid = coords[None].repeat(batch, 1, 1, 1)
+    _coords_cache[key] = grid
+    return grid
 
 
 def reproject(depth1, pose1, pose2, K1, K2):
@@ -82,9 +92,12 @@ def bilinear_sampler(img, coords, mode="bilinear", mask=False):
     return img
 
 
-def check_cycle_consistency(flow_01, flow_10, threshold=1):
-    flow_01 = torch.from_numpy(flow_01).permute(2, 0, 1)[None]
-    flow_10 = torch.from_numpy(flow_10).permute(2, 0, 1)[None]
+def check_cycle_consistency(flow_01, flow_10, threshold=1, device=None):
+    if device is None:
+        device = get_torch_device()
+    with torch.no_grad():
+        flow_01 = torch.as_tensor(flow_01, device=device).permute(2, 0, 1)[None].float()
+        flow_10 = torch.as_tensor(flow_10, device=device).permute(2, 0, 1)[None].float()
     H, W = flow_01.shape[-2:]
     coords = coords_grid(1, H, W, flow_01.device)
     coords1 = coords + flow_01
@@ -92,17 +105,17 @@ def check_cycle_consistency(flow_01, flow_10, threshold=1):
     cycle = flow_reprojected + flow_01
     cycle = torch.norm(cycle, dim=1)
     mask = (cycle < threshold).float()
-    return mask[0].numpy()
+    return mask[0].cpu().numpy()
 
 
-def compute_covisibility(depth0, depth1, camview0, camview1):
+def compute_covisibility(depth0, depth1, camview0, camview1, device=None):
     data = {}
     data["K0"] = camview0["K"]
     data["K1"] = camview1["K"]
     data["T0"] = camview0["T"]
     data["T1"] = camview1["T"]
     flow_01, flow_10 = induced_flow(depth0, depth1, data)
-    mask = check_cycle_consistency(flow_01, flow_10)
+    mask = check_cycle_consistency(flow_01, flow_10, device=device)
     return mask.mean()
 
 
@@ -159,6 +172,8 @@ if __name__ == "__main__":
                 )
 
     scenes = os.listdir(target_folder)
+    device = get_torch_device()
+    setup_torch_runtime(device)
 
     def worker(scene):
         cam_ids = [
@@ -166,21 +181,27 @@ if __name__ == "__main__":
             for x in os.listdir(target_folder / scene / "images")
             if x.endswith(".png")
         ]
+        depth_cache = {
+            cam_id: np.load(target_folder / scene / f"depths/{cam_id}.npy")
+            for cam_id in cam_ids
+        }
+        cam_cache = {
+            cam_id: np.load(target_folder / scene / f"cameras/{cam_id}.npz")
+            for cam_id in cam_ids
+        }
         with open(target_folder / scene / "pairs.txt", "w") as f:
             for cam_id0 in cam_ids:
                 f.write(f"{cam_id0} ")
-                depth_path = target_folder / scene / f"depths/{cam_id0}.npy"
-                camera_path = target_folder / scene / f"cameras/{cam_id0}.npz"
-                depth0 = np.load(depth_path)
-                camview0 = np.load(camera_path)
+                depth0 = depth_cache[cam_id0]
+                camview0 = cam_cache[cam_id0]
                 for cam_id1 in cam_ids:
                     if cam_id1 == cam_id0:
                         continue
-                    depth_path = target_folder / scene / f"depths/{cam_id1}.npy"
-                    camera_path = target_folder / scene / f"cameras/{cam_id1}.npz"
-                    depth1 = np.load(depth_path)
-                    camview1 = np.load(camera_path)
-                    cov = compute_covisibility(depth0, depth1, camview0, camview1)
+                    depth1 = depth_cache[cam_id1]
+                    camview1 = cam_cache[cam_id1]
+                    cov = compute_covisibility(
+                        depth0, depth1, camview0, camview1, device=device
+                    )
                     f.write(f" {cam_id1} {cov}")
                 f.write("\n")
         thumbnails = []
