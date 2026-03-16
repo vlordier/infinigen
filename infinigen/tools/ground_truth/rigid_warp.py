@@ -72,7 +72,6 @@ if __name__ == "__main__":
 
     image2 = imread(image2_path)
     image1 = imread(image1_path)
-    depth1 = np.load(depth_path)
     pose1 = np.load(camview1_path)["T"]
     pose2 = np.load(camview2_path)["T"]
     K1 = np.load(camview1_path)["K"]

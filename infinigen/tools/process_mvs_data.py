@@ -108,7 +108,7 @@ def check_cycle_consistency(flow_01, flow_10, threshold=1, device=None):
         cycle = flow_reprojected + flow_01
         cycle = torch.norm(cycle, dim=1)
         mask = (cycle < threshold).float()
-    return mask[0].cpu().numpy()
+    return mask
 
 
 def compute_covisibility(depth0, depth1, camview0, camview1, device=None):
@@ -139,7 +139,7 @@ def compute_covisibility(depth0, depth1, camview0, camview1, device=None):
     depth1 = torch.as_tensor(depth1, device=device, dtype=torch.float32)
     flow_01, flow_10 = induced_flow_torch(depth0, depth1, camview0, camview1, device)
     mask = check_cycle_consistency(flow_01, flow_10, device=device)
-    return float(mask.mean())
+    return float(mask.mean().item())
 
 
 if __name__ == "__main__":
