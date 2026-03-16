@@ -4,7 +4,6 @@
 # Authors: Lahav Lipson
 
 import argparse
-import colorsys
 import json
 import sys
 from pathlib import Path
@@ -76,12 +75,15 @@ def calc_bbox_pts(min_pt, max_pt):
     return points, faces
 
 
-# Deterministic, but probably slow. Good enough for visualization.
-def arr2color(e):
-    s = np.random.RandomState(np.array(e, dtype=np.uint32))
-    return (
-        np.asarray(colorsys.hsv_to_rgb(s.uniform(0, 1), s.uniform(0.1, 1), 1)) * 255
-    ).astype(np.uint8)
+def hash_color(e):
+    vals = np.asarray(e, dtype=np.uint32).reshape(-1)
+    h = np.uint32(2166136261)
+    for v in vals:
+        h = (h ^ v) * np.uint32(16777619)
+    r = np.uint8(((h * np.uint32(1597334677)) >> np.uint32(24)) & np.uint32(255))
+    g = np.uint8(((h * np.uint32(3812015801)) >> np.uint32(24)) & np.uint32(255))
+    b = np.uint8(((h * np.uint32(279470273)) >> np.uint32(24)) & np.uint32(255))
+    return [int(r), int(g), int(b)]
 
 
 if __name__ == "__main__":
@@ -125,6 +127,7 @@ if __name__ == "__main__":
 
     H, W, _ = image.shape
     camera_pose = camview["T"]
+    camera_pose_inv = inv(camera_pose)
     K = camview["K"]
 
     # Assign unique colors to each object instance
@@ -148,7 +151,7 @@ if __name__ == "__main__":
                             model_mat=model_mat,
                             min=obj["min"],
                             max=obj["max"],
-                            color=arr2color(instance_id).tolist(),
+                            color=hash_color(instance_id),
                         )
                     )
 
@@ -161,7 +164,7 @@ if __name__ == "__main__":
         size = np.linalg.norm(max_pt - min_pt)
         bbox_points, faces = calc_bbox_pts(min_pt, max_pt)
         bbox_points_wc = transform(bbox["model_mat"], bbox_points)
-        bbox_points_cc = transform(inv(camera_pose), bbox_points_wc)
+        bbox_points_cc = transform(camera_pose_inv, bbox_points_wc)
         bbox_points_h = (K @ bbox_points_cc.T).T
         bbox_points_uv = (bbox_points_h[:, :2] / bbox_points_h[:, [2]]).astype(int)
         if bbox_points_h[:, 2].min() < 0:  # bbox goes behind the camera
