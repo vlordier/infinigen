@@ -11,10 +11,8 @@ import sys
 from pathlib import Path
 
 import cv2
-import numba as nb
 import numpy as np
 from imageio.v3 import imread, imwrite
-from numba.types import bool_
 
 from infinigen.core.util.array_ops import unique_rows
 from infinigen.tools.compress_masks import recover
@@ -23,7 +21,7 @@ from infinigen.tools.dataset_loader import get_frame_path
 logger = logging.getLogger(__name__)
 
 try:
-    from einops import pack, rearrange, repeat
+    from einops import pack, rearrange
 except ImportError as e:
     raise ImportError(
         "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
@@ -38,36 +36,30 @@ Output:
 """
 
 
-@nb.njit
 def should_highlight_pixel(arr2d, set1d):
     """Compute boolean mask for items in arr2d that are also in set1d"""
-    H, W = arr2d.shape
-    output = np.zeros((H, W), dtype=bool_)
-    for i in range(H):
-        for j in range(W):
-            for n in range(set1d.size):
-                output[i, j] = output[i, j] or (arr2d[i, j] == set1d[n])
-    return output
+    return np.isin(arr2d, set1d)
 
 
-@nb.njit
 def compute_boxes(indices, binary_tag_mask):
     """Compute 2d bounding boxes for highlighted pixels"""
     H, W = binary_tag_mask.shape
-    num_u = indices.max() + 1
+    num_u = int(indices.max()) + 1
     x_min = np.full(num_u, W - 1, dtype=np.int32)
     y_min = np.full(num_u, H - 1, dtype=np.int32)
     x_max = np.full(num_u, -1, dtype=np.int32)
     y_max = np.full(num_u, -1, dtype=np.int32)
-    for y in range(H):
-        for x in range(W):
-            idx = indices[y, x]
-            tag_is_present = binary_tag_mask[y, x]
-            if tag_is_present:
-                x_min[idx] = min(x_min[idx], x)
-                x_max[idx] = max(x_max[idx], x)
-                y_min[idx] = min(y_min[idx], y)
-                y_max[idx] = max(y_max[idx], y)
+
+    flat_mask = binary_tag_mask.reshape(-1)
+    if flat_mask.any():
+        linear = np.flatnonzero(flat_mask)
+        ys, xs = np.divmod(linear, W)
+        obj_idx = indices.reshape(-1)[linear]
+        np.minimum.at(x_min, obj_idx, xs)
+        np.maximum.at(x_max, obj_idx, xs)
+        np.minimum.at(y_min, obj_idx, ys)
+        np.maximum.at(y_max, obj_idx, ys)
+
     return np.stack((x_min, y_min, x_max, y_max), axis=-1)
 
 
@@ -149,21 +141,19 @@ if __name__ == "__main__":
         for (x_min, y_min, x_max, y_max), color, idx, ui in zip(
             bbox, unique_colors, np.arange(m.size)[m], uniq_instances
         ):
-            points = [(x_min, y_min), (x_min, y_max), (x_max, y_max), (x_max, y_min)]
-            for i in range(4):
-                canvas = cv2.line(
-                    canvas,
-                    points[i],
-                    points[(i + 1) % 4],
-                    color=color.tolist(),
-                    thickness=2,
-                )
+            canvas = cv2.rectangle(
+                canvas,
+                (int(x_min), int(y_min)),
+                (int(x_max), int(y_max)),
+                color=color.tolist(),
+                thickness=2,
+            )
     else:
         colors_for_instances = unique_colors[indices].reshape((H, W, 3))
         canvas = np.zeros((H, W, 3), dtype=np.uint8)
-        for obj in objects_to_highlight:
-            m = repeat(object_segmentation_mask == obj["object_index"], "H W -> H W 3")
-            canvas[m] = colors_for_instances[m]
+        highlight_ids = np.array([obj["object_index"] for obj in objects_to_highlight])
+        m = should_highlight_pixel(object_segmentation_mask, highlight_ids)
+        canvas[m] = colors_for_instances[m]
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image)
