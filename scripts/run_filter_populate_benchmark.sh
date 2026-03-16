@@ -15,6 +15,10 @@ fi
 SCENE_PATH="$1"
 shift
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+VENV_SITE_PACKAGES="$(ls -d "$REPO_ROOT"/.venv/lib/python*/site-packages 2>/dev/null | head -n 1 || true)"
+
 if [ ! -f "$SCENE_PATH" ]; then
   echo "Scene file not found: $SCENE_PATH" >&2
   exit 2
@@ -54,8 +58,14 @@ for ((i=0; i<${#EXTRA_ARGS[@]}; i++)); do
   fi
 done
 
-"$BLENDER_BIN" -b "$SCENE_PATH" \
-  --python scripts/benchmark_filter_populate_targets.py -- \
+if [ -n "$VENV_SITE_PACKAGES" ]; then
+  export PYTHONPATH="$REPO_ROOT:$VENV_SITE_PACKAGES${PYTHONPATH:+:$PYTHONPATH}"
+else
+  export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+fi
+
+"$BLENDER_BIN" -b "$SCENE_PATH" --python-use-system-env \
+  --python "$REPO_ROOT/scripts/benchmark_filter_populate_targets.py" -- \
   "${EXTRA_ARGS[@]}"
 
 if [ ! -f "$OUTPUT" ]; then
