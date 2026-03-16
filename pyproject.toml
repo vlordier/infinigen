@@ -33,7 +33,7 @@ dependencies = [
     "imageio>=2.33,<3",    # required by scikit-image
     "matplotlib",
     "networkx",
-    "numpy<2",
+    "numpy<3",  # validated with NumPy 2.x on py311
     "opencv-python<4.14.0", # validated through 4.13.x on py311
     "pandas",
     "psutil",
