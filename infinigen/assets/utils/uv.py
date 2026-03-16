@@ -8,7 +8,6 @@ from collections.abc import Iterable
 
 import bpy
 import numpy as np
-from sklearn.linear_model import LinearRegression
 
 from infinigen.assets.materials.utils import common
 from infinigen.assets.utils.decorate import (
@@ -101,10 +100,14 @@ def compute_uv_direction(obj, x="x", y="y", selection=None):
     next_loops[loop_starts + loop_totals - 1] -= loop_totals
     uv_diff = uv[next_loops] - uv
     co_diff = co[next_vertices] - co[loop_vertices]
-    lr = LinearRegression()
-    lr.fit(co_diff[selection], uv_diff[selection])
-    lr.coef_[lr.coef_ > 1e3] = 0
-    axes = lr.predict(np.stack([x, y]))
+
+    x_train = co_diff[selection]
+    y_train = uv_diff[selection]
+    x_aug = np.concatenate([x_train, np.ones((x_train.shape[0], 1))], axis=1)
+    coeff, *_ = np.linalg.lstsq(x_aug, y_train, rcond=None)
+    coeff[:3][coeff[:3] > 1e3] = 0
+    xy_axes = np.stack([x, y])
+    axes = xy_axes @ coeff[:3] + coeff[3]
     axes = axes / (np.linalg.norm(axes, axis=-1) + 1e-6)
     pred = uv @ axes.T
     pred_sel = pred[selection]

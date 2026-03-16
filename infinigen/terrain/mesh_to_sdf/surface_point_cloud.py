@@ -14,7 +14,7 @@ import math
 
 import numpy as np
 import trimesh
-from sklearn.neighbors import KDTree
+from scipy.spatial import cKDTree
 
 from .scan import Scan, get_camera_transform_looking_at_origin
 from .utils import check_voxels, get_raster_points, sample_uniform_points_in_unit_sphere
@@ -38,14 +38,14 @@ class SurfacePointCloud:
         self.normals = normals
         self.scans = scans
 
-        self.kd_tree = KDTree(points)
+        self.kd_tree = cKDTree(points)
 
     def get_random_surface_points(self, count, use_scans=True):
         if use_scans:
             indices = np.random.choice(self.points.shape[0], count)
             return self.points[indices, :]
         else:
-            samples, index = trimesh.sample.sample_surface(
+            samples, _index = trimesh.sample.sample_surface(
                 mesh=self.mesh, count=count, face_weight=None, seed=0
             )
             return samples
@@ -58,17 +58,23 @@ class SurfacePointCloud:
         return_gradients=False,
     ):
         if use_depth_buffer:
-            distances, indices = self.kd_tree.query(query_points)
+            distances, indices = self.kd_tree.query(query_points, k=1, workers=-1)
             distances = distances.astype(np.float32).reshape(-1)
+            indices = indices.reshape(-1)
             inside = ~self.is_outside(query_points)
             distances[inside] *= -1
 
             if return_gradients:
-                gradients = query_points - self.points[indices[:, 0]]
+                gradients = query_points - self.points[indices]
                 gradients[inside] *= -1
 
         else:
-            distances, indices = self.kd_tree.query(query_points, k=sample_count)
+            distances, indices = self.kd_tree.query(
+                query_points, k=sample_count, workers=-1
+            )
+            if distances.ndim == 1:
+                distances = distances[:, None]
+                indices = indices[:, None]
             distances = distances.astype(np.float32)
 
             closest_points = self.points[indices]
