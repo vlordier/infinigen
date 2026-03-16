@@ -143,9 +143,7 @@ if __name__ == "__main__":
         unique_colors = unique_colors[m]
         uniq_instances = uniq_instances[m]
         canvas = np.copy(image)
-        for (x_min, y_min, x_max, y_max), color, idx, ui in zip(
-            bbox, unique_colors, np.arange(m.size)[m], uniq_instances
-        ):
+        for (x_min, y_min, x_max, y_max), color, ui in zip(bbox, unique_colors, uniq_instances):
             canvas = cv2.rectangle(
                 canvas,
                 (int(x_min), int(y_min)),
@@ -156,9 +154,7 @@ if __name__ == "__main__":
     else:
         colors_for_instances = unique_colors[indices].reshape((H, W, 3))
         canvas = np.zeros((H, W, 3), dtype=np.uint8)
-        highlight_ids = np.array([obj["object_index"] for obj in objects_to_highlight])
-        m = should_highlight_pixel(object_segmentation_mask, highlight_ids)
-        canvas[m] = colors_for_instances[m]
+        canvas[highlighted_pixels] = colors_for_instances[highlighted_pixels]
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image)
