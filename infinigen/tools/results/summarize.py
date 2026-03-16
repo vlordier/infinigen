@@ -35,15 +35,17 @@ def make_defaultdict(inner):
 
 
 def parse_mask_tag_jsons(base_folder):
+    fine_matches = []
     for file_path in base_folder.rglob("MaskTag.json"):
         if match := re.fullmatch(
             "fine_([0-9])_([0-9])_([0-9]{4})_([0-9])", file_path.parent.name
         ):
             _, _, frame_str, _ = match.groups()
             yield (int(frame_str), file_path)
-    for file_path in base_folder.rglob("MaskTag.json"):
-        if match := re.fullmatch("fine.*", file_path.parent.name):
-            yield (0, file_path)
+        elif re.fullmatch("fine.*", file_path.parent.name):
+            fine_matches.append(file_path)
+    for file_path in fine_matches:
+        yield (0, file_path)
 
 
 def summarize_folder(base_folder):
@@ -51,7 +53,7 @@ def summarize_folder(base_folder):
     output = defaultdict(make_defaultdict(make_defaultdict(make_defaultdict(dict))))
     max_frame = -1
     for file_path in base_folder.rglob("*"):
-        if (not file_path.is_file) or ("saved_mesh" in file_path.parts):
+        if (not file_path.is_file()) or ("saved_mesh" in file_path.parts):
             continue
 
         if match := re.fullmatch(

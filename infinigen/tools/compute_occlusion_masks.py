@@ -17,6 +17,20 @@ from infinigen.core.util.device import get_torch_device, setup_torch_runtime
 _grid_cache: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
 _torch_grid_cache: dict[tuple[str, int, int], torch.Tensor] = {}
 _offset_cache_torch: dict[str, torch.Tensor] = {}
+_npy_cache: dict[str, np.ndarray] = {}
+
+
+def _load_npy_cached(path: Path):
+    key = str(path)
+    cached = _npy_cache.get(key)
+    if cached is not None:
+        return cached
+    arr = np.load(path)
+    _npy_cache[key] = arr
+    if len(_npy_cache) > 128:
+        _npy_cache.clear()
+        _npy_cache[key] = arr
+    return arr
 
 
 def _get_base_grid(H, W):
@@ -204,26 +218,26 @@ if __name__ == "__main__":
         data_type = file_path.name.split("_")[0]
         if data_type == "Flow3D":
             depth_info = dict(info)
-            depth = np.load(
+            depth = _load_npy_cached(
                 file_path.parent / ("Depth" + get_suffix(depth_info) + ".npy")
             )
             depth_info["frame"] += 1
-            dst_depth = np.load(
+            dst_depth = _load_npy_cached(
                 file_path.parent / ("Depth" + get_suffix(depth_info) + ".npy")
             )
         elif data_type == "PointTraj3D":
             depth_info = dict(info)
             depth_info["frame"] = args.point_traj_source_frame
-            depth = np.load(
+            depth = _load_npy_cached(
                 file_path.parent / ("Depth" + get_suffix(depth_info) + ".npy")
             )
             depth_info["frame"] = info["frame"]
-            dst_depth = np.load(
+            dst_depth = _load_npy_cached(
                 file_path.parent / ("Depth" + get_suffix(depth_info) + ".npy")
             )
         else:
             continue
-        flow = np.load(file_path)
+        flow = _load_npy_cached(file_path)
         if use_torch:
             sample_shape = flow.shape
             if pending and pending[0][4].shape != sample_shape:
