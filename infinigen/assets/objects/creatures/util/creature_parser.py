@@ -44,7 +44,9 @@ def parse_nurbs_data(obj, i=0):
     spline = obj.data.splines[i]
     m, n = spline.point_count_u, spline.point_count_v
 
-    points = np.array([p.co for p in spline.points])
+    points = np.empty(len(spline.points) * 4)
+    spline.points.foreach_get("co", points)
+    points = points.reshape(-1, 4)
     points = points.reshape(n, m, -1)
 
     return points

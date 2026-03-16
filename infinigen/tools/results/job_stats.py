@@ -164,6 +164,6 @@ if __name__ == "__main__":
         logger.info('-' * len(HEADER) + '\n' + HEADER)
         for j in v:
             if j.node is not None:
-                logger.info(f'{j}({node_info[j.node]['group']})')
+                logger.info(f"{j}({node_info[j.node]['group']})")
             else:
                 logger.info(j)

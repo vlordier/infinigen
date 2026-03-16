@@ -5,7 +5,6 @@
 
 
 import copy
-import itertools
 import typing
 from dataclasses import dataclass, field
 
@@ -75,13 +74,14 @@ class CreatureGenome:
 
 
 def compute_child_matching(a: list[Tree], b: list[Tree]):
-    def match_cost(a: Tree, b: Tree):
-        diff = b.item.att.coord - a.item.att.coord
-        diff[1] = min(diff[1], 1 - diff[1])
-        return np.linalg.norm(diff)
+    if not a or not b:
+        return [(x if i < len(a) else None, None) for i, x in enumerate(a)]
 
-    cost_matrix = np.array([match_cost(ac, bc) for ac, bc in itertools.product(a, b)])
-    cost_matrix = cost_matrix.reshape(len(a), len(b))
+    a_coords = np.array([node.item.att.coord for node in a], dtype=float)
+    b_coords = np.array([node.item.att.coord for node in b], dtype=float)
+    diff = b_coords[None, :, :] - a_coords[:, None, :]
+    diff[:, :, 1] = np.minimum(diff[:, :, 1], 1 - diff[:, :, 1])
+    cost_matrix = np.linalg.norm(diff, axis=2)
     cost_matrix = csr_matrix(cost_matrix)
 
     perm = maximum_bipartite_matching(-cost_matrix, perm_type="column")

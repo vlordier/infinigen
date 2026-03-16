@@ -53,8 +53,8 @@ if __name__ == "__main__":
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image1)
-    logger.info(f'Wrote {args.output / 'A.png'}')
+    logger.info(f"Wrote {args.output / 'A.png'}")
     imwrite(args.output / "C.png", image2)
-    logger.info(f'Wrote {args.output / 'C.png'}')
+    logger.info(f"Wrote {args.output / 'C.png'}")
     imwrite(args.output / "B.png", warped_image)
-    logger.info(f'Wrote {args.output / 'B.png'}')
+    logger.info(f"Wrote {args.output / 'B.png'}")

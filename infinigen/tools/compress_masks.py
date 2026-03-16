@@ -47,5 +47,5 @@ if __name__ == "__main__":
             d = compress(arr)
             assert show(arr) == show(recover(d))
             np.savez(file_path.with_suffix(".npz"), **d)
-            logger.info(f'{file_path} -> {file_path.with_suffix('.npz')}')
+            logger.info(f"{file_path} -> {file_path.with_suffix('.npz')}")
             file_path.unlink()

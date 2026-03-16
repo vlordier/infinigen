@@ -167,6 +167,6 @@ if __name__ == "__main__":
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image)
-    logger.info(f'Wrote {args.output / 'A.png'}')
+    logger.info(f"Wrote {args.output / 'A.png'}")
     imwrite(args.output / "B.png", canvas)
-    logger.info(f'Wrote {args.output / 'B.png'}')
+    logger.info(f"Wrote {args.output / 'B.png'}")
