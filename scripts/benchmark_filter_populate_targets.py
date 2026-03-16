@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import time
 from pathlib import Path
 
@@ -34,6 +35,8 @@ from infinigen.core.placement.placement import (
     get_placeholder_points,
     parse_asset_name,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def filter_populate_targets_legacy(
@@ -92,6 +95,7 @@ def _get_cameras(camera_collection_name: str):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
     parser.add_argument("--placeholder-collection", required=True)
     parser.add_argument("--camera-collection", required=True)
@@ -146,8 +150,8 @@ def main():
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2))
-    print(json.dumps(report, indent=2))
-    print(f"WROTE {args.output}")
+    logger.info("%s", json.dumps(report, indent=2))
+    logger.info("WROTE %s", args.output)
 
 
 if __name__ == "__main__":
