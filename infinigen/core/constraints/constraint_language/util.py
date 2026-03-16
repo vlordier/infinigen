@@ -14,7 +14,6 @@ import numpy as np
 import trimesh
 from mathutils import Matrix, Vector
 from shapely import LineString, MultiPolygon, Point, Polygon
-from sklearn.decomposition import PCA
 from trimesh import Scene
 
 from infinigen.core import tagging
@@ -260,7 +259,7 @@ def subset(scene: Scene, incl):
 
     objs = []
     for n in scene.graph.nodes:
-        T, g = scene.graph[n]
+        _T, g = scene.graph[n]
         if g is None:
             continue
         otags = scene.geometry[g].metadata["tags"]
@@ -400,8 +399,8 @@ def blender_centroid(a):
 def order_objects_by_principal_axis(objects: list[bpy.types.Object]):
     locations = [obj.location for obj in objects]
     location_matrix = np.array(locations)
-    pca = PCA(n_components=1)
-    pca.fit(location_matrix)
-    locations_projected = pca.transform(location_matrix)
+    centered = location_matrix - location_matrix.mean(axis=0, keepdims=True)
+    principal_axis = np.linalg.svd(centered, full_matrices=False)[2][0]
+    locations_projected = centered @ principal_axis
     sorted_indices = np.argsort(locations_projected.ravel())
     return [objects[i] for i in sorted_indices]

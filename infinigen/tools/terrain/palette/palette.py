@@ -14,7 +14,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from google_images_search import GoogleImagesSearch
-from sklearn.mixture import GaussianMixture
+from scipy.cluster.vq import kmeans2
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +53,24 @@ def make_palette(keyword, num_images, num_colors, overwrite=False):
     for i in range(len(colors)):
         colors[i] = colorsys.rgb_to_hsv(*colors[i])
 
-    model = GaussianMixture(num_colors, random_state=0).fit(colors)
+    centroids, labels = kmeans2(colors, num_colors, minit="points")
 
-    weights = model.weights_.copy()
+    weights = np.bincount(labels, minlength=num_colors).astype(np.float64)
+    total = max(weights.sum(), 1.0)
+    weights /= total
+    colors_hsv = centroids.copy()
+    cov = np.zeros((num_colors, 3, 3), dtype=np.float64)
+    for i in range(num_colors):
+        cluster_points = colors[labels == i]
+        if cluster_points.shape[0] >= 2:
+            cov[i] = np.cov(cluster_points, rowvar=False)
+        else:
+            cov[i] = 1e-4 * np.eye(3)
+
     index = np.argsort(weights)[::-1]
     weights = weights[index]
-    colors_hsv = model.means_.copy()[index]
-    cov = model.covariances_.copy()[index]
+    colors_hsv = colors_hsv[index]
+    cov = cov[index]
     colors_rgb = colors_hsv.copy()
     for i in range(num_colors):
         colors_rgb[i] = colorsys.hsv_to_rgb(*colors_rgb[i])
