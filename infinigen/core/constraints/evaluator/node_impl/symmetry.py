@@ -212,31 +212,33 @@ def weight(obj):
 
 
 def normalization_factor(objs):
-    avg_distance = np.mean(
-        [
-            distance(obj1.location, obj2.location)
-            for obj1 in objs
-            for obj2 in objs
-            if obj1 != obj2
-        ]
-    )
-    return avg_distance
+    if len(objs) < 2:
+        return 1.0
+    locs = np.array([[o.location.x, o.location.y, o.location.z] for o in objs])
+    diffs = locs[:, None, :] - locs[None, :, :]
+    dists = np.linalg.norm(diffs, axis=2)
+    mask = ~np.eye(len(objs), dtype=bool)
+    return float(dists[mask].mean())
 
 
 def bipartite_matching(objs, reflected_objs_data):
     # Use the Hungarian algorithm to find the optimal pairing between objs and reflected_objs
     for obj in objs:
         obj.rotation_mode = "QUATERNION"
-    cost_matrix = np.array(
-        [
-            [
-                distance(obj.location, ref[0])
-                + angle_difference(obj.rotation_quaternion, ref[1])
-                for ref in reflected_objs_data
-            ]
-            for obj in objs
-        ]
-    )
+
+    obj_locs = np.array([[o.location.x, o.location.y, o.location.z] for o in objs])
+    ref_locs = np.array([[r[0].x, r[0].y, r[0].z] for r in reflected_objs_data])
+    positional_cost = np.linalg.norm(obj_locs[:, None, :] - ref_locs[None, :, :], axis=2)
+
+    obj_quats = np.array([list(o.rotation_quaternion) for o in objs], dtype=float)
+    ref_quats = np.array([list(r[1]) for r in reflected_objs_data], dtype=float)
+    obj_quats /= np.linalg.norm(obj_quats, axis=1, keepdims=True)
+    ref_quats /= np.linalg.norm(ref_quats, axis=1, keepdims=True)
+    # Use absolute quaternion dot product to ignore double-cover sign.
+    dot_products = np.clip(np.abs(obj_quats @ ref_quats.T), -1.0, 1.0)
+    angular_cost = 2 * np.arccos(dot_products)
+
+    cost_matrix = positional_cost + angular_cost
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
     return [(objs[i], reflected_objs_data[j]) for i, j in zip(row_ind, col_ind)]
 

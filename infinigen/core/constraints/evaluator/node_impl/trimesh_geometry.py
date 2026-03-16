@@ -1239,53 +1239,37 @@ def coplanarity_cost_pair(scene, a: str, b: str):
     a_trimesh_bbox = a_trimesh.bounding_box_oriented
     b_trimesh_bbox = b_trimesh.bounding_box_oriented
 
-    object1_planes = []
-    object2_planes = []
+    def unique_planes_from_bbox(bbox, tol=1e-3):
+        face_normals = bbox.face_normals
+        if len(face_normals) == 0:
+            return np.empty((0, 3)), np.empty((0, 3))
+        # Quantize by tolerance to avoid repeated isclose scans.
+        keys = np.round(face_normals / tol).astype(np.int64)
+        _, first_idx = np.unique(keys, axis=0, return_index=True)
+        first_idx.sort()
+        points = bbox.vertices[bbox.faces[first_idx, 0]]
+        normals = face_normals[first_idx]
+        return points, normals
 
-    # Helper function to check if a normal is close to any in the list
-    def is_normal_new(normal, normals_list):
-        normals_np = np.array(normals_list)
-        if len(normals_list) > 0:
-            return not np.any(np.all(np.isclose(normals_np, normal, atol=1e-3), axis=1))
-        return True
+    points1, normals1 = unique_planes_from_bbox(a_trimesh_bbox)
+    points2, normals2 = unique_planes_from_bbox(b_trimesh_bbox)
 
-    for i in range(len(a_trimesh_bbox.faces)):
-        normal = a_trimesh_bbox.face_normals[i]
-        if is_normal_new(normal, [n for _, n in object1_planes]):
-            object1_planes.append(
-                (a_trimesh_bbox.vertices[a_trimesh_bbox.faces[i]][0], normal)
-            )
+    if len(normals1) == 0 or len(normals2) == 0:
+        return 0.0
 
-    for i in range(len(b_trimesh_bbox.faces)):
-        normal = b_trimesh_bbox.face_normals[i]
-        if is_normal_new(normal, [n for _, n in object2_planes]):
-            object2_planes.append(
-                (b_trimesh_bbox.vertices[b_trimesh_bbox.faces[i]][0], normal)
-            )
-
-    # Calculate angle cost matrix for bipartite matching
-    angle_cost_matrix = np.zeros((len(object1_planes), len(object2_planes)))
-    for j, plane1 in enumerate(object1_planes):
-        for k, plane2 in enumerate(object2_planes):
-            angle_cost = 1 - np.dot(plane1[1], plane2[1])
-            angle_cost_matrix[j, k] = angle_cost
+    # Angle cost matrix for bipartite matching.
+    angle_cost_matrix = 1 - normals1 @ normals2.T
 
     # Perform linear sum assignment based on angle alignment
     row_ind, col_ind = linear_sum_assignment(angle_cost_matrix)
 
-    # Calculate total costs (angle + distance) for the optimal matching
-    total_costs = []
-    for r, c in zip(row_ind, col_ind):
-        distance_cost = iu.distance_to_plane(
-            object1_planes[r][0], object2_planes[c][0], object2_planes[c][1]
-        )
-        total_cost = (
-            angle_cost_matrix[r, c] + distance_cost
-        )  # Sum angle and distance costs
-        total_costs.append(total_cost)
-    total_costs = sorted(total_costs)
-
-    return sum(total_costs[:-2])
+    # Total costs (angle + point-to-plane distance) for the optimal matching.
+    matched_p1 = points1[row_ind]
+    matched_p2 = points2[col_ind]
+    matched_n2 = normals2[col_ind]
+    distance_costs = np.abs(np.einsum("ij,ij->i", matched_p1 - matched_p2, matched_n2))
+    total_costs = np.sort(angle_cost_matrix[row_ind, col_ind] + distance_costs)
+    return float(total_costs[:-2].sum())
 
 
 def coplanarity_cost(scene, a: str | list[str]):
