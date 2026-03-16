@@ -363,12 +363,12 @@ class Kernelizer:
             elif node.bl_idname == Nodes.InputColor:
                 imp_inputs[get_imp_var_name(node_tree.name, node.name)] = (
                     KernelDataType.float4,
-                    np.array([node.color[i] for i in range(4)], dtype=np.float32),
+                    np.asarray(node.color, dtype=np.float32),
                 )
             elif node.bl_idname == Nodes.Vector:
                 imp_inputs[get_imp_var_name(node_tree.name, node.name)] = (
                     KernelDataType.float3,
-                    np.array([node.vector[i] for i in range(3)], dtype=np.float32),
+                    np.asarray(node.vector, dtype=np.float32),
                 )
             elif node.bl_idname == Nodes.ColorRamp and node.name.endswith("_VAR"):
                 for i in range(len(node.color_ramp.elements)):

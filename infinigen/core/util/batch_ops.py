@@ -90,7 +90,10 @@ def chunked_concat(arrays, *, axis: int = 0, num_workers: int | None = None):
     if num_workers is None:
         num_workers = _default_num_workers()
 
-    if len(arrays) < 16 or num_workers <= 1:
+    total_bytes = sum(getattr(a, "nbytes", 0) for a in arrays)
+    # ThreadPool startup/synchronization dominates for moderate workloads.
+    # Keep concatenation serial unless the aggregate payload is large enough.
+    if len(arrays) < 16 or num_workers <= 1 or total_bytes < 64 * 1024 * 1024:
         return np.concatenate(arrays, axis=axis)
 
     # Split into roughly equal chunks

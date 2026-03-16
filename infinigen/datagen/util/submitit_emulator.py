@@ -11,6 +11,7 @@ import copy
 import itertools
 import logging
 import os
+import random
 import re
 import subprocess
 import sys
@@ -220,6 +221,8 @@ class LocalScheduleHandler:
         self.queue = []
         self.jobs_per_gpu = jobs_per_gpu
         self.use_gpu = use_gpu
+        self._cached_total_resources = None
+        self._cached_cuda_visible = None
 
     def enqueue(
         self, command: str, params: dict, log_folder: Path, stdout_passthrough: bool
@@ -246,6 +249,13 @@ class LocalScheduleHandler:
 
     @gin.configurable
     def total_resources(self) -> set:
+        curr_cuda_visible = os.environ.get(CUDA_VARNAME, None)
+        if (
+            self._cached_total_resources is not None
+            and self._cached_cuda_visible == curr_cuda_visible
+        ):
+            return copy.copy(self._cached_total_resources)
+
         resources = {}
 
         if self.use_gpu:
@@ -256,7 +266,7 @@ class LocalScheduleHandler:
                 )
 
             result = subprocess.check_output(f"{NVIDIA_SMI_PATH} -L".split()).decode()
-            gpus_uuids = set(i for i in range(len(result.splitlines())))
+            gpus_uuids = set(range(len(result.splitlines())))
 
             if CUDA_VARNAME in os.environ:
                 visible = [int(s.strip()) for s in os.environ[CUDA_VARNAME].split(",")]
@@ -269,6 +279,8 @@ class LocalScheduleHandler:
                 itertools.product(gpus_uuids, range(self.jobs_per_gpu))
             )
 
+        self._cached_cuda_visible = curr_cuda_visible
+        self._cached_total_resources = copy.copy(resources)
         return resources
 
     def resources_available(self, total) -> set:
@@ -319,9 +331,9 @@ class LocalScheduleHandler:
 
         if n_gpus <= len(available["gpus"]):
             if select_gpus == "first":
-                gpus = set(itertools.islice(list(available["gpus"]), n_gpus))
+                gpus = set(itertools.islice(available["gpus"], n_gpus))
             elif select_gpus == "random":
-                gpus = set(np.random.choice(list(available["gpus"]), n_gpus))
+                gpus = set(random.sample(list(available["gpus"]), n_gpus))
             else:
                 raise ValueError(f"Unrecognized {select_gpus=}")
             available["gpus"] -= gpus
