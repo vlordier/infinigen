@@ -44,6 +44,21 @@ else:
     block_W = W + (margin + subfigure_W) * sublevel_layout[1] + margin
     block_H = H + margin
 
+folder_to_image = {}
+for entry in os.scandir(root_folder):
+    if not entry.is_dir():
+        continue
+    frames_path = os.path.join(entry.path, f"frames_{entry.name}_resmpl0")
+    if not os.path.exists(frames_path):
+        continue
+    first_noisy = None
+    for name in os.listdir(frames_path):
+        if name.startswith("Noisy") and name.endswith(".png"):
+            first_noisy = os.path.join(frames_path, name)
+            break
+    if first_noisy is not None:
+        folder_to_image[entry.name] = first_noisy
+
 canvas = (
     np.zeros(
         (block_H * level0_layout[0] - margin, block_W * level0_layout[1] - margin, 3)
@@ -55,16 +70,9 @@ for i, scene_type, title in zip(range(len(scene_types)), scene_types, titles):
     for j in range(sublevel_layout[0] * sublevel_layout[1] + 1):
         logger.info("%s %s", scene_type, j)
         folder = f"{scene_type}_{j}"
-        path = f"{root_folder}/{folder}/frames_{folder}_resmpl0"
-        if not os.path.exists(path):
-            logger.info(f'{path} did not exist')
+        image_path = folder_to_image.get(folder)
+        if image_path is None:
             continue
-        image_path = [
-            x for x in os.listdir(path) if x.startswith("Noisy") and x.endswith(".png")
-        ]
-        if image_path == []:
-            continue
-        image_path = f"{path}/{image_path[0]}"
         image = cv2.imread(image_path)
         if j == 0:
             image = cv2.resize(image, (W, H))

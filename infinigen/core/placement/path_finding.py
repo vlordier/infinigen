@@ -27,16 +27,18 @@ def path_finding(
     ).astype(np.int32)
     NN = np.prod(N)
     # print(f"{N=}")
-    start_location, start_rotation = start_pose
-    end_location, end_rotation = end_pose
+    start_location, _start_rotation = start_pose
+    end_location, _end_rotation = end_pose
     margin_d = np.ceil((resolution / volume) ** (1 / 3) * margin)
     row = []
     col = []
     data = []
+    pi2 = 2.0 * np.pi
 
     def freespace_ray_check(a, b, margin=0):
         v = b - a
-        location, *_ = bvhtree.ray_cast(a, v, v.length)
+        v_len = v.length
+        location, *_ = bvhtree.ray_cast(a, v, v_len)
         if location is not None:
             return False
         if margin != 0:
@@ -47,14 +49,16 @@ def path_finding(
             offset = v.cross(perp)
             offset *= margin / offset.length
             check_N = 10
-            angle = np.pi * 2 / check_N
+            angle = pi2 / check_N
+            cos_a = np.cos(angle)
+            sin_a = np.sin(angle)
             for _i in range(check_N):
-                location, *_ = bvhtree.ray_cast(a + offset, v, v.length)
+                location, *_ = bvhtree.ray_cast(a + offset, v, v_len)
                 if location is not None:
                     return False
                 tar_direction = offset.cross(v)
                 tar_direction *= margin / tar_direction.length
-                offset = offset * np.cos(angle) + tar_direction * np.sin(angle)
+                offset = offset * cos_a + tar_direction * sin_a
         return True
 
     def index(i, j, k):
@@ -136,7 +140,7 @@ def path_finding(
     A = csr_matrix((data, (row, col)), shape=(NN, NN))
     G = nx.from_scipy_sparse_array(A)
 
-    n_neighbors = np.array(A.sum(axis=0))[0]
+    n_neighbors = A.sum(axis=0).A1
     boundaries = np.where(n_neighbors != 8 + 10 * penalty)[0].tolist()
 
     lengths_dict = nx.multi_source_dijkstra_path_length(G, boundaries, weight="weight")
@@ -163,11 +167,12 @@ def path_finding(
 
     for p in path[1:]:
         back = 0
+        target = mathutils.Vector([x[p], y[p], z[p]])
         while freespace_ray_check(
             mathutils.Vector(
                 [x[stack[-1 - back]], y[stack[-1 - back]], z[stack[-1 - back]]]
             ),
-            mathutils.Vector([x[p], y[p], z[p]]),
+            target,
             margin=margin,
         ):
             back += 1
@@ -189,6 +194,7 @@ def path_finding(
         if len(locations) >= 2:
             lengths.append((locations[-1] - locations[-2]).length)
     keyframed_poses = []
+    cumulative_lengths = np.concatenate(([0.0], np.cumsum(lengths)))
 
     for i in range(len(stack)):
         if i == 0:
@@ -208,10 +214,10 @@ def path_finding(
                     rotation_euler.x += np.pi
                     rotation_euler.z += np.pi
             angle_differece = [
-                abs(rotation_euler.z - 2 * np.pi - keyframed_poses[i - 1][2].z),
+                abs(rotation_euler.z - pi2 - keyframed_poses[i - 1][2].z),
                 abs(rotation_euler.z - keyframed_poses[i - 1][2].z),
-                abs(rotation_euler.z + 2 * np.pi - keyframed_poses[i - 1][2].z),
+                abs(rotation_euler.z + pi2 - keyframed_poses[i - 1][2].z),
             ]
-            rotation_euler.z += (np.argmin(angle_differece) - 1) * 2 * np.pi
-            keyframed_poses.append((np.sum(lengths[:i]), locations[i], rotation_euler))
+            rotation_euler.z += (np.argmin(angle_differece) - 1) * pi2
+            keyframed_poses.append((float(cumulative_lengths[i]), locations[i], rotation_euler))
     return keyframed_poses
