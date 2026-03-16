@@ -20,16 +20,6 @@ from infinigen.core.util.device import get_torch_device, setup_torch_runtime
 from infinigen.tools.suffixes import parse_suffix
 
 
-# these functions till check_cycle_consistency are from https://github.com/princeton-vl/SEA-RAFT
-def transform(T, p):
-    assert T.shape == (4, 4)
-    return np.einsum("H W j, i j -> H W i", p, T[:3, :3]) + T[:3, 3]
-
-
-def from_homog(x):
-    return x[..., :-1] / x[..., [-1]]
-
-
 _coords_cache: Dict[Tuple[str, int, int], torch.Tensor] = {}
 
 
@@ -48,30 +38,31 @@ def coords_grid(batch, ht, wd, device):
     return cached.expand(batch, -1, -1, -1)
 
 
-def reproject(depth1, pose1, pose2, K1, K2):
-    H, W = depth1.shape
-    x, y = np.meshgrid(np.arange(W), np.arange(H), indexing="xy")
-    img_1_coords = np.stack((x, y, np.ones_like(x)), axis=-1).astype(np.float64)
-    cam1_coords = np.einsum(
-        "H W, H W j, i j -> H W i", depth1, img_1_coords, np.linalg.inv(K1)
-    )
-    rel_pose = np.linalg.inv(pose2) @ pose1
-    cam2_coords = transform(rel_pose, cam1_coords)
-    return from_homog(np.einsum("H W j, i j -> H W i", cam2_coords, K2))
+def reproject_torch(depth, src_cam, dst_cam, device):
+    H, W = depth.shape
+    coords0 = coords_grid(1, H, W, device)[0].permute(1, 2, 0)
+    ones = torch.ones((H, W, 1), dtype=depth.dtype, device=device)
+    img_coords = torch.cat((coords0, ones), dim=-1)
+
+    cam_src = depth.unsqueeze(-1) * torch.matmul(img_coords, src_cam["K_inv"].T)
+    rel_pose = torch.matmul(dst_cam["T_inv"], src_cam["T"])
+    cam_dst = torch.matmul(cam_src, rel_pose[:3, :3].T) + rel_pose[:3, 3]
+    proj = torch.matmul(cam_dst, dst_cam["K"].T)
+
+    z = proj[..., 2:3]
+    z = torch.where(z.abs() < 1e-8, torch.full_like(z, 1e-8), z)
+    return proj[..., :2] / z
 
 
-def induced_flow(depth0, depth1, data):
+def induced_flow_torch(depth0, depth1, cam0, cam1, device):
     H, W = depth0.shape
-    coords1 = reproject(depth0, data["T0"], data["T1"], data["K0"], data["K1"])
-
-    x, y = np.meshgrid(np.arange(W), np.arange(H), indexing="xy")
-    coords0 = np.stack([x, y], axis=-1)
+    coords0 = coords_grid(1, H, W, device)[0].permute(1, 2, 0)
+    coords1 = reproject_torch(depth0, cam0, cam1, device)
     flow_01 = coords1 - coords0
 
     H, W = depth1.shape
-    coords1 = reproject(depth1, data["T1"], data["T0"], data["K1"], data["K0"])
-    x, y = np.meshgrid(np.arange(W), np.arange(H), indexing="xy")
-    coords0 = np.stack([x, y], axis=-1)
+    coords0 = coords_grid(1, H, W, device)[0].permute(1, 2, 0)
+    coords1 = reproject_torch(depth1, cam1, cam0, device)
     flow_10 = coords1 - coords0
 
     return flow_01, flow_10
@@ -85,7 +76,7 @@ def bilinear_sampler(img, coords, mode="bilinear", mask=False):
     ygrid = 2 * ygrid / (H - 1) - 1
 
     grid = torch.cat([xgrid, ygrid], dim=-1)
-    img = F.grid_sample(img, grid, align_corners=True)
+    img = F.grid_sample(img, grid, mode=mode, align_corners=True)
 
     if mask:
         mask = (xgrid > -1) & (ygrid > -1) & (xgrid < 1) & (ygrid < 1)
@@ -98,8 +89,20 @@ def check_cycle_consistency(flow_01, flow_10, threshold=1, device=None):
     if device is None:
         device = get_torch_device()
     with torch.inference_mode():
-        flow_01 = torch.as_tensor(flow_01, device=device).permute(2, 0, 1)[None].float()
-        flow_10 = torch.as_tensor(flow_10, device=device).permute(2, 0, 1)[None].float()
+        if torch.is_tensor(flow_01):
+            flow_01 = flow_01.to(device=device, dtype=torch.float32)
+        else:
+            flow_01 = torch.as_tensor(flow_01, device=device, dtype=torch.float32)
+        if torch.is_tensor(flow_10):
+            flow_10 = flow_10.to(device=device, dtype=torch.float32)
+        else:
+            flow_10 = torch.as_tensor(flow_10, device=device, dtype=torch.float32)
+
+        if flow_01.ndim == 3:
+            flow_01 = flow_01.permute(2, 0, 1)[None]
+        if flow_10.ndim == 3:
+            flow_10 = flow_10.permute(2, 0, 1)[None]
+
         H, W = flow_01.shape[-2:]
         coords = coords_grid(1, H, W, flow_01.device)
         coords1 = coords + flow_01
@@ -111,14 +114,34 @@ def check_cycle_consistency(flow_01, flow_10, threshold=1, device=None):
 
 
 def compute_covisibility(depth0, depth1, camview0, camview1, device=None):
-    data = {}
-    data["K0"] = camview0["K"]
-    data["K1"] = camview1["K"]
-    data["T0"] = camview0["T"]
-    data["T1"] = camview1["T"]
-    flow_01, flow_10 = induced_flow(depth0, depth1, data)
+    if device is None:
+        device = get_torch_device()
+
+    def _as_cam_tensors(cam):
+        K = cam.get("K")
+        K_inv = cam.get("K_inv")
+        T = cam.get("T")
+        T_inv = cam.get("T_inv")
+
+        K_t = torch.as_tensor(K, device=device, dtype=torch.float32)
+        T_t = torch.as_tensor(T, device=device, dtype=torch.float32)
+        if K_inv is None:
+            K_inv_t = torch.linalg.inv(K_t)
+        else:
+            K_inv_t = torch.as_tensor(K_inv, device=device, dtype=torch.float32)
+        if T_inv is None:
+            T_inv_t = torch.linalg.inv(T_t)
+        else:
+            T_inv_t = torch.as_tensor(T_inv, device=device, dtype=torch.float32)
+        return {"K": K_t, "K_inv": K_inv_t, "T": T_t, "T_inv": T_inv_t}
+
+    camview0 = _as_cam_tensors(camview0)
+    camview1 = _as_cam_tensors(camview1)
+    depth0 = torch.as_tensor(depth0, device=device, dtype=torch.float32)
+    depth1 = torch.as_tensor(depth1, device=device, dtype=torch.float32)
+    flow_01, flow_10 = induced_flow_torch(depth0, depth1, camview0, camview1, device)
     mask = check_cycle_consistency(flow_01, flow_10, device=device)
-    return mask.mean()
+    return float(mask.mean())
 
 
 if __name__ == "__main__":
@@ -192,7 +215,14 @@ if __name__ == "__main__":
         cam_cache = {}
         for cam_id in cam_ids:
             with np.load(target_folder / scene / f"cameras/{cam_id}.npz") as cam_npz:
-                cam_cache[cam_id] = {"K": cam_npz["K"], "T": cam_npz["T"]}
+                K = torch.as_tensor(cam_npz["K"], dtype=torch.float32, device=device)
+                T = torch.as_tensor(cam_npz["T"], dtype=torch.float32, device=device)
+                cam_cache[cam_id] = {
+                    "K": K,
+                    "K_inv": torch.linalg.inv(K),
+                    "T": T,
+                    "T_inv": torch.linalg.inv(T),
+                }
 
         n_cams = len(cam_ids)
         cov_matrix = np.ones((n_cams, n_cams), dtype=np.float32)
