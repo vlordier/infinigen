@@ -66,15 +66,11 @@ class ColorMap2d:
 
     def __call__(self, X):
         assert len(X.shape) == 2
-        output = np.zeros((X.shape[0], 3))
-        for i in range(X.shape[0]):
-            x, y = X[i, :]
-            xp = int((self._width - 1) * x)
-            yp = int((self._height - 1) * y)
-            xp = np.clip(xp, 0, self._width - 1)
-            yp = np.clip(yp, 0, self._height - 1)
-            output[i, :] = self._img[yp, xp]
-        return output
+        xp = ((self._width - 1) * X[:, 0]).astype(np.int32)
+        yp = ((self._height - 1) * X[:, 1]).astype(np.int32)
+        np.clip(xp, 0, self._width - 1, out=xp)
+        np.clip(yp, 0, self._height - 1, out=yp)
+        return self._img[yp, xp, :3]
 
 
 class Summ_writer:
@@ -95,6 +91,14 @@ class Summ_writer:
         self.maxwidth = 10000
         self.save_this = self.global_step % self.log_freq == 0
         self.scalar_freq = max(scalar_freq, 1)
+        self._mpl_colormaps = {}
+
+    def _get_mpl_colormap(self, cmap):
+        color_map = self._mpl_colormaps.get(cmap)
+        if color_map is None:
+            color_map = cm.get_cmap(cmap)
+            self._mpl_colormaps[cmap] = color_map
+        return color_map
 
     def summ_boxlist2d(
         self,
@@ -157,8 +161,9 @@ class Summ_writer:
         S1, D = traj.shape
         assert D == 2
 
-        color_map = cm.get_cmap(cmap)
+        color_map = self._get_mpl_colormap(cmap)
         S1, D = traj.shape
+        dot_color = np.array(color_map(1)[:3]) * 255 if show_dots else None
 
         for s in range(S1):
             if val is not None:
@@ -188,7 +193,7 @@ class Summ_writer:
                     rgb,
                     (int(traj[s, 0]), int(traj[s, 1])),
                     linewidth,
-                    np.array(color_map(1)[:3]) * 255,
+                    dot_color,
                     -1,
                 )
 
@@ -237,6 +242,9 @@ class Summ_writer:
             vals = vals[0]  # N
             # print('vals', vals.shape)
 
+        trajs_np = trajs.long().detach().cpu().numpy()
+        valids_np = valids.long().detach().cpu().numpy()
+
         rgbs_color = []
         for rgb in rgbs:
             rgb = rgb.numpy()
@@ -250,8 +258,8 @@ class Summ_writer:
                 cmap_ = "winter"
             else:
                 cmap_ = cmap
-            traj = trajs[:, i].long().detach().cpu().numpy()  # S, 2
-            valid = valids[:, i].long().detach().cpu().numpy()  # S
+            traj = trajs_np[:, i]  # S, 2
+            valid = valids_np[:, i]  # S
 
             # print('traj', traj.shape)
             # print('valid', valid.shape)
@@ -286,10 +294,9 @@ class Summ_writer:
                 cmap_ = "winter"
             else:
                 cmap_ = cmap
-            traj = trajs[:, i]  # S,2
+            traj = trajs_np[:, i]  # S,2
             # vis = visibles[:,i] # S
-            vis = torch.ones_like(traj[:, 0])  # S
-            valid = valids[:, i]  # S
+            vis = np.ones_like(traj[:, 0])  # S
             rgbs_color = self.draw_circ_on_images_py(
                 rgbs_color,
                 traj,
@@ -373,13 +380,14 @@ class Summ_writer:
             # color = (int(color[0]),int(color[1]),int(color[2]))
             color = (int(color[2]), int(color[1]), int(color[0]))
 
+        if cmap is not None:
+            color_map = self._get_mpl_colormap(cmap)
+            color_steps = (np.arange(S1, dtype=np.float32) + 1.0) / max(1.0, float(S - 1))
+            colors = np.asarray(color_map(color_steps)[:, :3] * 255)
+
         for s in range(S1):
             if cmap is not None:
-                color_map = cm.get_cmap(cmap)
-                # color = np.array(color_map(s/(S-1))[:3]) * 255 # rgb
-                color = (
-                    np.array(color_map((s + 1) / max(1, float(S - 1)))[:3]) * 255
-                )  # rgb
+                color = colors[s]
                 # color = color.astype(np.uint8)
                 # color = (color[0], color[1], color[2])
                 # print('color', color)
@@ -422,10 +430,16 @@ def visualize_folder(folder):
         # pick N points to track; we'll use a uniform grid
         N = 1024
         N_ = np.sqrt(N).round().astype(np.int32)
-        grid_y, grid_x = np.meshgrid(range(N_), range(N_), indexing="ij")
-        grid_y = (8 + grid_y.reshape(1, -1) / float(N_ - 1) * (H - 16)).astype(np.int32)
-        grid_x = (8 + grid_x.reshape(1, -1) / float(N_ - 1) * (W - 16)).astype(np.int32)
-        xy0 = np.stack([grid_x, grid_y], axis=-1)  # B, N_*N_, 2
+        grid_y, grid_x = np.meshgrid(
+            np.linspace(8, H - 8, N_, dtype=np.float32),
+            np.linspace(8, W - 8, N_, dtype=np.float32),
+            indexing="ij",
+        )
+        grid_y = grid_y.astype(np.int32).reshape(-1)
+        grid_x = grid_x.astype(np.int32).reshape(-1)
+        sample_y = grid_y * 2
+        sample_x = grid_x * 2
+        xy0 = np.stack([grid_x, grid_y], axis=-1)[None, ...]  # B, N_*N_, 2
         trajs_e = np.zeros((1, S, N_ * N_, 2))
         for file in sub_lists:
             file = Path(file)
@@ -437,9 +451,7 @@ def visualize_folder(folder):
                 / ("PointTraj3D" + file.name[5:-4] + ".npy")
             )
             traj = np.load(traj_path)
-            trajs_e[:, frame - frame_start] = (
-                xy0 + traj[grid_y * 2, grid_x * 2][..., :2]
-            )
+            trajs_e[:, frame - frame_start] = xy0 + traj[sample_y, sample_x, :2]
 
         trajs_e = trajs_e.transpose(0, 1, 3, 2)  # 1, S, 2, N_*N_
         trajs_e = trajs_e.reshape(S * 2, -1).transpose()  # N_*N_, S*2

@@ -13,6 +13,7 @@ configuration to maximise throughput on each target.
 import logging
 import os
 import platform
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
@@ -30,22 +31,25 @@ def get_torch_device(prefer: str | None = None):
     -------
     torch.device
     """
-    import torch
-
     # Allow environment variable override
     env_device = os.environ.get("INFINIGEN_TORCH_DEVICE")
-    if env_device:
-        prefer = env_device
+    return _resolve_torch_device(prefer, env_device)
 
-    if prefer:
-        prefer = prefer.lower()
-        if prefer == "cuda" and torch.cuda.is_available():
+
+@lru_cache(maxsize=8)
+def _resolve_torch_device(prefer: str | None, env_device: str | None):
+    import torch
+
+    requested = env_device if env_device else prefer
+    if requested:
+        requested = requested.lower()
+        if requested == "cuda" and torch.cuda.is_available():
             logger.info("Using CUDA device")
             return torch.device("cuda")
-        if prefer == "mps" and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        if requested == "mps" and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             logger.info("Using MPS device (Apple Silicon)")
             return torch.device("mps")
-        if prefer == "cpu":
+        if requested == "cpu":
             logger.info("Using CPU device (explicitly requested)")
             return torch.device("cpu")
 
@@ -209,9 +213,14 @@ def setup_torch_runtime(device=None) -> dict:
         summary["matmul_precision"] = "default"
 
     if device.type == "cuda":
+        if hasattr(torch.backends, "cuda") and hasattr(torch.backends.cuda, "matmul"):
+            torch.backends.cuda.matmul.allow_tf32 = True
+            summary["cuda_matmul_tf32"] = True
         if hasattr(torch.backends, "cudnn"):
             torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.allow_tf32 = True
             summary["cudnn_benchmark"] = True
+            summary["cudnn_tf32"] = True
         return summary
 
     if device.type == "cpu":
