@@ -242,14 +242,11 @@ class Summ_writer:
             vals = vals[0]  # N
             # print('vals', vals.shape)
 
-        trajs_np = trajs.long().detach().cpu().numpy()
-        valids_np = valids.long().detach().cpu().numpy()
+        trajs_np = trajs.detach().to(dtype=torch.int32, device="cpu").numpy()
+        valids_np = valids.detach().to(dtype=torch.bool, device="cpu").numpy()
 
-        rgbs_color = []
-        for rgb in rgbs:
-            rgb = rgb.numpy()
-            rgb = np.transpose(rgb, [1, 2, 0])  # put channels last
-            rgbs_color.append(rgb)  # each element 3 x H x W
+        rgbs_color = np.transpose(rgbs.detach().cpu().numpy(), [0, 2, 3, 1]).copy()
+        val_seq_cache = {k: np.linspace(0, 1, k) for k in range(1, 10)}
 
         for i in range(N):
             if cmap == "onediff" and i == 0:
@@ -268,7 +265,7 @@ class Summ_writer:
                 if valid[t]:
                     # traj_seq = traj[max(t-16,0):t+1]
                     traj_seq = traj[max(t - 8, 0) : t + 1]
-                    val_seq = np.linspace(0, 1, len(traj_seq))
+                    val_seq = val_seq_cache[len(traj_seq)]
                     # if t<2:
                     #     val_seq = np.zeros_like(val_seq)
                     # print('val_seq', val_seq)
@@ -307,10 +304,7 @@ class Summ_writer:
                 linewidth=linewidth,
             )
 
-        rgbs = []
-        for rgb in rgbs_color:
-            rgb = torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0)
-            rgbs.append(rgb)
+        rgbs = [torch.from_numpy(rgb).permute(2, 0, 1).unsqueeze(0) for rgb in rgbs_color]
 
         return self.summ_rgbs(name, rgbs, only_return=only_return, frame_ids=frame_ids)
 
