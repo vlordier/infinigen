@@ -16,10 +16,10 @@ except ImportError:
 def _resolve_backend(backend: str | None = None) -> str:
     backend = backend or os.getenv("INFINIGEN_ISOSURFACE_BACKEND", "auto")
     if backend == "auto":
-        if skimage_marching_cubes is not None:
-            return "skimage"
         if mcubes is not None:
             return "mcubes"
+        if skimage_marching_cubes is not None:
+            return "skimage"
         raise ImportError(
             "No marching cubes backend available. Install `mcubes` or `scikit-image`."
         )
