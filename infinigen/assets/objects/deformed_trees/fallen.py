@@ -10,7 +10,7 @@ import numpy as np
 from numpy.random import uniform
 
 from infinigen.assets.objects.deformed_trees.base import BaseDeformedTreeFactory
-from infinigen.assets.utils.decorate import remove_vertices
+from infinigen.assets.utils.decorate import read_co, remove_vertices
 from infinigen.assets.utils.draw import cut_plane
 from infinigen.assets.utils.misc import assign_material
 from infinigen.assets.utils.object import join_objects, separate_loose
@@ -99,13 +99,12 @@ class FallenTreeFactory(BaseDeformedTreeFactory):
 
     def create_asset(self, i, distance=0, **params):
         upper = self.build_tree(i, distance, **params)
-        radius = max(
-            [
-                np.sqrt(v.co[0] ** 2 + v.co[1] ** 2)
-                for v in upper.data.vertices
-                if v.co[-1] < 0.1
-            ]
-        )
+        co = read_co(upper)
+        low_mask = co[:, -1] < 0.1
+        if low_mask.any():
+            radius = np.sqrt(co[low_mask, 0] ** 2 + co[low_mask, 1] ** 2).max()
+        else:
+            radius = 0.0
         self.trunk_surface.apply(upper)
         butil.apply_modifiers(upper)
         lower = deep_clone_obj(upper, keep_materials=True)
@@ -121,14 +120,15 @@ class FallenTreeFactory(BaseDeformedTreeFactory):
         )
 
         ortho = np.array([-cut_normal[0], 0, 1])
-        locations = np.array([v.co for v in lower.data.vertices])
+        locations = read_co(lower)
         highest = locations[np.argmax(locations @ ortho)] + np.array(
             [-uniform(0.05, 0.15), 0, -uniform(0.05, 0.15)]
         )
         upper.location = -highest
         butil.apply_transform(upper, loc=True)
 
-        x, _, z = np.mean(np.stack([v.co for v in upper.data.vertices]), 0)
+        upper_co = read_co(upper)
+        x, _, z = upper_co.mean(axis=0)
         r = np.sqrt(x * x + z * z)
         if r > 0:
             upper.rotation_euler[1] = (

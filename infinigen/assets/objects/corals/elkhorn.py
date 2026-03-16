@@ -91,7 +91,10 @@ class ElkhornBaseCoralFactory(BaseCoralFactory):
         temp = deep_clone_obj(obj)
         surface.add_geomod(temp, self.geo_elkhorn, apply=True)
 
-        locations = np.array([temp.matrix_world @ v.co for v in temp.data.vertices])
+        co = np.empty(len(temp.data.vertices) * 3)
+        temp.data.vertices.foreach_get("co", co)
+        from infinigen.core.util.blender import apply_matrix_world
+        locations = apply_matrix_world(temp, co.reshape(-1, 3))
         butil.delete(temp)
         self.tree2mesh(obj, locations)
         obj = separate_loose(obj)
@@ -122,15 +125,13 @@ class ElkhornBaseCoralFactory(BaseCoralFactory):
 
     @staticmethod
     def tree2mesh(obj, locations):
-        kd = kdtree.KDTree(len(locations))
-        for i, loc in enumerate(locations):
-            kd.insert(loc, i)
-        kd.balance()
+        from scipy.spatial import cKDTree
+        kd = cKDTree(locations)
 
         large_radius = uniform(0.08, 0.12)
         remove_vertices(
             obj,
-            lambda x, y, z: np.array([kd.find(v)[-1] for v in np.stack([x, y, z], -1)])
+            lambda x, y, z: kd.query(np.stack([x, y, z], -1))[0]
             > 0.015 + large_radius * (1 - np.sqrt(x * x + y * y)),
         )
 
@@ -172,7 +173,7 @@ class ElkhornBaseCoralFactory(BaseCoralFactory):
         f_power = make_circular_interp(1.0, 1.6, 5)
 
         x, y, z = read_co(obj).T
-        a = np.array([angles[_] for _ in range(len(x))]) + np.pi
+        a = angles[:len(x)] + np.pi
         z += f_scale(a) * (x * x + y * y) ** f_power(a)
         rotation = f_rotation(a)
         c, s = np.cos(rotation), np.sin(rotation)

@@ -161,11 +161,16 @@ class URDFBuilder(SimBuilder):
             inertial = create_element("inertial")
             mass = create_element("mass", value=str(mat_physics["density"] * vol))
 
+            n_verts = len(mesh.data.vertices)
+            _co = np.empty(n_verts * 3)
+            mesh.data.vertices.foreach_get("co", _co)
+            mesh.data.calc_loop_triangles()
+            n_tris = len(mesh.data.loop_triangles)
+            _tri = np.empty(n_tris * 3, dtype=int)
+            mesh.data.loop_triangles.foreach_get("vertices", _tri)
             t = trimesh.Trimesh(
-                vertices=[list(vertex.co) for vertex in mesh.data.vertices],
-                faces=[
-                    list(triangle.vertices) for triangle in mesh.data.loop_triangles
-                ],
+                vertices=_co.reshape(-1, 3),
+                faces=_tri.reshape(-1, 3),
             )
             t.mass_properties["density"] = mass / t.volume
             I_tensor = t.moment_inertia

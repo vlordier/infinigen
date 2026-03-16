@@ -656,7 +656,9 @@ def sample_random_locs(surface: bpy.types.Object, eps=0.01):
     butil.modify_mesh(
         surface, "NODES", node_group=geo_distrib_random_points(), apply=True
     )
-    locs = np.array([v.co for v in surface.data.vertices])
+    co = np.empty(len(surface.data.vertices) * 3)
+    surface.data.vertices.foreach_get("co", co)
+    locs = co.reshape(-1, 3)
     locs[:, -1] += eps
     butil.delete(surface)
     return locs
@@ -693,7 +695,9 @@ def configure_cameras(
 
     if mvs_setting:
         if terrain_mesh:
-            vertices = np.array([np.array(v.co) for v in terrain_mesh.data.vertices])
+            _co = np.empty(len(terrain_mesh.data.vertices) * 3)
+            terrain_mesh.data.vertices.foreach_get("co", _co)
+            vertices = _co.reshape(-1, 3)
             sdfs = scene_preprocessed["terrain"].compute_camera_space_sdf(vertices)
             vertices = vertices[sdfs >= -1e-5]
             center_coordinate = list(
@@ -714,10 +718,11 @@ def configure_cameras(
             ]
             assert inside_objs != []
             obj = np.random.choice(inside_objs)
-            vertices = [v.co for v in obj.data.vertices]
-            center_coordinate = vertices[np.random.choice(list(range(len(vertices))))]
-            center_coordinate = obj.matrix_world @ center_coordinate
-            center_coordinate = list(np.array(center_coordinate))
+            _co = np.empty(len(obj.data.vertices) * 3)
+            obj.data.vertices.foreach_get("co", _co)
+            _verts = _co.reshape(-1, 3)
+            center_coordinate = _verts[np.random.choice(len(_verts))]
+            center_coordinate = list(butil.apply_matrix_world(obj, center_coordinate.reshape(1, 3))[0])
         else:
             raise ValueError(
                 f"Got {mvs_setting=} yet {terrain_mesh=} {nonroom_objs=}, we expected at least one in order to choose a center coordinate"

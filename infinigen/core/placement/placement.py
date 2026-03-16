@@ -64,9 +64,9 @@ def placeholder_locs(
 
     # dump the point locations out as vertices
     butil.apply_modifiers(temp_vert, geo)
-    locations = np.array(
-        [temp_vert.matrix_world @ v.co for v in temp_vert.data.vertices]
-    )
+    co = np.empty(len(temp_vert.data.vertices) * 3)
+    temp_vert.data.vertices.foreach_get("co", co)
+    locations = butil.apply_matrix_world(temp_vert, co.reshape(-1, 3))
 
     butil.delete(temp_vert)
 

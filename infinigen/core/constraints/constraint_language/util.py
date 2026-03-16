@@ -216,22 +216,15 @@ def is_planar(obj, tolerance=1e-6):
         return False
 
     polygon = obj.data.polygons[0]
-    global_normal = butil.global_polygon_normal(obj, polygon)
+    global_normal = np.array(butil.global_polygon_normal(obj, polygon))
 
-    # Take the first vertex as a reference point on the plane
-    ref_vertex = butil.global_vertex_coordinates(
-        obj, obj.data.vertices[polygon.vertices[0]]
-    )
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    global_verts = butil.apply_matrix_world(obj, co.reshape(-1, 3))
+    ref_vertex = global_verts[polygon.vertices[0]]
 
-    # Check if all vertices lie on the plane defined by the reference vertex and the global normal
-    for vertex in obj.data.vertices:
-        distance = (butil.global_vertex_coordinates(obj, vertex) - ref_vertex).dot(
-            global_normal
-        )
-        if not math.isclose(distance, 0, abs_tol=tolerance):
-            return False
-
-    return True
+    distances = (global_verts - ref_vertex) @ global_normal
+    return np.allclose(distances, 0, atol=tolerance)
 
 
 def planes_parallel(plane_obj_a, plane_obj_b, tolerance=1e-6):
@@ -398,7 +391,10 @@ def set_rotation(scene: trimesh.Scene, obj_name: str, rotation):
 
 # for debugging. does not actually find centroid
 def blender_centroid(a):
-    return np.mean([a.matrix_world @ v.co for v in a.data.vertices], axis=0)
+    co = np.empty(len(a.data.vertices) * 3)
+    a.data.vertices.foreach_get("co", co)
+    from infinigen.core.util.blender import apply_matrix_world
+    return apply_matrix_world(a, co.reshape(-1, 3)).mean(axis=0)
 
 
 def order_objects_by_principal_axis(objects: list[bpy.types.Object]):

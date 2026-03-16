@@ -284,12 +284,14 @@ class SimBuilder:
 
     def get_bounding_box_info(self):
         # get bounding box information for the asset
+        _co = np.empty(len(self.blend_obj.data.vertices) * 3)
+        self.blend_obj.data.vertices.foreach_get("co", _co)
+        self.blend_obj.data.calc_loop_triangles()
+        _tri = np.empty(len(self.blend_obj.data.loop_triangles) * 3, dtype=int)
+        self.blend_obj.data.loop_triangles.foreach_get("vertices", _tri)
         mesh = trimesh.Trimesh(
-            vertices=[list(vertex.co) for vertex in self.blend_obj.data.vertices],
-            faces=[
-                list(triangle.vertices)
-                for triangle in self.blend_obj.data.loop_triangles
-            ],
+            vertices=_co.reshape(-1, 3),
+            faces=_tri.reshape(-1, 3),
         )
         vertices = mesh.vertices
         min_corner = np.min(vertices, axis=0)

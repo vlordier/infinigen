@@ -120,9 +120,12 @@ def get_geometry_given_attribs(
     mesh_obj = tagging.extract_vertex_mask(obj_clone, vertex_mask)
 
     if center_at_origin:
-        translation = mathutils.Vector(-get_aabb_center(mesh_obj))
-        for v in mesh_obj.data.vertices:
-            v.co += translation
+        translation = np.array(-get_aabb_center(mesh_obj))
+        co = np.empty(len(mesh_obj.data.vertices) * 3)
+        mesh_obj.data.vertices.foreach_get("co", co)
+        co = co.reshape(-1, 3) + translation
+        mesh_obj.data.vertices.foreach_set("co", co.ravel())
+        mesh_obj.data.update()
     butil.delete(obj_clone)
     return mesh_obj
 
@@ -143,11 +146,16 @@ def combine_geometries(geometries: list[bpy.types.Object]) -> trimesh.Trimesh:
     """
     combined_mesh = None
     for geometry in geometries:
+        n_v = len(geometry.data.vertices)
+        _co = np.empty(n_v * 3)
+        geometry.data.vertices.foreach_get("co", _co)
+        geometry.data.calc_loop_triangles()
+        n_t = len(geometry.data.loop_triangles)
+        _tri = np.empty(n_t * 3, dtype=int)
+        geometry.data.loop_triangles.foreach_get("vertices", _tri)
         mesh = trimesh.Trimesh(
-            vertices=[list(vertex.co) for vertex in geometry.data.vertices],
-            faces=[
-                list(triangle.vertices) for triangle in geometry.data.loop_triangles
-            ],
+            vertices=_co.reshape(-1, 3),
+            faces=_tri.reshape(-1, 3),
         )
         if combined_mesh is None:
             combined_mesh = mesh

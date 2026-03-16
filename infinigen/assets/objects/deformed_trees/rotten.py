@@ -10,6 +10,7 @@ from numpy.random import uniform
 
 from infinigen.assets.objects.deformed_trees.base import BaseDeformedTreeFactory
 from infinigen.assets.utils.decorate import (
+    read_co,
     read_material_index,
     remove_vertices,
     write_material_index,
@@ -115,13 +116,12 @@ class RottenTreeFactory(BaseDeformedTreeFactory):
 
     def create_asset(self, i, distance=0, **params):
         outer = self.build_tree(i, distance, **params)
-        radius = max(
-            [
-                np.sqrt(v.co[0] ** 2 + v.co[1] ** 2)
-                for v in outer.data.vertices
-                if v.co[-1] < 0.1
-            ]
-        )
+        co = read_co(outer)
+        low_mask = co[:, -1] < 0.1
+        if low_mask.any():
+            radius = np.sqrt(co[low_mask, 0] ** 2 + co[low_mask, 1] ** 2).max()
+        else:
+            radius = 0.0
         height = uniform(0.8, 1.6)
         cutter, fn, inverse_fn, metric_fn = self.build_cutter(radius, height)
         butil.modify_mesh(outer, "BOOLEAN", object=cutter, operation="DIFFERENCE")

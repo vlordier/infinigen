@@ -167,7 +167,10 @@ def add_cave(rescale, cave_z):
         bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="MEDIAN")
         bpy.data.objects["Cave"].location = (0, 0, cave_z)
         bpy.ops.object.transform_apply(scale=True)
-    cave.path_verts = np.array([v.co for v in get_all_verts()])
+    obj = bpy.context.active_object
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    cave.path_verts = co.reshape(-1, 3)
     # cave.add_lights(n_cave_light)
     return cave
 

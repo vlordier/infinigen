@@ -5,7 +5,7 @@
 # Authors:
 # - Abhishek Joshi: primary author
 
-import itertools
+
 import json
 import logging
 from collections import defaultdict
@@ -424,13 +424,16 @@ class USDBuilder(SimBuilder):
 
             for part in parts:
                 # convert Blender mesh to trimesh
-                translation = mathutils.Vector(-exputils.get_aabb_center(asset))
-                vertices = np.array(
-                    [list(v.co + translation) for v in part.data.vertices]
-                )
-                faces = np.array(
-                    [list(f.vertices) for f in part.data.loop_triangles]
-                ).reshape(-1, 3)
+                translation = np.array(-exputils.get_aabb_center(asset))
+                n_v = len(part.data.vertices)
+                _co = np.empty(n_v * 3)
+                part.data.vertices.foreach_get("co", _co)
+                vertices = _co.reshape(-1, 3) + translation
+                part.data.calc_loop_triangles()
+                n_t = len(part.data.loop_triangles)
+                _tri = np.empty(n_t * 3, dtype=int)
+                part.data.loop_triangles.foreach_get("vertices", _tri)
+                faces = _tri.reshape(-1, 3)
                 tri_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
                 tri_mesh.merge_vertices(merge_norm=True, merge_tex=True)
                 trimesh.repair.fix_inversion(tri_mesh)
@@ -580,11 +583,17 @@ class USDBuilder(SimBuilder):
         triangulate_mesh(asset)
         labels = self._get_labels(asset)
         # translate bounding box center to world origin
-        translation = mathutils.Vector(-exputils.get_aabb_center(asset))
-        vertices = [list(vertex.co + translation) for vertex in asset.data.vertices]
-        faces = [list(triangle.vertices) for triangle in asset.data.loop_triangles]
-        faces = list(itertools.chain.from_iterable(faces))
-        facenum = [3 for _ in range(len(faces))]
+        translation = np.array(-exputils.get_aabb_center(asset))
+        n_v = len(asset.data.vertices)
+        _co = np.empty(n_v * 3)
+        asset.data.vertices.foreach_get("co", _co)
+        vertices = (_co.reshape(-1, 3) + translation).tolist()
+        asset.data.calc_loop_triangles()
+        n_t = len(asset.data.loop_triangles)
+        _tri = np.empty(n_t * 3, dtype=int)
+        asset.data.loop_triangles.foreach_get("vertices", _tri)
+        faces = _tri.tolist()
+        facenum = [3] * n_t
         return vertices, faces, facenum, labels, asset
 
 

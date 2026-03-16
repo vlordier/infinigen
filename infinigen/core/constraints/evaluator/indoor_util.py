@@ -179,21 +179,19 @@ def is_planar(obj, tolerance=1e-6):
 
     polygon = obj.data.polygons[0]
     global_normal = butil.global_polygon_normal(obj, polygon)
+    global_normal = np.array(global_normal)
 
-    # Take the first vertex as a reference point on the plane
-    ref_vertex = butil.global_vertex_coordinates(
-        obj, obj.data.vertices[polygon.vertices[0]]
-    )
+    # Get all global vertex coordinates at once
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    global_verts = butil.apply_matrix_world(obj, co.reshape(-1, 3))
 
-    # Check if all vertices lie on the plane defined by the reference vertex and the global normal
-    for vertex in obj.data.vertices:
-        distance = (butil.global_vertex_coordinates(obj, vertex) - ref_vertex).dot(
-            global_normal
-        )
-        if not math.isclose(distance, 0, abs_tol=tolerance):
-            return False
+    # Take the first polygon vertex as a reference point
+    ref_vertex = global_verts[polygon.vertices[0]]
 
-    return True
+    # Check if all vertices lie on the plane
+    distances = (global_verts - ref_vertex) @ global_normal
+    return np.allclose(distances, 0, atol=tolerance)
 
 
 def planes_parallel(plane_obj_a, plane_obj_b, tolerance=1e-6):
@@ -226,13 +224,12 @@ def distance_to_plane(point, plane_point, plane_normal):
 def is_within_margin_from_plane(obj, obj_b, margin, tol=1e-6):
     """Check if all vertices of an object are within a given margin from a plane."""
     polygon_b = obj_b.data.polygons[0]
-    plane_point_b = butil.global_vertex_coordinates(
+    plane_point_b = np.array(butil.global_vertex_coordinates(
         obj_b, obj_b.data.vertices[polygon_b.vertices[0]]
-    )
-    plane_normal_b = butil.global_polygon_normal(obj_b, polygon_b)
-    for vertex in obj.data.vertices:
-        global_vertex = butil.global_vertex_coordinates(obj, vertex)
-        distance = distance_to_plane(global_vertex, plane_point_b, plane_normal_b)
-        if not math.isclose(distance, margin, abs_tol=tol):
-            return False
-    return True
+    ))
+    plane_normal_b = np.array(butil.global_polygon_normal(obj_b, polygon_b))
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    global_verts = butil.apply_matrix_world(obj, co.reshape(-1, 3))
+    distances = np.abs((global_verts - plane_point_b) @ plane_normal_b)
+    return np.allclose(distances, margin, atol=tol)

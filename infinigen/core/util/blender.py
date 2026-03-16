@@ -799,9 +799,12 @@ def joined_kd(objs, include_origins=False):
 
     i = 0
     for o in objs:
-        for v in o.data.vertices:
+        co = np.empty(len(o.data.vertices) * 3)
+        o.data.vertices.foreach_get("co", co)
+        global_co = apply_matrix_world(o, co.reshape(-1, 3))
+        for v_co in global_co:
             assert i < size
-            kd.insert(o.matrix_world @ v.co, i)
+            kd.insert(v_co, i)
             i += 1
         if include_origins:
             kd.insert(o.location, i)
@@ -1008,8 +1011,13 @@ def create_noise_plane(size=50, cuts=10, std=3, levels=3):
     bpy.ops.mesh.primitive_grid_add(size=size, x_subdivisions=cuts, y_subdivisions=cuts)
     obj = bpy.context.active_object
 
-    for v in obj.data.vertices:
-        v.co[2] = v.co[2] + np.random.normal(0, std)
+    n_v = len(obj.data.vertices)
+    co = np.empty(n_v * 3)
+    obj.data.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    co[:, 2] += np.random.normal(0, std, n_v)
+    obj.data.vertices.foreach_set("co", co.ravel())
+    obj.data.update()
 
     return modify_mesh(obj, "SUBSURF", levels=levels)
 

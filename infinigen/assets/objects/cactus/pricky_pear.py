@@ -67,7 +67,8 @@ class PrickyPearBaseCactusFactory(BaseCactusFactory):
             ]
         )[:n]
         vectors = [[np.sin(a), 0, np.cos(a) + 0.5] for a in angles]
-        locations = np.array([v.co for v in base.data.vertices])
+        from infinigen.assets.utils.decorate import read_co
+        locations = read_co(base)
         for a, v, leaf in zip(angles, vectors, leaves):
             index = np.argmax(locations @ v)
             leaf.location[-1] -= 0.15

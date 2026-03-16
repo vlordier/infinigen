@@ -76,9 +76,10 @@ def find_approx_uvr_coord(child, parent_mesh, parent_nurbs):
     assert parent_mesh.type == "MESH"
 
     loc = np.array(child.matrix_world.translation)
-    verts = np.array(
-        [parent_mesh.matrix_world @ v.co for v in parent_mesh.data.vertices]
-    )
+    co = np.empty(len(parent_mesh.data.vertices) * 3)
+    parent_mesh.data.vertices.foreach_get("co", co)
+    from infinigen.core.util.blender import apply_matrix_world
+    verts = apply_matrix_world(parent_mesh, co.reshape(-1, 3))
 
     dists = np.linalg.norm(verts - loc, axis=-1)
     i = dists.argmin()

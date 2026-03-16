@@ -68,10 +68,12 @@ class Hoof:
 
     def make_face(self, obj):
         bm = bmesh.new()
-        for v in obj.data.vertices:
-            x, y, z = obj.matrix_world @ v.co
-            if z == 0:
-                bm.verts.new((x, y, z))
+        co = np.empty(len(obj.data.vertices) * 3)
+        obj.data.vertices.foreach_get("co", co)
+        from infinigen.core.util.blender import apply_matrix_world
+        global_co = apply_matrix_world(obj, co.reshape(-1, 3))
+        for xyz in global_co[global_co[:, 2] == 0]:
+            bm.verts.new(xyz)
         bm.faces.new(bm.verts)
         bm.normal_update()
         bm.from_mesh(obj.data)

@@ -78,11 +78,11 @@ class Planes:
         )
 
     def compute_all_planes_fast(self, obj, face_mask, tolerance=1e-4):
-        # Cache computations
+        # Batch-compute global vertex coordinates
+        co = np.empty(len(obj.data.vertices) * 3)
+        obj.data.vertices.foreach_get("co", co)
+        all_global_verts = butil.apply_matrix_world(obj, co.reshape(-1, 3))
 
-        vertex_cache = {
-            v.index: butil.global_vertex_coordinates(obj, v) for v in obj.data.vertices
-        }
         normal_cache = {
             p.index: butil.global_polygon_normal(obj, p)
             for p in obj.data.polygons
@@ -101,7 +101,7 @@ class Planes:
             if np.linalg.norm(normal) < 1e-6:
                 continue
 
-            vertex = vertex_cache[polygon.vertices[0]]
+            vertex = all_global_verts[polygon.vertices[0]]
 
             # Hash the plane using both normal and the point
             plane_hash = self.hash_plane(normal, vertex, tolerance)

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import logging
 
-import bmesh
 import bpy
 import gin
 import matplotlib.pyplot as plt
@@ -295,35 +294,30 @@ def random_sample_point(
             f"No faces in object {obj.name} are coplanar with plane {plane}."
         )
 
-    # Create a bmesh from the object mesh
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
-
-    faces = [bm.faces[i] for i in np.where(plane_mask)[0]]
-
-    # Calculate the area for each face and create a cumulative distribution
-    areas = np.array([f.calc_area() for f in faces])
+    # Get face areas via foreach_get for the masked faces
+    all_areas = np.empty(len(obj.data.polygons))
+    obj.data.polygons.foreach_get("area", all_areas)
+    face_indices = np.where(plane_mask)[0]
+    areas = all_areas[face_indices]
     cumulative_areas = np.cumsum(areas)
     total_area = cumulative_areas[-1]
 
     # Generate a random number and find the corresponding face
     random_area_point = np.random.rand() * total_area
-    face_index = np.searchsorted(cumulative_areas, random_area_point)
-    selected_face = faces[face_index]
+    idx = np.searchsorted(cumulative_areas, random_area_point)
+    selected_poly = obj.data.polygons[face_indices[idx]]
 
-    verts = [v.co for v in selected_face.verts]
+    # Get vertex coords for the selected polygon
+    poly_verts = [obj.data.vertices[vi].co for vi in selected_poly.vertices]
 
     # Use barycentric coordinates to sample a random point in the triangle
     # Random weights for each vertex
     weights = np.random.rand(3)
     weights /= np.sum(weights)
     random_point_local = (
-        weights[0] * verts[0] + weights[1] * verts[1] + weights[2] * verts[2]
+        weights[0] * poly_verts[0] + weights[1] * poly_verts[1] + weights[2] * poly_verts[2]
     )
     random_point_global = obj.matrix_world @ Vector(random_point_local)
-
-    bm.free()
 
     return random_point_global
 

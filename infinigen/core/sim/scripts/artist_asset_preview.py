@@ -238,9 +238,8 @@ def extract_vertex_mask(
             bpy.ops.mesh.select_all(action="DESELECT")
 
         # select vertices based on the mask
-        for vert in obj.data.vertices:
-            vert.select = vertex_mask[vert.index]
-        if nonempty and len([v for v in obj.data.vertices if v.select]) == 0:
+        obj.data.vertices.foreach_set("select", vertex_mask)
+        if nonempty and not vertex_mask.any():
             raise ValueError(
                 f"extract_vertex_mask({obj.name=}, {nonempty=}) failed to select vertices"
             )
@@ -357,15 +356,20 @@ def check_mesh_penetration(obj1, obj2, epsilon=1e-5):
         return False  # No intersection at all
 
     # Step 2: Check if at least one vertex of obj1 is inside obj2
-    for vert in obj1.data.vertices:
-        world_vert = obj1.matrix_world @ vert.co  # Convert to world coordinates
-        if is_point_inside_bvh(bvh2, world_vert, obj2, epsilon):
+    co1 = np.empty(len(obj1.data.vertices) * 3)
+    obj1.data.vertices.foreach_get("co", co1)
+    from infinigen.core.util.blender import apply_matrix_world
+    world_verts1 = apply_matrix_world(obj1, co1.reshape(-1, 3))
+    for wv in world_verts1:
+        if is_point_inside_bvh(bvh2, mathutils.Vector(wv), obj2, epsilon):
             return True  # obj1 has a vertex inside obj2 -> intersection detected
 
     # Step 3: Check if at least one vertex of obj2 is inside obj1
-    for vert in obj2.data.vertices:
-        world_vert = obj2.matrix_world @ vert.co
-        if is_point_inside_bvh(bvh1, world_vert, obj1, epsilon):
+    co2 = np.empty(len(obj2.data.vertices) * 3)
+    obj2.data.vertices.foreach_get("co", co2)
+    world_verts2 = apply_matrix_world(obj2, co2.reshape(-1, 3))
+    for wv in world_verts2:
+        if is_point_inside_bvh(bvh1, mathutils.Vector(wv), obj1, epsilon):
             return True  # obj2 has a vertex inside obj1 -> intersection detected
 
     return False

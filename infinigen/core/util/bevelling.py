@@ -15,10 +15,9 @@ from .blender import ViewportMode
 
 def special_bounds(obj):
     inf = 1e5
-    points = []
-    for v in obj.data.vertices:
-        points.append(v.co)
-    points = np.array(points)
+    co = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get("co", co)
+    points = co.reshape(-1, 3)
     mask = np.sum(points**2, axis=-1) ** 0.5 < 0.5 * inf
     return points[mask].min(axis=0), points[mask].max(axis=0)
 
@@ -39,21 +38,23 @@ def get_bevel_edges(obj):
     points_min, points_max = special_bounds(obj)
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-    edges = []
-    for edge in bm.edges:
-        on_bounds_flag = [0, 0, 0]
-        flags = []
-        mags = []
-        for i in range(2):
-            pos = np.array([edge.verts[i].co.x, edge.verts[i].co.y, edge.verts[i].co.z])
-            flags.append(on_bound_edges(pos, points_min, points_max))
-            mags.append(np.sum(pos**2) ** 0.5)
-        for j in range(3):
-            on_bounds_flag[j] = flags[0][j] != 0 and flags[0][j] == flags[1][j]
-        if np.sum(on_bounds_flag) >= 2:
-            edges.append(edge.index)
-        elif mags[0] > 0.5 * inf and mags[0] < 1.5 * inf:
-            edges.append(edge.index)
+    n_edges = len(bm.edges)
+    # Extract all edge vertex positions at once
+    v0_co = np.array([e.verts[0].co[:] for e in bm.edges])
+    v1_co = np.array([e.verts[1].co[:] for e in bm.edges])
+    eps = 1e-4
+    # Compute bound flags for both endpoints
+    def _bound_flags(co, pmin, pmax):
+        flags = np.zeros(co.shape, dtype=int)
+        flags[np.abs(co - pmin) < eps] = -1
+        flags[np.abs(co - pmax) < eps] = 1
+        return flags
+    f0 = _bound_flags(v0_co, points_min, points_max)
+    f1 = _bound_flags(v1_co, points_min, points_max)
+    on_bounds = np.sum((f0 != 0) & (f0 == f1), axis=1)
+    mags0 = np.linalg.norm(v0_co, axis=1)
+    mask = (on_bounds >= 2) | ((mags0 > 0.5 * inf) & (mags0 < 1.5 * inf))
+    edges = np.where(mask)[0].tolist()
     return edges
 
 

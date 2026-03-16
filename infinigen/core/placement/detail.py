@@ -173,8 +173,12 @@ def merged_by_distance_col(col, face_size, inplace=False):
 
 
 def min_max_edgelen(mesh):
-    verts = np.array([v.co for v in mesh.vertices])
-    edges = np.array([e.vertices for e in mesh.edges])
+    co = np.empty(len(mesh.vertices) * 3)
+    mesh.vertices.foreach_get("co", co)
+    verts = co.reshape(-1, 3)
+    ed = np.empty(len(mesh.edges) * 2, dtype=int)
+    mesh.edges.foreach_get("vertices", ed)
+    edges = ed.reshape(-1, 2)
     lens = np.linalg.norm(verts[edges[:, 0]] - verts[edges[:, 1]], axis=-1)
     lens = np.sort(lens)
     if len(lens) <= 4:

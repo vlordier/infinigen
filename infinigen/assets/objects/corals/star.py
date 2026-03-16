@@ -128,7 +128,9 @@ class StarBaseCoralFactory(BaseCoralFactory):
 
         for ring in butil.split_object(rings):
             size = len(ring.data.vertices)
-            center = np.mean([v.co for v in ring.data.vertices], 0)
+            _co = np.empty(size * 3)
+            ring.data.vertices.foreach_get("co", _co)
+            center = _co.reshape(-1, 3).mean(axis=0)
             empty = new_empty(scale=[uniform(0.3, 0.5) ** (1 / resolution)] * 3)
             butil.modify_mesh(
                 ring,

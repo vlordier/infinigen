@@ -215,14 +215,16 @@ def smooth_around_line(obj, line_obj, rad, iters=30, factor=0.9):
 
     assert obj.matrix_world == line_obj.matrix_world
 
-    kd = mathutils.kdtree.KDTree(len(line_obj.data.vertices))
-    for i, v in enumerate(line_obj.data.vertices):
-        kd.insert(v.co, i)
-    kd.balance()
+    from scipy.spatial import cKDTree
+    from infinigen.assets.utils.decorate import read_co
 
-    ds = np.array([kd.find(v.co)[2] for v in obj.data.vertices])
-    for i, v in enumerate(obj.data.vertices):
-        v.select = ds[i] < rad
+    line_co = read_co(line_obj)
+    kd = cKDTree(line_co)
+
+    obj_co = read_co(obj)
+    ds, _ = kd.query(obj_co)
+    sel = ds < rad
+    obj.data.vertices.foreach_set("select", sel)
 
     with butil.ViewportMode(obj, mode="EDIT"):
         bpy.ops.mesh.vertices_smooth(repeat=iters, factor=0.9)

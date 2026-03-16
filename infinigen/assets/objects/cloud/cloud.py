@@ -170,7 +170,9 @@ class Cumulus:
         name = cloud.name
 
         # Marching cubes
-        points = np.array([v.co for v in cloud.data.vertices])
+        co = np.empty(len(cloud.data.vertices) * 3)
+        cloud.data.vertices.foreach_get("co", co)
+        points = co.reshape(-1, 3)
 
         min_pts = points.min(axis=0)
         max_pts = points.max(axis=0)

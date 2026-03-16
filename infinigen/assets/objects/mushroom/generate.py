@@ -60,11 +60,11 @@ class MushroomFactory(AssetFactory):
             clone = deep_clone_obj(obj)
             butil.modify_mesh(clone, "REMESH", voxel_size=0.04)
             mushrooms.append(obj)
-            k = np.array(
-                [v.co for v in clone.data.vertices if v.co[-1] > self.tolerant_length]
-            )
-            if len(k) == 0:
-                k = np.array([v.co for v in clone.data.vertices])
+            _co = np.empty(len(clone.data.vertices) * 3)
+            clone.data.vertices.foreach_get("co", _co)
+            all_co = _co.reshape(-1, 3)
+            mask = all_co[:, -1] > self.tolerant_length
+            k = all_co[mask] if mask.any() else all_co
             if len(k) == 0:
                 k = np.zeros((1, 3))
             keypoints.append(k)
@@ -87,13 +87,12 @@ class MushroomFactory(AssetFactory):
             ).T
         for i in range(1, len(vertices)):
             basis = np.concatenate(vertices[:i])
-            kd = kdtree.KDTree(len(basis))
-            for idx, v in enumerate(basis):
-                kd.insert(v, idx)
-            kd.balance()
+            from scipy.spatial import cKDTree
+            kd = cKDTree(basis)
             for d in np.linspace(0, 4, 20) * self.radius:
                 offset = start_locs[i] + directions[i] * d
-                if min(kd.find(v + offset)[-1] for v in vertices[i]) > 0.008:
+                dists, _ = kd.query(vertices[i] + offset)
+                if dists.min() > 0.008:
                     break
             else:
                 offset = start_locs[i] + directions[i] * 4 * self.radius
