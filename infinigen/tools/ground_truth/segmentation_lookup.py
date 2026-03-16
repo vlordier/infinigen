@@ -4,7 +4,6 @@
 # Authors: Lahav Lipson
 
 import argparse
-import colorsys
 import json
 import logging
 import sys
@@ -63,12 +62,18 @@ def compute_boxes(indices, binary_tag_mask):
     return np.stack((x_min, y_min, x_max, y_max), axis=-1)
 
 
-# Deterministic, but probably slow. Good enough for visualization.
-def arr2color(e):
-    s = np.random.RandomState(np.array(e, dtype=np.uint32))
-    return (
-        np.asarray(colorsys.hsv_to_rgb(s.uniform(0, 1), s.uniform(0.1, 1), 1)) * 255
-    ).astype(np.uint8)
+def arrs2colors(values):
+    values = np.asarray(values, dtype=np.uint32)
+    if values.ndim == 1:
+        values = values[None, :]
+    primes = np.array([73856093, 19349663, 83492791, 2654435761], dtype=np.uint32)
+    mixed = np.zeros(values.shape[0], dtype=np.uint32)
+    for i in range(values.shape[1]):
+        mixed ^= values[:, i] * primes[i % len(primes)]
+    r = ((mixed * np.uint32(1597334677)) >> np.uint32(24)).astype(np.uint8)
+    g = ((mixed * np.uint32(3812015801)) >> np.uint32(24)).astype(np.uint8)
+    b = ((mixed * np.uint32(279470273)) >> np.uint32(24)).astype(np.uint8)
+    return np.stack((r, g, b), axis=-1)
 
 
 if __name__ == "__main__":
@@ -129,7 +134,7 @@ if __name__ == "__main__":
     )
     combined_mask = rearrange(combined_mask, "h w d -> (h w) d")
     uniq_instances, indices = unique_rows(combined_mask, return_inverse=True)
-    unique_colors = np.stack([arr2color(row) for row in uniq_instances])
+    unique_colors = arrs2colors(uniq_instances)
 
     if args.boxes:
         bbox = compute_boxes(indices.reshape((H, W)), highlighted_pixels)
