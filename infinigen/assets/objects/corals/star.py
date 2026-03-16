@@ -149,10 +149,16 @@ class StarBaseCoralFactory(BaseCoralFactory):
 
                 bm = bmesh.from_edit_mesh(ring.data)
                 bm.verts.ensure_lookup_table()
+                # Pre-extract all coords for batch mean computation
+                n_bm_verts = len(bm.verts)
+                all_co = np.empty((n_bm_verts, 3))
+                for vi in range(n_bm_verts):
+                    all_co[vi] = bm.verts[vi].co
                 for i in range(1, resolution + 1):
-                    c = np.mean([v.co for v in bm.verts[i * size : (i + 1) * size]], 0)
+                    c = all_co[i * size : (i + 1) * size].mean(axis=0)
+                    offset = center - c
                     for j in range(i * size, (i + 1) * size):
-                        bm.verts[j].co += Vector(center - c)
+                        bm.verts[j].co += Vector(offset)
                 bmesh.update_edit_mesh(ring.data)
 
                 bpy.ops.mesh.select_all(action="SELECT")

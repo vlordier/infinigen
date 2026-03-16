@@ -36,12 +36,18 @@ def on_bound_edges(points, points_min, points_max):
 def get_bevel_edges(obj):
     inf = 1e5
     points_min, points_max = special_bounds(obj)
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    n_edges = len(bm.edges)
-    # Extract all edge vertex positions at once
-    v0_co = np.array([e.verts[0].co[:] for e in bm.edges])
-    v1_co = np.array([e.verts[1].co[:] for e in bm.edges])
+    mesh = obj.data
+    # Use foreach_get on mesh data directly instead of bmesh
+    n_verts = len(mesh.vertices)
+    co = np.empty(n_verts * 3)
+    mesh.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    n_edges = len(mesh.edges)
+    edge_verts = np.empty(n_edges * 2, dtype=int)
+    mesh.edges.foreach_get("vertices", edge_verts)
+    edge_verts = edge_verts.reshape(-1, 2)
+    v0_co = co[edge_verts[:, 0]]
+    v1_co = co[edge_verts[:, 1]]
     eps = 1e-4
     # Compute bound flags for both endpoints
     def _bound_flags(co, pmin, pmax):

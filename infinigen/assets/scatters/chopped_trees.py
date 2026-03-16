@@ -64,7 +64,9 @@ def approx_settle_transform(obj, samples=200):
 def chop_object(obj, n, cutter_size, max_tilt=15, thickness=0.03):
     assert obj.type == "MESH"
 
-    bbox = np.array([obj.matrix_world @ mathutils.Vector(v) for v in obj.bound_box])
+    mat = np.array(obj.matrix_world)
+    bb = np.array(obj.bound_box)
+    bbox = bb @ mat[:3, :3].T + mat[:3, 3]
 
     def cutter(t):
         butil.select_none()

@@ -7,7 +7,6 @@
 # - Sumanth Maddirala: base view selection
 
 import logging
-from copy import deepcopy
 from functools import partial
 
 import bpy
@@ -158,8 +157,8 @@ def compute_trajectories(
             original_rotations = list()
             for frame in keyframe_list:
                 bpy.context.scene.frame_set(frame)
-                original_locations.append(deepcopy(cam.location))
-                original_rotations.append(deepcopy(cam.rotation_euler))
+                original_locations.append(cam.location.copy())
+                original_rotations.append(cam.rotation_euler.copy())
 
             # compute score for each frame on the trajectory
             current_traj_scores = []
@@ -185,9 +184,9 @@ def compute_trajectories(
             trajectory_proposals.append(
                 (
                     avg_score,
-                    deepcopy(keyframe_list),
-                    deepcopy(original_locations),
-                    deepcopy(original_rotations),
+                    list(keyframe_list),
+                    [loc.copy() for loc in original_locations],
+                    [rot.copy() for rot in original_rotations],
                     focus_dist,
                 )
             )

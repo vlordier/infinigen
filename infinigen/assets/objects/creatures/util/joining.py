@@ -94,7 +94,9 @@ def select_large_component(o, thresh=0.95, tries=5):
             bpy.ops.mesh.select_mode(type="VERT")
             bpy.ops.mesh.select_linked()
 
-        pct = np.array([v.select for v in o.data.vertices]).mean()
+        sel = np.empty(len(o.data.vertices), dtype=bool)
+        o.data.vertices.foreach_get("select", sel)
+        pct = sel.mean()
         if pct > thresh:
             return pct
 

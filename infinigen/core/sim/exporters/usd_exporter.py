@@ -347,10 +347,11 @@ class USDBuilder(SimBuilder):
             has_material = False
 
         if has_material:
-            uvs = [loop.uv[:] for loop in uv_layer.data]
-            indices = []
-            for polygon in asset.data.polygons:
-                indices.extend(polygon.loop_indices)
+            n_loops = len(uv_layer.data)
+            uv_flat = np.empty(n_loops * 2)
+            uv_layer.data.foreach_get("uv", uv_flat)
+            uvs = uv_flat.reshape(-1, 2).tolist()
+            indices = list(range(n_loops))
 
             texCoords = UsdGeom.PrimvarsAPI(vismesh).CreatePrimvar(
                 "st", Sdf.ValueTypeNames.TexCoord2fArray, UsdGeom.Tokens.faceVarying

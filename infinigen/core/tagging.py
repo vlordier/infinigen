@@ -448,9 +448,8 @@ def _extract_by_mask(
             bpy.ops.mesh.select_all(action="DESELECT")
 
         elements = getattr(obj.data, elements_attr)
-        for elem in elements:
-            elem.select = mask[elem.index]
-        if nonempty and len([e for e in elements if e.select]) == 0:
+        elements.foreach_set("select", mask)
+        if nonempty and not mask.any():
             raise ValueError(
                 f"{func_name}({obj.name=}, {nonempty=}) failed to select {element_label}"
             )
@@ -538,15 +537,19 @@ def tag_support_surfaces(obj, angle_threshold=0.1):
     """
 
     def process_mesh(mesh_obj):
-        up_vector = Vector((0, 0, 1))
-
         n_poly = len(mesh_obj.data.polygons)
-        support_mask = np.zeros(n_poly, dtype=bool)
-
-        for poly in mesh_obj.data.polygons:
-            global_normal = butil.global_polygon_normal(mesh_obj, poly)
-            if global_normal.dot(up_vector) > 1 - angle_threshold:
-                support_mask[poly.index] = True
+        # Batch-compute global normals: apply rotation to all polygon normals at once
+        normals = np.empty(n_poly * 3)
+        mesh_obj.data.polygons.foreach_get("normal", normals)
+        normals = normals.reshape(-1, 3)
+        loc, rot, scale = mesh_obj.matrix_world.decompose()
+        rot_mat = np.array(rot.to_matrix())
+        global_normals = normals @ rot_mat.T
+        # Normalize
+        norms = np.linalg.norm(global_normals, axis=1, keepdims=True)
+        norms[norms < 1e-8] = 1.0
+        global_normals /= norms
+        support_mask = global_normals[:, 2] > 1 - angle_threshold
 
         if t.Subpart.SupportSurface.value not in tag_system.tag_dict:
             tag_system.tag_dict[t.Subpart.SupportSurface.value] = (

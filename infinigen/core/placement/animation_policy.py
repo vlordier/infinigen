@@ -7,7 +7,7 @@
 
 
 import logging
-from copy import copy, deepcopy
+from copy import copy
 
 import bpy
 import gin
@@ -340,7 +340,7 @@ def validate_keyframe_range(
     check_straight_line=True,  # rules out proposals faster, but has imperfect precision
     check_keyframe_straight_line=True,
 ):
-    last_pos = deepcopy(obj.location)
+    last_pos = obj.location.copy()
 
     def freespace_ray_check(a, b):
         location, *_ = bvhtree.ray_cast(a, b - a, (a - b).length)
@@ -365,7 +365,7 @@ def validate_keyframe_range(
             logger.debug(f"{frame_idx} validate_pose_func failed")
             return False
 
-        last_pos = deepcopy(obj.location)
+        last_pos = obj.location.copy()
 
     return True
 
@@ -480,7 +480,7 @@ def try_animate_with_pathfinding(
                 continue
 
             bpy.context.scene.frame_set(frame_curr)
-            last_pose = (deepcopy(obj.location), deepcopy(obj.rotation_euler))
+            last_pose = (obj.location.copy(), obj.rotation_euler.copy())
             keyframe(obj, loc, rot, frame_curr + 1, interp="BEZIER")
             bpy.context.scene.frame_set(frame_curr + 1)
 
@@ -737,7 +737,7 @@ def policy_create_bezier_path(
         for p in fc.keyframe_points:
             f = int(p.co[0])
             bpy.context.scene.frame_set(f)
-            positions.append(deepcopy(temp.location - eval_offset))
+            positions.append((temp.location - eval_offset).copy())
 
     logger.debug(f"Created policy path with {len(positions)} keypoints")
 

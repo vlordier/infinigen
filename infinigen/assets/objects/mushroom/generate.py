@@ -7,6 +7,7 @@
 import numpy as np
 from mathutils import Euler, kdtree
 from numpy.random import uniform
+from scipy.spatial import cKDTree
 
 from infinigen.assets.utils.mesh import polygon_angles
 from infinigen.assets.utils.object import join_objects
@@ -87,7 +88,6 @@ class MushroomFactory(AssetFactory):
             ).T
         for i in range(1, len(vertices)):
             basis = np.concatenate(vertices[:i])
-            from scipy.spatial import cKDTree
             kd = cKDTree(basis)
             for d in np.linspace(0, 4, 20) * self.radius:
                 offset = start_locs[i] + directions[i] * d

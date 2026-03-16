@@ -167,7 +167,12 @@ def treeify(obj):
         bm.edges.ensure_lookup_table()
         n = len(bm.verts)
         included = np.zeros(n, dtype=bool)
-        co_z = np.array([v.co[-1] for v in bm.verts])
+        co_flat = np.empty(n * 3)
+        for iv, v in enumerate(bm.verts):
+            co_flat[iv * 3] = v.co[0]
+            co_flat[iv * 3 + 1] = v.co[1]
+            co_flat[iv * 3 + 2] = v.co[2]
+        co_z = co_flat[2::3]
         i = int(np.argmin(co_z))
         queue = [bm.verts[i]]
         included[i] = True

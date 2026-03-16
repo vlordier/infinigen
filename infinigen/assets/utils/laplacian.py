@@ -128,7 +128,12 @@ def build_laplacian_2d(
     bmesh.ops.delete(bm, geom=vertices_to_remove)
     bm.verts.ensure_lookup_table()
     n_v = len(bm.verts)
-    co = np.array([v.co[:] for v in bm.verts])
+    co_flat = np.empty(n_v * 3)
+    for i, v in enumerate(bm.verts):
+        co_flat[i * 3] = v.co[0]
+        co_flat[i * 3 + 1] = v.co[1]
+        co_flat[i * 3 + 2] = v.co[2]
+    co = co_flat.reshape(-1, 3)
     x, y, z = co.T
     scale = np.maximum(np.abs(x), np.abs(y)) / (np.sqrt(x**2 + y**2) + 1e-6)
     co *= scale[:, None]

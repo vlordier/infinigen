@@ -56,19 +56,15 @@ class SphericalMesher:
         self.r_min = r_min
         self.complete_depth_test = complete_depth_test
         self.bounds = bounds
-        self.r_max = 0
-        for cam in cams:
-            for i in range(2):
-                for j in range(2):
-                    for k in range(2):
-                        r_max = np.linalg.norm(
-                            np.array(
-                                [self.bounds[i], self.bounds[2 + j], self.bounds[4 + k]]
-                            )
-                            - cam[:3, 3]
-                        )
-                        self.r_max = max(self.r_max, r_max)
-        self.r_max *= 1.1
+        # Vectorize r_max computation over all 8 corner combinations x all cameras
+        corners = np.array(
+            [[self.bounds[i], self.bounds[2 + j], self.bounds[4 + k]]
+             for i in range(2) for j in range(2) for k in range(2)]
+        )
+        cam_origins = np.array([cam[:3, 3] for cam in cams])
+        # Broadcast: (n_cams, 1, 3) - (1, 8, 3) -> (n_cams, 8, 3)
+        diffs = cam_origins[:, None, :] - corners[None, :, :]
+        self.r_max = np.linalg.norm(diffs.reshape(-1, 3), axis=1).max() * 1.1
 
 
 @gin.configurable

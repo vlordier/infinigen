@@ -15,11 +15,19 @@ def uvs_to_attribute(obj, name="uv_map"):
     assert obj.type == "MESH"
 
     n = len(obj.data.vertices)
+    n_loops = len(obj.data.loops)
     data = np.empty((n, 3), dtype=np.float32)
 
-    for loop in obj.data.loops:
-        u, v = obj.data.uv_layers.active.data[loop.index].uv
-        data[loop.vertex_index] = u, v, 0
+    # Batch-get loop vertex indices and UV data
+    loop_vi = np.empty(n_loops, dtype=int)
+    obj.data.loops.foreach_get("vertex_index", loop_vi)
+    uv_flat = np.empty(n_loops * 2, dtype=np.float32)
+    obj.data.uv_layers.active.data.foreach_get("uv", uv_flat)
+    uv_data = uv_flat.reshape(-1, 2)
+    # Last loop per vertex wins (same as original)
+    data[loop_vi, 0] = uv_data[:, 0]
+    data[loop_vi, 1] = uv_data[:, 1]
+    data[:, 2] = 0
 
     attr = obj.data.attributes.new(name, type="FLOAT_VECTOR", domain="POINT")
     attr.data.foreach_set("vector", data.reshape(-1))
@@ -37,9 +45,12 @@ def attribute_to_uvs(obj, attr_name):
     obj.data.attributes[attr_name].data.foreach_get("vector", data)
     data = data.reshape((n, 3))
 
-    for loop in obj.data.loops:
-        u, v, _ = data[loop.vertex_index]
-        obj.data.uv_layers.active.data[loop.index].uv = (u, v)
+    n_loops = len(obj.data.loops)
+    loop_vi = np.empty(n_loops, dtype=int)
+    obj.data.loops.foreach_get("vertex_index", loop_vi)
+    uv_out = data[loop_vi, :2]
+    uv_flat = uv_out.reshape(-1).astype(np.float32)
+    obj.data.uv_layers.active.data.foreach_set("uv", uv_flat)
 
 
 # list of supported data type:

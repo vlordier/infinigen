@@ -60,74 +60,92 @@ def dist(x, y):
 def corner_vertices(obj):
     THRESHOLD = 0.3
     mesh = obj.data
-    n = len(obj.data.vertices)
+    n = len(mesh.vertices)
     value = np.zeros(n)
 
+    # Batch-get polygon normals
+    n_poly = len(mesh.polygons)
+    poly_normals = np.empty(n_poly * 3)
+    mesh.polygons.foreach_get("normal", poly_normals)
+    poly_normals = poly_normals.reshape(-1, 3)
+
+    # Build per-vertex normal lists
     nor = {}
+    for fi in range(n_poly):
+        poly = mesh.polygons[fi]
+        fn = poly_normals[fi]
+        for v in poly.vertices:
+            if v not in nor:
+                nor[v] = [fn]
+            else:
+                nor[v].append(fn)
 
-    def add(u, v):
-        if u not in nor:
-            nor[u] = []
-        nor[u].append(v)
-
-    for face in mesh.polygons:
-        for v in face.vertices:
-            add(v, face.normal)
-
-    COUNT = 0
-    for u in mesh.vertices:
-        if u.index not in nor:
-            value[u.index] = 1.0
-            COUNT += 1
+    for vi in range(n):
+        if vi not in nor:
+            value[vi] = 1.0
             continue
 
-        normals = nor[u.index]
-        mx_cross = 0
-        for i in range(len(normals)):
-            for j in range(i + 1, len(normals)):
-                n1 = normals[i]
-                n2 = normals[j]
-                cross = np.linalg.norm(np.cross(n1, n2))
-                mx_cross = max(mx_cross, cross)
-                if mx_cross > THRESHOLD:
-                    break
+        normals = nor[vi]
+        nn = len(normals)
+        if nn < 2:
+            continue
+        # Stack and compute pairwise cross products
+        nors = np.array(normals)
+        mx_cross = 0.0
+        for i in range(nn):
+            crosses = np.cross(nors[i], nors[i + 1 :])
+            mx = np.max(np.linalg.norm(crosses, axis=1)) if len(crosses) > 0 else 0.0
+            if mx > mx_cross:
+                mx_cross = mx
             if mx_cross > THRESHOLD:
                 break
 
         if mx_cross > THRESHOLD:
-            COUNT += 1
-            value[u.index] = 1.0
+            value[vi] = 1.0
     return value
 
 
 def dorsal_vertices(obj):
     mesh = obj.data
-    n = len(obj.data.vertices)
+    n = len(mesh.vertices)
     value = np.zeros(n)
 
-    for face in mesh.polygons:
-        for v in face.vertices:
-            if face.normal[2] > 0:
-                value[v] = 1.0
-    for u in mesh.vertices:
-        if u.co[0] > 0:
-            value[u.index] = 0
+    n_poly = len(mesh.polygons)
+    normals = np.empty(n_poly * 3)
+    mesh.polygons.foreach_get("normal", normals)
+    normals = normals.reshape(-1, 3)
+    # Get face vertex indices via loop_start/loop_total + loops
+    up_faces = np.where(normals[:, 2] > 0)[0]
+    for fi in up_faces:
+        poly = mesh.polygons[fi]
+        for v in poly.vertices:
+            value[v] = 1.0
+    co = np.empty(n * 3)
+    mesh.vertices.foreach_get("co", co)
+    co = co.reshape(-1, 3)
+    value[co[:, 0] > 0] = 0
     return value
 
 
 def ventral_vertices(obj, bodycheck=False):
     mesh = obj.data
-    n = len(obj.data.vertices)
+    n = len(mesh.vertices)
     value = np.zeros(n)
 
-    for face in mesh.polygons:
-        for v in face.vertices:
-            if face.normal[2] < 0:
-                value[v] = 1.0
+    n_poly = len(mesh.polygons)
+    normals = np.empty(n_poly * 3)
+    mesh.polygons.foreach_get("normal", normals)
+    normals = normals.reshape(-1, 3)
+    down_faces = np.where(normals[:, 2] < 0)[0]
+    for fi in down_faces:
+        poly = mesh.polygons[fi]
+        for v in poly.vertices:
+            value[v] = 1.0
     if bodycheck:
-        for u in mesh.vertices:
-            if u.co[0] > 0:
-                value[u.index] = 0
+        co = np.empty(n * 3)
+        mesh.vertices.foreach_get("co", co)
+        co = co.reshape(-1, 3)
+        value[co[:, 0] > 0] = 0
     return value
 
 

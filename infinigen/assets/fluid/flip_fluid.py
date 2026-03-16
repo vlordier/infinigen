@@ -35,13 +35,11 @@ def get_objs_inside_domain(dom, objects):
     min_co, max_co = obj_bb_minmax(dom)
     logger.info("%s %s", min_co, max_co)
     for obj in objects:
+        trans = obj.matrix_world.translation
         if (
-            obj.matrix_world.translation[0] < max_co[0]
-            and obj.matrix_world.translation[1] < max_co[1]
-            and obj.matrix_world.translation[2] < max_co[2]
-            and obj.matrix_world.translation[0] > min_co[0]
-            and obj.matrix_world.translation[1] > min_co[1]
-            and obj.matrix_world.translation[2] > min_co[2]
+            min_co[0] < trans[0] < max_co[0]
+            and min_co[1] < trans[1] < max_co[1]
+            and min_co[2] < trans[2] < max_co[2]
         ):
             ls.append(obj)
 

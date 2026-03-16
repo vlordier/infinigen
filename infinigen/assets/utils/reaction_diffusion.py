@@ -25,19 +25,19 @@ def reaction_diffusion(
 ):
     diff_a = diff_a * scale
     diff_b = diff_b * scale
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    bm.edges.ensure_lookup_table()
-    bm.verts.ensure_lookup_table()
-    n = len(bm.verts)
+    mesh = obj.data
+    n = len(mesh.vertices)
     a = np.ones(n)
-    coords = np.empty((n, 3))
-    for i, v in enumerate(bm.verts):
-        coords[i] = v.co
+    coords = np.empty(n * 3)
+    mesh.vertices.foreach_get("co", coords)
+    coords = coords.reshape(-1, 3)
     b = weight_fn(coords)
-    edge_from = np.array([e.verts[0].index for e in bm.edges])
-    edge_to = np.array([e.verts[1].index for e in bm.edges])
-    bm.free()
+    n_edges = len(mesh.edges)
+    edge_verts = np.empty(n_edges * 2, dtype=int)
+    mesh.edges.foreach_get("vertices", edge_verts)
+    edge_verts = edge_verts.reshape(-1, 2)
+    edge_from = edge_verts[:, 0]
+    edge_to = edge_verts[:, 1]
     kill_feed = kill_rate + feed_rate
     for _ in range(steps):
         a_msg = a[edge_to] - a[edge_from]
@@ -66,10 +66,13 @@ def reaction_diffusion(
     deform_bm.from_mesh(obj.data)
     deform_bm.verts.ensure_lookup_table()
     deform_layer = deform_bm.verts.layers.deform.verify()
-    for vg, vals in ((vg_la, lap_a), (vg_lb, lap_b), (vg_a, a), (vg_b, b)):
-        gi = vg.index
-        for i in range(n):
-            deform_bm.verts[i][deform_layer][gi] = float(vals[i])
+    gi_la, gi_lb, gi_a, gi_b = vg_la.index, vg_lb.index, vg_a.index, vg_b.index
+    for i in range(n):
+        d = deform_bm.verts[i][deform_layer]
+        d[gi_la] = float(lap_a[i])
+        d[gi_lb] = float(lap_b[i])
+        d[gi_a] = float(a[i])
+        d[gi_b] = float(b[i])
     deform_bm.to_mesh(obj.data)
     deform_bm.free()
     obj.data.update()

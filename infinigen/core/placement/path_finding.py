@@ -3,8 +3,6 @@
 
 # Authors: Zeyu Ma
 
-import itertools
-
 import mathutils
 import networkx as nx
 import numpy as np
@@ -104,39 +102,32 @@ def path_finding(
     z[end_index] = end_pose[0].z
 
     penalty = 99
-    for i, j, k in list(itertools.product(range(N[0]), range(N[1]), range(N[2]))):
-        index_ijk = index(i, j, k)
-        pos_from = mathutils.Vector([x[index_ijk], y[index_ijk], z[index_ijk]])
-        for di, dj, dk in [
-            [1, 0, 0],
-            [0, 1, 0],
-            [0, 0, 1],
-            [1, 1, 0],
-            [0, 1, 1],
-            [1, 0, 1],
-            [1, -1, 0],
-            [0, 1, -1],
-            [1, 0, -1],
-        ]:
-            ni, nj, nk = i + di, j + dj, k + dk
-            if (
-                ni >= 0
-                and nj >= 0
-                and nk >= 0
-                and ni < N[0]
-                and nj < N[1]
-                and nk < N[2]
-            ):
-                index_nijk = index(ni, nj, nk)
-                pos_to = mathutils.Vector([x[index_nijk], y[index_nijk], z[index_nijk]])
-                connected = freespace_ray_check(pos_from, pos_to)
-                if connected:
-                    row.append(index_ijk)
-                    col.append(index_nijk)
-                    data.append(1 if dk == 0 else penalty)
-                    row.append(index_nijk)
-                    col.append(index_ijk)
-                    data.append(1 if dk == 0 else penalty)
+    # Pre-compute all valid neighbor pairs vectorized
+    gi, gj, gk = np.meshgrid(
+        np.arange(N[0]), np.arange(N[1]), np.arange(N[2]), indexing="ij"
+    )
+    gi, gj, gk = gi.ravel(), gj.ravel(), gk.ravel()
+    offsets = np.array([
+        [1, 0, 0], [0, 1, 0], [0, 0, 1],
+        [1, 1, 0], [0, 1, 1], [1, 0, 1],
+        [1, -1, 0], [0, 1, -1], [1, 0, -1],
+    ])
+    for di, dj, dk in offsets:
+        ni, nj, nk = gi + di, gj + dj, gk + dk
+        valid = (ni >= 0) & (nj >= 0) & (nk >= 0) & (ni < N[0]) & (nj < N[1]) & (nk < N[2])
+        src_idx = (gi[valid] * N[1] * N[2] + gj[valid] * N[2] + gk[valid]).astype(int)
+        dst_idx = (ni[valid] * N[1] * N[2] + nj[valid] * N[2] + nk[valid]).astype(int)
+        weight = penalty if dk != 0 else 1
+        for s, d in zip(src_idx, dst_idx):
+            pos_from = mathutils.Vector([x[s], y[s], z[s]])
+            pos_to = mathutils.Vector([x[d], y[d], z[d]])
+            if freespace_ray_check(pos_from, pos_to):
+                row.append(s)
+                col.append(d)
+                data.append(weight)
+                row.append(d)
+                col.append(s)
+                data.append(weight)
 
     row = np.array(row)
     col = np.array(col)
@@ -145,17 +136,14 @@ def path_finding(
     A = csr_matrix((data, (row, col)), shape=(NN, NN))
     G = nx.from_scipy_sparse_array(A)
 
-    boundaries = []
     n_neighbors = np.array(A.sum(axis=0))[0]
-
-    for i in range(NN):
-        if n_neighbors[i] != 8 + 10 * penalty:
-            boundaries.append(i)
+    boundaries = np.where(n_neighbors != 8 + 10 * penalty)[0].tolist()
 
     lengths_dict = nx.multi_source_dijkstra_path_length(G, boundaries, weight="weight")
-    lengths = np.zeros(NN) + np.inf
-    for n in lengths_dict:
-        lengths[n] = lengths_dict[n]
+    lengths = np.full(NN, np.inf)
+    idx = np.fromiter(lengths_dict.keys(), dtype=int, count=len(lengths_dict))
+    vals = np.fromiter(lengths_dict.values(), dtype=float, count=len(lengths_dict))
+    lengths[idx] = vals
 
     mask1 = lengths[row] >= margin_d
     mask2 = lengths[col] >= margin_d

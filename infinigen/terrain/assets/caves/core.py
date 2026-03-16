@@ -187,7 +187,7 @@ def caves_asset(
     with ViewportMode(obj, "EDIT"):
         bpy.ops.mesh.select_all(action="SELECT")
         bpy.ops.mesh.quads_convert_to_tris(quad_method="BEAUTY", ngon_method="BEAUTY")
-    bounding_box = np.array([v[:] for v in obj.bound_box])
+    bounding_box = np.array(obj.bound_box)
     min_gen, max_gen = [0, 0, 0], [0, 0, 0]
     for j in range(3):
         min_gen[j], max_gen[j] = bounding_box[:, j].min(), bounding_box[:, j].max()

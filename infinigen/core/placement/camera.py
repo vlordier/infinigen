@@ -9,7 +9,7 @@
 
 import logging
 import typing
-from copy import deepcopy
+from copy import copy
 from dataclasses import dataclass
 from functools import partial
 from itertools import chain
@@ -513,7 +513,7 @@ def compute_base_views(
             forward_dir = (destination - cam.location).normalized()
             *_, straight_ahead_dist = scene_bvh.ray_cast(cam.location, forward_dir)
 
-            potential_views.append((criterion, deepcopy(props), straight_ahead_dist))
+            potential_views.append((criterion, copy(props), straight_ahead_dist))
             pbar.update(1)
 
             if len(potential_views) >= n_min_candidates:
@@ -721,8 +721,10 @@ def configure_cameras(
             _co = np.empty(len(obj.data.vertices) * 3)
             obj.data.vertices.foreach_get("co", _co)
             _verts = _co.reshape(-1, 3)
-            center_coordinate = _verts[np.random.choice(len(_verts))]
-            center_coordinate = list(butil.apply_matrix_world(obj, center_coordinate.reshape(1, 3))[0])
+            sampled_local = _verts[np.random.choice(len(_verts))]
+            center_coordinate = list(
+                butil.apply_matrix_world(obj, sampled_local.reshape(1, 3))[0]
+            )
         else:
             raise ValueError(
                 f"Got {mvs_setting=} yet {terrain_mesh=} {nonroom_objs=}, we expected at least one in order to choose a center coordinate"

@@ -59,14 +59,15 @@ def apply(objs, selection=None, **kwargs):
                     obj = e.other_vert(v)
                     if len(e.link_faces) == 2:
                         direction = np.array(obj.co - v.co)
-                        direction = direction / np.linalg.norm(direction)
+                        direction /= np.linalg.norm(direction)
+                        f0, f1 = e.link_faces
                         normal = (
-                            np.mean(np.array([f.normal for f in e.link_faces]), 0)
+                            (np.array(f0.normal) + np.array(f1.normal)) * 0.5
                             * normal_ratio
                             + np.array([0, 0, 1 - normal_ratio])
                             + direction * uniform(0.2, 0.5)
                         )
-                        normal = normal / np.linalg.norm(normal)
+                        normal /= np.linalg.norm(normal)
                         perp_direction = direction - np.dot(direction, normal) * normal
                         perp_direction = perp_direction / np.linalg.norm(perp_direction)
                         rotation = np.array(
@@ -151,14 +152,15 @@ class Mushroom:
                         obj = e.other_vert(v)
                         if len(e.link_faces) == 2:
                             direction = np.array(obj.co - v.co)
-                            direction = direction / np.linalg.norm(direction)
+                            direction /= np.linalg.norm(direction)
+                            f0, f1 = e.link_faces
                             normal = (
-                                np.mean(np.array([f.normal for f in e.link_faces]), 0)
+                                (np.array(f0.normal) + np.array(f1.normal)) * 0.5
                                 * normal_ratio
                                 + np.array([0, 0, 1 - normal_ratio])
                                 + direction * uniform(0.2, 0.5)
                             )
-                            normal = normal / np.linalg.norm(normal)
+                            normal /= np.linalg.norm(normal)
                             perp_direction = (
                                 direction - np.dot(direction, normal) * normal
                             )

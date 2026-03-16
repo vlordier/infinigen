@@ -83,11 +83,17 @@ class Planes:
         obj.data.vertices.foreach_get("co", co)
         all_global_verts = butil.apply_matrix_world(obj, co.reshape(-1, 3))
 
-        normal_cache = {
-            p.index: butil.global_polygon_normal(obj, p)
-            for p in obj.data.polygons
-            if face_mask[p.index]
-        }
+        # Batch-compute all global polygon normals at once
+        n_poly = len(obj.data.polygons)
+        normals = np.empty(n_poly * 3)
+        obj.data.polygons.foreach_get("normal", normals)
+        normals = normals.reshape(-1, 3)
+        loc, rot, scale = obj.matrix_world.decompose()
+        rot_mat = np.array(rot.to_matrix())
+        global_normals = normals @ rot_mat.T
+        gnorms = np.linalg.norm(global_normals, axis=1, keepdims=True)
+        gnorms[gnorms < 1e-8] = 1.0
+        global_normals /= gnorms
 
         unique_planes = {}
 
@@ -96,7 +102,7 @@ class Planes:
                 continue
 
             # Get the normal and a vertex to represent the plane
-            normal = normal_cache[polygon.index]
+            normal = global_normals[polygon.index]
 
             if np.linalg.norm(normal) < 1e-6:
                 continue
@@ -236,8 +242,7 @@ class Planes:
         # Set initial selection for polygons to False
         bpy.ops.object.mode_set(mode="OBJECT")
 
-        for poly in obj.data.polygons:
-            poly.select = mask[poly.index]
+        obj.data.polygons.foreach_set("select", mask)
 
         # Switch to Edit mode, duplicate the selection, and separate it
         old_set = set(bpy.data.objects[:])
