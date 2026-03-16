@@ -9,14 +9,18 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import torch
+import torch.nn.functional as F
 from imageio.v3 import imread, imwrite
 
+from infinigen.core.util.device import get_torch_device, setup_torch_runtime
 from infinigen.tools.dataset_loader import get_frame_path
 
 logger = logging.getLogger(__name__)
 
 
 _coord_cache: dict[tuple[int, int], np.ndarray] = {}
+_coord_cache_torch: dict[tuple[str, int, int], torch.Tensor] = {}
 
 
 def _base_coords(H, W):
@@ -29,6 +33,21 @@ def _base_coords(H, W):
         axis=-1,
     )
     _coord_cache[key] = cached
+    return cached
+
+
+def _base_coords_torch(H, W, device):
+    key = (str(device), int(H), int(W))
+    cached = _coord_cache_torch.get(key)
+    if cached is not None:
+        return cached
+    yy, xx = torch.meshgrid(
+        torch.arange(H, device=device, dtype=torch.float32),
+        torch.arange(W, device=device, dtype=torch.float32),
+        indexing="ij",
+    )
+    cached = torch.stack((xx, yy), dim=-1)
+    _coord_cache_torch[key] = cached
     return cached
 
 """
@@ -44,8 +63,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("folder", type=Path)
     parser.add_argument("frame", type=int)
+    parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--output", type=Path, default=Path("testbed"))
     args = parser.parse_args()
+
+    device = get_torch_device(args.device)
+    setup_torch_runtime(device)
+    use_torch = device.type != "cpu"
     flow3d_path = get_frame_path(args.folder, 0, args.frame, "Flow3D_npy")
     image1_path = get_frame_path(args.folder, 0, args.frame, "Image_png")
     image2_path = get_frame_path(args.folder, 0, args.frame + 1, "Image_png")
@@ -57,12 +81,19 @@ if __name__ == "__main__":
     image1 = imread(image1_path)
     H, W, _ = image1.shape
 
-    flow2d = cv2.resize(
-        np.load(flow3d_path), dsize=(W, H), interpolation=cv2.INTER_LINEAR
-    )[..., :2]
-    new_coords = flow2d.astype(np.float32, copy=False) + _base_coords(H, W)
+    flow = np.load(flow3d_path)
+    if use_torch:
+        flow_t = torch.as_tensor(flow[..., :2], dtype=torch.float32, device=device)
+        flow_t = flow_t.permute(2, 0, 1).unsqueeze(0)
+        flow2d = F.interpolate(flow_t, size=(H, W), mode="bilinear", align_corners=False)
+        flow2d = flow2d[0].permute(1, 2, 0)
+        new_coords = (flow2d + _base_coords_torch(H, W, device)).cpu().numpy()
+    else:
+        flow2d = cv2.resize(flow, dsize=(W, H), interpolation=cv2.INTER_LINEAR)[..., :2]
+        new_coords = flow2d.astype(np.float32, copy=False) + _base_coords(H, W)
+
     warped_image = cv2.remap(
-        image2, new_coords, None, interpolation=cv2.INTER_LINEAR
+        image2, new_coords.astype(np.float32, copy=False), None, interpolation=cv2.INTER_LINEAR
     )
 
     args.output.mkdir(exist_ok=True)
