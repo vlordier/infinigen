@@ -134,6 +134,29 @@ def flush_torch_batch(pending, device):
         save_mask(file_path, data_type, mask)
 
 
+def choose_torch_mode(backend, device_type, workload_size):
+    if backend == "cpu":
+        return False
+    if backend == "torch":
+        return device_type != "cpu"
+    if device_type == "cuda":
+        return True
+    if device_type == "mps":
+        # MPS shows gains when enough frames are processed per run.
+        return workload_size >= 8
+    return False
+
+
+def auto_batch_size(device_type, workload_size):
+    if device_type == "cuda":
+        return 32
+    if device_type == "mps":
+        if workload_size >= 16:
+            return 16
+        return 8
+    return 1
+
+
 def get_mask(depth, flow, dst_depth):
     H, W = depth.shape
     base_y, base_x = _get_base_grid(H, W)
@@ -155,21 +178,30 @@ if __name__ == "__main__":
     parser.add_argument("target_frames_dir", type=Path)
     parser.add_argument("point_traj_source_frame", type=int)
     parser.add_argument("--device", type=str, default=None)
-    parser.add_argument("--batch-size", type=int, default=8)
+    parser.add_argument("--backend", type=str, choices=("auto", "cpu", "torch"), default="auto")
+    parser.add_argument("--batch-size", type=int, default=0)
     args = parser.parse_args()
     assert args.target_frames_dir.exists()
     assert args.target_frames_dir.name.startswith("frames_")
 
+    candidate_files = [
+        file_path
+        for file_path in sorted(args.target_frames_dir.glob("*.npy"))
+        if file_path.name.split("_")[0] in {"Flow3D", "PointTraj3D"}
+    ]
+
     device = get_torch_device(args.device)
     setup_torch_runtime(device)
-    use_torch = device.type != "cpu"
+    use_torch = choose_torch_mode(args.backend, device.type, len(candidate_files))
+    batch_size = args.batch_size if args.batch_size > 0 else auto_batch_size(device.type, len(candidate_files))
+
+    if use_torch and batch_size < 1:
+        batch_size = 1
 
     pending = []
-    for file_path in sorted(args.target_frames_dir.glob("*.npy")):
+    for file_path in candidate_files:
         info = parse_suffix(file_path.name)
         data_type = file_path.name.split("_")[0]
-        if not file_path.name.endswith(".npy"):
-            continue
         if data_type == "Flow3D":
             depth_info = dict(info)
             depth = np.load(
@@ -198,7 +230,7 @@ if __name__ == "__main__":
                 flush_torch_batch(pending, device)
                 pending = []
             pending.append((file_path, data_type, depth, dst_depth, flow))
-            if len(pending) >= max(1, args.batch_size):
+            if len(pending) >= batch_size:
                 flush_torch_batch(pending, device)
                 pending = []
         else:
