@@ -251,8 +251,24 @@ def contains(scene: Scene, a: str, b: str, tol=1e-6) -> bool:
     mesh_a = scene.geometry[a]
     mesh_b = scene.geometry[b]
 
-    difference = mesh_a.difference(mesh_b)
+    # Fast reject via axis-aligned bounding boxes.
+    a_min, a_max = mesh_a.bounds
+    b_min, b_max = mesh_b.bounds
+    if np.any(b_min < (a_min - tol)) or np.any(b_max > (a_max + tol)):
+        return False
 
+    # Fast path: when mesh_a is watertight, containment can be checked using
+    # point-in-mesh on mesh_b vertices, avoiding costly boolean operations.
+    if mesh_a.is_watertight and len(mesh_b.vertices) > 0:
+        try:
+            inside = mesh_a.contains(mesh_b.vertices)
+            if inside.all():
+                return True
+        except Exception:
+            pass
+
+    # Robust fallback for non-watertight or pathological geometry.
+    difference = mesh_a.difference(mesh_b)
     return abs(difference.volume - mesh_a.volume) < tol
 
 
@@ -357,7 +373,7 @@ def has_line_of_sight(
             ray_directions /= np.linalg.norm(ray_directions, axis=1)[:, None]
 
             # Check for intersections with the combined mesh
-            locations, index_ray, index_tri = (
+            locations, index_ray, _index_tri = (
                 combined_mesh.ray_pyembree.intersects_location(
                     ray_origins, ray_directions, multiple_hits=False
                 )
@@ -454,7 +470,7 @@ def rasterize_space_with_obstacles(
 
     # For visualization
     if visualize:
-        fig, ax = plt.subplots()
+        _fig, ax = plt.subplots()
         for space in space_polygons:
             if isinstance(space, Polygon):
                 x, y = space.exterior.xy
@@ -611,7 +627,7 @@ def angle_alignment_cost_base(
     a_blender_objs = iu.blender_objs_from_names(a)
 
     if visualize:
-        fig, ax = plt.subplots()
+        _fig, ax = plt.subplots()
         for edge, _ in b_edges:
             x, y = edge.xy
             ax.plot(x, y, color="red", linewidth=1, label="B Edges")
@@ -751,7 +767,7 @@ def focus_score(
 
     if visualize:
         # Plotting the polygons and normals
-        fig, ax = plt.subplots()
+        _fig, ax = plt.subplots()
         if isinstance(b_poly, Polygon):
             x, y = b_poly.exterior.xy
             ax.fill(x, y, alpha=0.5, fc="red", ec="black", label="Polygon b")
@@ -841,7 +857,7 @@ def min_dist_2d(scene, a: str | list[str], b, visualize=False):
         a = [a]
 
     if visualize:
-        fig, ax = plt.subplots()
+        _fig, ax = plt.subplots()
     min_dist = np.inf
 
     b_path2d, to_3D = b.to_planar()
@@ -1079,7 +1095,7 @@ def accessibility_cost(scene, a, b, normal, visualize=False, fast=True):
         return 0
 
     if visualize:
-        fig, ax = plt.subplots()
+        _fig, ax = plt.subplots()
     a_trimeshes = iu.meshes_from_names(scene, a)
     b_trimeshes = iu.meshes_from_names(scene, b)
 
