@@ -24,11 +24,16 @@ import pytest
 
 _UTIL_DIR = Path(__file__).resolve().parent.parent / "infinigen" / "core" / "util"
 _TOOLS_DIR = Path(__file__).resolve().parent.parent / "infinigen" / "tools"
+_TERRAIN_MESHER_DIR = (
+    Path(__file__).resolve().parent.parent / "infinigen" / "terrain" / "mesher"
+)
 
 
 def _load_module(name: str, filepath: Path):
     """Load a single Python file as a module, bypassing package __init__."""
     spec = importlib.util.spec_from_file_location(name, filepath)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load module spec for {filepath}")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
@@ -49,6 +54,12 @@ def _get_dataset_integrity():
 
 def _get_config_validation():
     return _load_module("config_validation", _UTIL_DIR / "config_validation.py")
+
+
+def _get_backend_protocol():
+    return _load_module(
+        "backend_protocol", _TERRAIN_MESHER_DIR / "backend_protocol.py"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -218,6 +229,135 @@ class TestHealthCheck:
             mod.HealthStatus.SKIP,
         )
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 3.  backend_protocol.py — OcMesher capability/schema contract
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class TestOcMesherBackendProtocol:
+    def test_capability_aliases_are_normalized(self):
+        mod = _get_backend_protocol()
+        caps = mod.normalize_backend_capabilities(
+            {
+                "cuda": 1,
+                "mps": 0,
+                "cpu": True,
+                "max_batch_size": "32",
+                "dtype": "float16",
+            }
+        )
+
+        assert caps["supports_cuda"] is True
+        assert caps["supports_mps"] is False
+        assert caps["supports_cpu"] is True
+        assert caps["max_batch"] == 32
+        assert caps["preferred_dtype"] == "float16"
+
+    def test_collect_capabilities_supports_get_capabilities(self):
+        mod = _get_backend_protocol()
+
+        class DummyBackend:
+            def get_capabilities(self):
+                return {"max_batch_size_hint": 64, "cuda": True}
+
+        caps = mod.collect_ocmesher_backend_capabilities(DummyBackend())
+        assert caps["max_batch"] == 64
+        assert caps["supports_cuda"] is True
+        assert "backend_name" in caps
+
+    def test_self_test_serializer_has_exact_schema(self):
+        mod = _get_backend_protocol()
+        payload = mod.serialize_ocmesher_self_test_payload(
+            {
+                "ok": True,
+                "backend": "dummy.Backend",
+                "backend_version": "0.1.0",
+                "test_bounds": (-1, 1, -2, 2, -3, 3),
+                "vertices": 12,
+                "faces": 8,
+                "capabilities": {"cuda": True},
+            }
+        )
+
+        assert tuple(payload.keys()) == mod.SELF_TEST_SCHEMA_KEYS
+        assert payload["test_bounds"] == [-1.0, 1.0, -2.0, 2.0, -3.0, 3.0]
+        assert payload["capabilities"]["supports_cuda"] is True
+        assert payload["error"] is None
+
+    def test_runtime_defaults_from_capabilities(self):
+        mod = _get_backend_protocol()
+
+        class DummyBackend:
+            DEFAULT_CAPABILITIES = {
+                "preferred_dtype": "float32",
+                "max_batch": 128,
+                "supports_async": True,
+            }
+
+            def __init__(
+                self,
+                cameras,
+                bounds,
+                *,
+                device=None,
+                dtype=None,
+                max_batch=None,
+                stream_policy=None,
+            ):
+                pass
+
+        resolved = mod.resolve_ocmesher_runtime_kwargs(
+            DummyBackend,
+            {},
+            env={},
+            device_hint="mps",
+        )
+
+        assert resolved["device"] == "mps"
+        assert resolved["dtype"] == "float32"
+        assert resolved["max_batch"] == 128
+        assert resolved["stream_policy"] == "auto"
+
+    def test_runtime_env_overrides_capability_defaults(self):
+        mod = _get_backend_protocol()
+
+        class DummyBackend:
+            DEFAULT_CAPABILITIES = {
+                "preferred_dtype": "float32",
+                "max_batch": 256,
+                "default_stream_policy": "auto",
+            }
+
+            def __init__(
+                self,
+                cameras,
+                bounds,
+                *,
+                device=None,
+                dtype=None,
+                batch_size=None,
+                stream_policy=None,
+            ):
+                pass
+
+        resolved = mod.resolve_ocmesher_runtime_kwargs(
+            DummyBackend,
+            {},
+            env={
+                "INFINIGEN_OCMESHER_DEVICE": "cuda",
+                "INFINIGEN_OCMESHER_DTYPE": "float16",
+                "INFINIGEN_OCMESHER_BATCH": "64",
+                "INFINIGEN_OCMESHER_STREAM_POLICY": "sync",
+            },
+            device_hint="cpu",
+        )
+
+        assert resolved["device"] == "cuda"
+        assert resolved["dtype"] == "float16"
+        assert resolved["batch_size"] == 64
+        assert resolved["stream_policy"] == "sync"
+
     def test_output_directory_skip_when_none(self):
         mod = _get_health_check()
         result = mod.check_output_directory(None)
@@ -378,7 +518,7 @@ class TestConfigValidation:
         pytest.importorskip("gin")
 
     def _setup_gin(self):
-        import gin
+        import gin  # type: ignore[import-untyped]
 
         gin.clear_config()
         return gin

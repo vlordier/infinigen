@@ -6,8 +6,11 @@
 
 import logging
 import os
+from importlib import import_module
 from ctypes import c_int32
 from pathlib import Path
+
+import json
 
 import bpy
 import gin
@@ -41,13 +44,18 @@ from infinigen.core.util.organization import (
 )
 from infinigen.core.util.random import weighted_sample
 from infinigen.core.util.test_utils import import_item
-from infinigen.OcMesher.ocmesher import OcMesher as UntexturedOcMesher
-from infinigen.OcMesher.ocmesher import __version__ as ocmesher_version
 from infinigen.terrain.assets.ocean import ocean_asset
 from infinigen.terrain.mesher import (
     OpaqueSphericalMesher,
     TransparentSphericalMesher,
     UniformMesher,
+)
+from infinigen.terrain.mesher.backend_protocol import (
+    collect_ocmesher_backend_capabilities,
+    normalize_ocmesher_result,
+    resolve_ocmesher_runtime_kwargs,
+    serialize_ocmesher_self_test_payload,
+    validate_ocmesher_backend_class,
 )
 from infinigen.terrain.scene import scene, transfer_scene_info
 from infinigen.terrain.surface_kernel.core import SurfaceKernel
@@ -62,13 +70,163 @@ from infinigen.terrain.utils import (
     write_attributes,
 )
 
+logger = logging.getLogger(__name__)
+_ocmesher_capabilities_logged = False
+
+
+def _load_ocmesher_backend():
+    class_path = os.environ.get(
+        "INFINIGEN_OCMESHER_CLASS", "infinigen.OcMesher.ocmesher.OcMesher"
+    )
+    backend_cls = import_item(class_path)
+    validate_ocmesher_backend_class(backend_cls, class_path)
+
+    version = None
+    module_name, _, _ = class_path.rpartition(".")
+    try:
+        module = import_module(module_name)
+        version = getattr(module, "__version__", None)
+    except Exception:
+        pass
+
+    return backend_cls, class_path, version
+
+
+def _log_ocmesher_backend_capabilities_once(instance, runtime_kwargs: dict):
+    global _ocmesher_capabilities_logged
+    if _ocmesher_capabilities_logged:
+        return
+
+    caps = collect_ocmesher_backend_capabilities(instance)
+    caps.update(
+        {
+            "backend_class_path": _ocmesher_class_path,
+            "backend_version": ocmesher_version,
+            "runtime_kwargs": runtime_kwargs,
+        }
+    )
+    logger.info("OcMesher backend capabilities: %s", json.dumps(caps, default=str))
+    _ocmesher_capabilities_logged = True
+
+
+def _build_ocmesher_self_test_bounds(bounds):
+    mins = np.array(bounds[::2], dtype=np.float64)
+    maxs = np.array(bounds[1::2], dtype=np.float64)
+    center = (mins + maxs) / 2.0
+    span = np.maximum((maxs - mins) * 0.01, 1.0)
+    test_mins = center - span / 2.0
+    test_maxs = center + span / 2.0
+    return (
+        float(test_mins[0]),
+        float(test_maxs[0]),
+        float(test_mins[1]),
+        float(test_maxs[1]),
+        float(test_mins[2]),
+        float(test_maxs[2]),
+    )
+
+
+def ocmesher_backend_self_test(cameras, bounds, strict=True):
+    """Instantiate configured backend and run a tiny dry-run contract check."""
+    if cameras is None or len(cameras) == 0:
+        raise ValueError("OcMesher backend self-test requires at least one camera")
+
+    test_bounds = _build_ocmesher_self_test_bounds(bounds)
+    mesher = OcMesher(
+        cameras,
+        test_bounds,
+        simplify_occluded=False,
+        pixels_per_cube=8,
+    )
+
+    def _constant_kernel(xyz):
+        return {Vars.SDF: np.ones((len(xyz),), dtype=np.float64)}
+
+    try:
+        mesh = mesher([_constant_kernel])
+    except Exception as exc:
+        if strict:
+            raise RuntimeError(
+                f"OcMesher backend self-test failed for {_ocmesher_class_path}: {exc}"
+            ) from exc
+        logger.warning("OcMesher backend self-test failed: %s", exc)
+        return serialize_ocmesher_self_test_payload(
+            {
+                "ok": False,
+                "error": str(exc),
+                "backend": _ocmesher_class_path,
+                "backend_version": ocmesher_version,
+            }
+        )
+
+    n_verts = len(mesh.vertices) if hasattr(mesh, "vertices") else -1
+    n_faces = len(mesh.faces) if hasattr(mesh, "faces") else -1
+    capabilities = collect_ocmesher_backend_capabilities(mesher)
+    return serialize_ocmesher_self_test_payload(
+        {
+            "ok": True,
+            "backend": _ocmesher_class_path,
+            "backend_version": ocmesher_version,
+            "test_bounds": test_bounds,
+            "vertices": int(n_verts),
+            "faces": int(n_faces),
+            "capabilities": capabilities,
+        }
+    )
+
+
+def _resolve_ocmesher_runtime_kwargs(cls, kwargs: dict):
+    requested_device = os.environ.get("INFINIGEN_OCMESHER_DEVICE")
+    if requested_device is None:
+        try:
+            from infinigen.core.util.device import get_torch_device
+
+            requested_device = get_torch_device().type
+        except Exception:
+            requested_device = None
+
+    resolved = resolve_ocmesher_runtime_kwargs(
+        cls,
+        kwargs,
+        env=os.environ,
+        device_hint=requested_device,
+    )
+
+    requested_batch = os.environ.get("INFINIGEN_OCMESHER_BATCH")
+    if requested_batch is not None and any(
+        k not in resolved for k in ("max_batch", "batch_size", "sdf_batch_size")
+    ):
+        try:
+            int(requested_batch)
+        except ValueError:
+            logger.warning(
+                "Invalid INFINIGEN_OCMESHER_BATCH value %s, ignoring", requested_batch
+            )
+
+    return resolved
+
+
+UntexturedOcMesher, _ocmesher_class_path, ocmesher_version = _load_ocmesher_backend()
+
 ocmesher_version_expected = "2.0"
-if ocmesher_version != ocmesher_version_expected:
+if (
+    _ocmesher_class_path == "infinigen.OcMesher.ocmesher.OcMesher"
+    and ocmesher_version != ocmesher_version_expected
+):
     raise ValueError(
         f"User has installed {ocmesher_version=} which is not for {infinigen.__version__=}, we expected {ocmesher_version_expected=}, you may need to re-run installation / recompile the codebase"
     )
-
-logger = logging.getLogger(__name__)
+if (
+    _ocmesher_class_path != "infinigen.OcMesher.ocmesher.OcMesher"
+    and ocmesher_version is not None
+    and ocmesher_version != ocmesher_version_expected
+):
+    logger.warning(
+        "Using custom OcMesher backend %s with version %s (expected %s for default backend)",
+        _ocmesher_class_path,
+        ocmesher_version,
+        ocmesher_version_expected,
+    )
 
 fine_suffix = "_fine"
 hidden_in_viewport = [ElementNames.Atmosphere]
@@ -98,11 +256,22 @@ def process_surface_input(_input, default):
 
 class OcMesher(UntexturedOcMesher):
     def __init__(self, cameras, bounds, **kwargs):
-        UntexturedOcMesher.__init__(self, get_caminfo(cameras)[0], bounds, **kwargs)
+        runtime_kwargs = _resolve_ocmesher_runtime_kwargs(UntexturedOcMesher, kwargs)
+        UntexturedOcMesher.__init__(
+            self,
+            get_caminfo(cameras)[0],
+            bounds,
+            **runtime_kwargs,
+        )
+        _log_ocmesher_backend_capabilities_once(self, runtime_kwargs)
 
     def __call__(self, kernels):
         sdf_kernels = [(lambda x, k0=k: k0(x)[Vars.SDF]) for k in kernels]
-        meshes, in_view_tags = UntexturedOcMesher.__call__(self, sdf_kernels)
+        result = UntexturedOcMesher.__call__(self, sdf_kernels)
+        meshes, in_view_tags = normalize_ocmesher_result(
+            result,
+            _ocmesher_class_path,
+        )
         with Timer("compute attributes"):
             write_attributes(kernels, None, meshes)
             for mesh, tag in zip(meshes, in_view_tags):
@@ -114,17 +283,29 @@ class OcMesher(UntexturedOcMesher):
 
 class CollectiveOcMesher(UntexturedOcMesher):
     def __init__(self, cameras, bounds, **kwargs):
-        UntexturedOcMesher.__init__(self, get_caminfo(cameras)[0], bounds, **kwargs)
+        runtime_kwargs = _resolve_ocmesher_runtime_kwargs(UntexturedOcMesher, kwargs)
+        UntexturedOcMesher.__init__(
+            self,
+            get_caminfo(cameras)[0],
+            bounds,
+            **runtime_kwargs,
+        )
+        _log_ocmesher_backend_capabilities_once(self, runtime_kwargs)
 
     def __call__(self, kernels):
         sdf_kernels = [
             lambda x: np.stack([k(x)[Vars.SDF] for k in kernels], -1).min(axis=-1)
         ]
-        mesh, in_view_tag = UntexturedOcMesher.__call__(self, sdf_kernels)
-        mesh = mesh[0]
+        result = UntexturedOcMesher.__call__(self, sdf_kernels)
+        meshes, in_view_tags = normalize_ocmesher_result(
+            result,
+            _ocmesher_class_path,
+            expect_single_mesh=True,
+        )
+        mesh = meshes[0]
         with Timer("compute attributes"):
             write_attributes(kernels, mesh, [])
-            mesh.vertex_attributes[Tags.OutOfView] = (~in_view_tag[0]).astype(np.int32)
+            mesh.vertex_attributes[Tags.OutOfView] = (~in_view_tags[0]).astype(np.int32)
         mesh = Mesh(mesh=mesh)
         return mesh
 
@@ -265,6 +446,12 @@ class Terrain:
         main_terrain_only=False,
         remove_redundant_attrs=True,
     ):
+        if mesher_backend == "OcMesher" and not getattr(self, "_ocmesher_self_test_done", False):
+            with Timer("OcMesher backend self-test"):
+                result = ocmesher_backend_self_test(cameras, self.bounds, strict=True)
+                logger.info("OcMesher backend self-test result: %s", json.dumps(result, default=str))
+            self._ocmesher_self_test_done = True
+
         meshes_dict = {}
         attributes_dict = {}
         if not main_terrain_only or TerrainNames.OpaqueTerrain == self.main_terrain:
