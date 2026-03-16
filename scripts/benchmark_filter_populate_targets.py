@@ -86,7 +86,19 @@ def _get_collection(name: str) -> bpy.types.Collection:
     return col
 
 
-def _get_cameras(camera_collection_name: str):
+def _find_placeholder_collection_name() -> str:
+    names = sorted(c.name for c in bpy.data.collections if c.name.startswith("placeholders:"))
+    if not names:
+        raise ValueError("No placeholder collection found (expected prefix 'placeholders:').")
+    return names[0]
+
+
+def _get_cameras(camera_collection_name: str | None):
+    if camera_collection_name is None:
+        cams = [o for o in bpy.data.objects if o.type == "CAMERA"]
+        if not cams:
+            raise ValueError("No cameras found in scene.")
+        return cams
     cam_col = _get_collection(camera_collection_name)
     cams = [o for o in cam_col.objects if o.type == "CAMERA"]
     if not cams:
@@ -97,14 +109,16 @@ def _get_cameras(camera_collection_name: str):
 def main():
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--placeholder-collection", required=True)
-    parser.add_argument("--camera-collection", required=True)
+    parser.add_argument("--placeholder-collection", default=None)
+    parser.add_argument("--camera-collection", default=None)
     parser.add_argument("--dist-cull", type=float, default=200.0)
     parser.add_argument("--vis-cull", type=float, default=0.0)
     parser.add_argument("--repeat", type=int, default=3)
     parser.add_argument("--output", type=Path, default=Path("/tmp/filter_populate_targets_bench.json"))
     args = parser.parse_args()
 
+    if args.placeholder_collection is None:
+        args.placeholder_collection = _find_placeholder_collection_name()
     placeholders_col = _get_collection(args.placeholder_collection)
     placeholders = [o for o in placeholders_col.objects if o.parent is None]
     cameras = _get_cameras(args.camera_collection)
