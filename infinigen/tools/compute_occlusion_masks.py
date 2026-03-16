@@ -5,14 +5,12 @@
 
 import argparse
 from pathlib import Path
-from typing import Dict, Tuple
 
 import cv2
 import numpy as np
 from suffixes import get_suffix, parse_suffix
 
-
-_grid_cache: Dict[Tuple[int, int], Tuple[np.ndarray, np.ndarray]] = {}
+_grid_cache: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
 
 
 def _get_base_grid(H, W):

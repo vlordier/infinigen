@@ -15,6 +15,22 @@ from infinigen.tools.dataset_loader import get_frame_path
 
 logger = logging.getLogger(__name__)
 
+
+_coord_cache: dict[tuple[int, int], np.ndarray] = {}
+
+
+def _base_coords(H, W):
+    key = (int(H), int(W))
+    cached = _coord_cache.get(key)
+    if cached is not None:
+        return cached
+    cached = np.stack(
+        np.meshgrid(np.arange(W, dtype=np.float32), np.arange(H, dtype=np.float32), indexing="xy"),
+        axis=-1,
+    )
+    _coord_cache[key] = cached
+    return cached
+
 """
 Usage: python -m tools.ground_truth.rigid_warp <scene-folder> <frame-index-i>
 Output:
@@ -44,11 +60,9 @@ if __name__ == "__main__":
     flow2d = cv2.resize(
         np.load(flow3d_path), dsize=(W, H), interpolation=cv2.INTER_LINEAR
     )[..., :2]
-    new_coords = flow2d + np.stack(
-        np.meshgrid(np.arange(W), np.arange(H), indexing="xy"), axis=-1
-    )
+    new_coords = flow2d.astype(np.float32, copy=False) + _base_coords(H, W)
     warped_image = cv2.remap(
-        image2, new_coords.astype(np.float32), None, interpolation=cv2.INTER_LINEAR
+        image2, new_coords, None, interpolation=cv2.INTER_LINEAR
     )
 
     args.output.mkdir(exist_ok=True)

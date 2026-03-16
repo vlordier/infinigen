@@ -10,18 +10,12 @@ from pathlib import Path
 import cv2
 import numpy as np
 from imageio.v3 import imread, imwrite
-from numpy.linalg import inv
 
 from infinigen.tools.dataset_loader import get_frame_path
 
 logger = logging.getLogger(__name__)
 
-try:
-    from einops import einsum
-except ImportError as e:
-    raise ImportError(
-        "GT visualization requires `einops`. Please install optional extras via `pip install .[vis]`."
-    ) from e
+_grid_cache: dict[tuple[int, int], np.ndarray] = {}
 
 """
 Usage: python -m tools.ground_truth.rigid_warp <scene-folder> <frame-index-i> <frame-index-j>
@@ -35,21 +29,31 @@ Output:
 
 def transform(T, p):
     assert T.shape == (4, 4)
-    return einsum(p, T[:3, :3], "H W j, i j -> H W i") + T[:3, 3]
+    return np.einsum("h w j, i j -> h w i", p, T[:3, :3]) + T[:3, 3]
 
 
 def from_homog(x):
     return x[..., :-1] / x[..., [-1]]
 
 
-def reproject(depth1, pose1, pose2, K1, K2):
-    H, W = depth1.shape
+def pixel_grid(H, W):
+    key = (int(H), int(W))
+    cached = _grid_cache.get(key)
+    if cached is not None:
+        return cached
     x, y = np.meshgrid(np.arange(W), np.arange(H), indexing="xy")
-    img_1_coords = np.stack((x, y, np.ones_like(x)), axis=-1).astype(np.float64)
-    cam1_coords = einsum(depth1, img_1_coords, inv(K1), "H W, H W j, i j -> H W i")
-    rel_pose = inv(pose2) @ pose1
+    cached = np.stack((x, y, np.ones_like(x)), axis=-1).astype(np.float64)
+    _grid_cache[key] = cached
+    return cached
+
+
+def reproject(depth1, pose1, pose2_inv, K1_inv, K2):
+    H, W = depth1.shape
+    img_1_coords = pixel_grid(H, W)
+    cam1_coords = np.einsum("h w, h w j, i j -> h w i", depth1, img_1_coords, K1_inv)
+    rel_pose = pose2_inv @ pose1
     cam2_coords = transform(rel_pose, cam1_coords)
-    return from_homog(einsum(cam2_coords, K2, "H W j, i j -> H W i"))
+    return from_homog(np.einsum("h w j, i j -> h w i", cam2_coords, K2))
 
 
 if __name__ == "__main__":
@@ -73,13 +77,15 @@ if __name__ == "__main__":
     pose2 = np.load(camview2_path)["T"]
     K1 = np.load(camview1_path)["K"]
     K2 = np.load(camview2_path)["K"]
+    pose2_inv = np.linalg.inv(pose2)
+    K1_inv = np.linalg.inv(K1)
 
     H, W, _ = image1.shape
     depth1 = cv2.resize(
         np.load(depth_path), dsize=(W, H), interpolation=cv2.INTER_LINEAR
     )
 
-    img2_coords = reproject(depth1, pose1, pose2, K1, K2)
+    img2_coords = reproject(depth1, pose1, pose2_inv, K1_inv, K2)
 
     warped_image = cv2.remap(
         image2, img2_coords.astype(np.float32), None, interpolation=cv2.INTER_LINEAR

@@ -7,7 +7,6 @@ import argparse
 import logging
 import shutil
 from pathlib import Path
-from typing import Dict, Tuple
 
 import cv2
 import imageio
@@ -30,7 +29,7 @@ Output:
 """
 
 
-_coord_cache: Dict[Tuple[str, int, int], torch.Tensor] = {}
+_coord_cache: dict[tuple[str, int, int], torch.Tensor] = {}
 
 
 def unproject_torch(depth, K_inv):

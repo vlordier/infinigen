@@ -7,7 +7,6 @@ import argparse
 import os
 import shutil
 from pathlib import Path
-from typing import Dict, Tuple
 
 import cv2
 import numpy as np
@@ -19,8 +18,7 @@ from tqdm import tqdm
 from infinigen.core.util.device import get_torch_device, setup_torch_runtime
 from infinigen.tools.suffixes import parse_suffix
 
-
-_coords_cache: Dict[Tuple[str, int, int], torch.Tensor] = {}
+_coords_cache: dict[tuple[str, int, int], torch.Tensor] = {}
 
 
 def coords_grid(batch, ht, wd, device):
