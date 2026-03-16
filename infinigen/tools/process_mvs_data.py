@@ -137,6 +137,10 @@ def compute_covisibility(depth0, depth1, camview0, camview1, device=None):
     camview1 = _as_cam_tensors(camview1)
     depth0 = torch.as_tensor(depth0, device=device, dtype=torch.float32)
     depth1 = torch.as_tensor(depth1, device=device, dtype=torch.float32)
+    return compute_covisibility_prepared(depth0, depth1, camview0, camview1, device)
+
+
+def compute_covisibility_prepared(depth0, depth1, camview0, camview1, device):
     flow_01, flow_10 = induced_flow_torch(depth0, depth1, camview0, camview1, device)
     mask = check_cycle_consistency(flow_01, flow_10, device=device)
     return float(mask.mean().item())
@@ -207,7 +211,11 @@ if __name__ == "__main__":
             ]
         )
         depth_cache = {
-            cam_id: np.load(target_folder / scene / f"depths/{cam_id}.npy")
+            cam_id: torch.as_tensor(
+                np.load(target_folder / scene / f"depths/{cam_id}.npy"),
+                dtype=torch.float32,
+                device=device,
+            )
             for cam_id in cam_ids
         }
         cam_cache = {}
@@ -230,7 +238,7 @@ if __name__ == "__main__":
             for j in range(i + 1, n_cams):
                 depth1 = depth_cache[cam_ids[j]]
                 camview1 = cam_cache[cam_ids[j]]
-                cov = compute_covisibility(depth0, depth1, camview0, camview1, device=device)
+                cov = compute_covisibility_prepared(depth0, depth1, camview0, camview1, device)
                 cov_matrix[i, j] = cov
                 cov_matrix[j, i] = cov
 
