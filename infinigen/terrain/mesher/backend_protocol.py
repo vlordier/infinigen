@@ -11,7 +11,7 @@ including Rust-backed implementations).
 from __future__ import annotations
 
 from inspect import Parameter, signature
-from typing import Any, Mapping, cast
+from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
 
@@ -295,6 +295,101 @@ def _evaluate_kernel_field(
     return _extract_kernel_field(kernel(xyz), field_key)
 
 
+class _OcMesherFieldKernelAdapter:
+    def __init__(self, kernel: Any, *, field_key: Any, batch_size: int | None):
+        self._kernel = kernel
+        self._field_key = field_key
+        self._batch_size = batch_size
+
+    def __call__(self, xyz: np.ndarray) -> Any:
+        return _evaluate_kernel_field(
+            self._kernel,
+            xyz,
+            field_key=self._field_key,
+            batch_size=self._batch_size,
+        )
+
+    def evaluate_batch(self, xyz: np.ndarray) -> Any:
+        eval_batch = getattr(self._kernel, "evaluate_batch", None)
+        if callable(eval_batch):
+            return _extract_kernel_field(eval_batch(xyz), self._field_key)
+        return _extract_kernel_field(self._kernel(xyz), self._field_key)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._kernel, name)
+
+
+class _OcMesherTorchFieldKernelAdapter(_OcMesherFieldKernelAdapter):
+    def evaluate_batch_torch(self, xyz: Any) -> Any:
+        eval_batch_torch = getattr(self._kernel, "evaluate_batch_torch")
+        return _extract_kernel_field(eval_batch_torch(xyz), self._field_key)
+
+
+def _wrap_ocmesher_sdf_kernel(
+    kernel: Any,
+    *,
+    field_key: Any,
+    batch_size: int | None,
+) -> Any:
+    if callable(getattr(kernel, "evaluate_batch_torch", None)):
+        return _OcMesherTorchFieldKernelAdapter(
+            kernel,
+            field_key=field_key,
+            batch_size=batch_size,
+        )
+    return _OcMesherFieldKernelAdapter(
+        kernel,
+        field_key=field_key,
+        batch_size=batch_size,
+    )
+
+
+class _OcMesherMinKernelAdapter:
+    def __init__(self, kernels: Sequence[Any]):
+        self._kernels = list(kernels)
+
+    def __call__(self, xyz: np.ndarray) -> np.ndarray:
+        return np.stack([kernel(xyz) for kernel in self._kernels], axis=-1).min(axis=-1)
+
+    def evaluate_batch(self, xyz: np.ndarray) -> np.ndarray:
+        return np.stack(
+            [kernel.evaluate_batch(xyz) for kernel in self._kernels],
+            axis=-1,
+        ).min(axis=-1)
+
+
+class _OcMesherTorchMinKernelAdapter(_OcMesherMinKernelAdapter):
+    def evaluate_batch_torch(self, xyz: Any) -> Any:
+        try:
+            import torch
+        except ImportError as exc:  # pragma: no cover - torchless environments
+            raise RuntimeError("torch is required for evaluate_batch_torch") from exc
+
+        outputs = [kernel.evaluate_batch_torch(xyz) for kernel in self._kernels]
+        tensors = [
+            value if isinstance(value, torch.Tensor) else torch.as_tensor(value, device=xyz.device)
+            for value in outputs
+        ]
+        return torch.stack(tensors, dim=-1).amin(dim=-1)
+
+
+def build_ocmesher_min_sdf_kernel(
+    kernels: list[Any],
+    *,
+    field_key: Any,
+    batch_size: int | None = None,
+) -> Any:
+    """Build a single min-reduction SDF kernel while preserving fast-path methods."""
+    wrapped_kernels = build_ocmesher_sdf_kernels(
+        kernels,
+        field_key=field_key,
+        batch_size=batch_size,
+    )
+    if all(callable(getattr(kernel, "evaluate_batch_torch", None)) for kernel in wrapped_kernels):
+        return _OcMesherTorchMinKernelAdapter(wrapped_kernels)
+    return _OcMesherMinKernelAdapter(wrapped_kernels)
+
+
 def build_ocmesher_sdf_kernels(
     kernels: list[Any],
     *,
@@ -303,15 +398,12 @@ def build_ocmesher_sdf_kernels(
 ) -> list[Any]:
     """Build backend-compatible SDF callables with optional batch-evaluate path."""
     return [
-        (
-            lambda x, k0=k: _evaluate_kernel_field(
-                k0,
-                x,
-                field_key=field_key,
-                batch_size=batch_size,
-            )
+        _wrap_ocmesher_sdf_kernel(
+            kernel,
+            field_key=field_key,
+            batch_size=batch_size,
         )
-        for k in kernels
+        for kernel in kernels
     ]
 
 

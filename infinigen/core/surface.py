@@ -175,6 +175,11 @@ def attribute_to_vertex_group(obj, attr, name=None, min_thresh=0, binary=False):
             group.add(indices.tolist(), 1.0, "ADD")
     else:
         if len(indices) > 0:
+            selected_weights = weights[indices]
+            if np.all(selected_weights == selected_weights[0]):
+                group.add(indices.tolist(), float(selected_weights[0]), "REPLACE")
+                return group
+
             deform_data = bmesh.new()
             deform_data.from_mesh(obj.data)
             deform_data.verts.ensure_lookup_table()

@@ -51,6 +51,7 @@ from infinigen.terrain.mesher import (
     UniformMesher,
 )
 from infinigen.terrain.mesher.backend_protocol import (
+    build_ocmesher_min_sdf_kernel,
     build_ocmesher_sdf_kernels,
     collect_ocmesher_backend_capabilities,
     normalize_ocmesher_result,
@@ -306,13 +307,12 @@ class CollectiveOcMesher(UntexturedOcMesher):
         _log_ocmesher_backend_capabilities_once(self, runtime_kwargs)
 
     def __call__(self, kernels):
-        kernel_fns = build_ocmesher_sdf_kernels(
-            kernels,
-            field_key=Vars.SDF,
-            batch_size=self._sdf_batch_size,
-        )
         sdf_kernels = [
-            lambda x: np.stack([k(x) for k in kernel_fns], -1).min(axis=-1)
+            build_ocmesher_min_sdf_kernel(
+                kernels,
+                field_key=Vars.SDF,
+                batch_size=self._sdf_batch_size,
+            )
         ]
         result = UntexturedOcMesher.__call__(self, sdf_kernels)
         meshes, in_view_tags = normalize_ocmesher_result(

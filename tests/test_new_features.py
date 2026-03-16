@@ -384,6 +384,62 @@ class TestOcMesherBackendProtocol:
         assert np.all(values[3:6] == 2)
         assert np.all(values[6:] == 3)
 
+    def test_sdf_kernel_adapter_preserves_torch_fast_path_and_metadata(self):
+        mod = _get_backend_protocol()
+        bundle = object()
+
+        class DummyKernel:
+            def __init__(self):
+                self._ocmesher_torch_bundle = bundle
+
+            def evaluate_batch(self, xyz):
+                return {"sdf": xyz[:, 0] + 1}
+
+            def evaluate_batch_torch(self, xyz):
+                return {"sdf": xyz[:, 0] + 2}
+
+            def __call__(self, xyz):
+                return {"sdf": xyz[:, 0]}
+
+        [kernel] = mod.build_ocmesher_sdf_kernels(
+            [DummyKernel()],
+            field_key="sdf",
+            batch_size=4,
+        )
+
+        xyz = np.arange(9, dtype=np.float32).reshape(3, 3)
+        assert kernel._ocmesher_torch_bundle is bundle
+        np.testing.assert_allclose(kernel.evaluate_batch(xyz), xyz[:, 0] + 1)
+        np.testing.assert_allclose(kernel.evaluate_batch_torch(xyz), xyz[:, 0] + 2)
+
+    def test_min_sdf_kernel_preserves_torch_batch_reduction(self):
+        mod = _get_backend_protocol()
+
+        class DummyKernel:
+            def __init__(self, bias):
+                self._bias = bias
+
+            def evaluate_batch(self, xyz):
+                return {"sdf": xyz[:, 0] + self._bias}
+
+            def evaluate_batch_torch(self, xyz):
+                return {"sdf": xyz[:, 0] + self._bias}
+
+            def __call__(self, xyz):
+                return {"sdf": xyz[:, 0] + self._bias}
+
+        kernel = mod.build_ocmesher_min_sdf_kernel(
+            [DummyKernel(3), DummyKernel(1)],
+            field_key="sdf",
+            batch_size=8,
+        )
+
+        xyz = np.arange(9, dtype=np.float32).reshape(3, 3)
+        expected = xyz[:, 0] + 1
+        np.testing.assert_allclose(kernel(xyz), expected)
+        np.testing.assert_allclose(kernel.evaluate_batch(xyz), expected)
+        np.testing.assert_allclose(kernel.evaluate_batch_torch(xyz), expected)
+
     def test_stream_policy_auto_is_guarded_to_sync_when_cuda_unavailable(self):
         mod = _get_backend_protocol()
 

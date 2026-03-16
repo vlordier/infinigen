@@ -37,6 +37,10 @@ SPECIAL_BAKE = {"METAL": "Metallic", "TRANSMISSION": "Transmission Weight"}
 ALL_BAKE = BAKE_TYPES | SPECIAL_BAKE
 
 
+def _view_layer_object_names() -> set[str]:
+    return {obj.name for obj in bpy.context.view_layer.objects}
+
+
 def apply_all_modifiers(obj):
     for mod in obj.modifiers:
         if mod is None:
@@ -780,11 +784,12 @@ def bake_object(obj, dest, img_size, export_usd, export_name=None):
 
 
 def bake_scene(folderPath: Path, image_res, vertex_colors, export_usd):
+    view_layer_object_names = _view_layer_object_names()
     for obj in bpy.data.objects:
         logging.info("---------------------------")
         logging.info(obj.name)
 
-        if obj.type != "MESH" or obj not in list(bpy.context.view_layer.objects):
+        if obj.type != "MESH" or obj.name not in view_layer_object_names:
             logging.info("Not mesh, skipping ...")
             continue
 
@@ -907,7 +912,9 @@ def export_single_obj(
     bpy.context.scene.cycles.tile_x = image_res
     bpy.context.scene.cycles.tile_y = image_res
 
-    if obj.type != "MESH" or obj not in list(bpy.context.view_layer.objects):
+    view_layer_object_names = _view_layer_object_names()
+
+    if obj.type != "MESH" or obj.name not in view_layer_object_names:
         raise ValueError("Object not mesh")
 
     if export_usd:
@@ -941,7 +948,7 @@ def export_single_obj(
         obj.type != "MESH"
         or obj.hide_render
         or len(obj.data.vertices) == 0
-        or obj not in list(bpy.context.view_layer.objects)
+        or obj.name not in view_layer_object_names
     ):
         raise ValueError("Object is not mesh or hidden from render")
 
@@ -1002,7 +1009,9 @@ def export_sim_ready(
     bpy.context.scene.cycles.tile_x = image_res
     bpy.context.scene.cycles.tile_y = image_res
 
-    if obj.type != "MESH" or obj not in list(bpy.context.view_layer.objects):
+    view_layer_object_names = _view_layer_object_names()
+
+    if obj.type != "MESH" or obj.name not in view_layer_object_names:
         raise ValueError("Object not mesh")
 
     # export the textures
@@ -1032,7 +1041,7 @@ def export_sim_ready(
         obj.type != "MESH"
         or obj.hide_render
         or len(obj.data.vertices) == 0
-        or obj not in list(bpy.context.view_layer.objects)
+        or obj.name not in view_layer_object_names
     ):
         raise ValueError("Object is not mesh or hidden from render")
 
@@ -1175,8 +1184,10 @@ def export_curr_scene(
 
     collection_views, obj_views = update_visibility()
 
+    view_layer_object_names = _view_layer_object_names()
+
     for obj in bpy.data.objects:
-        if obj.type != "MESH" or obj not in list(bpy.context.view_layer.objects):
+        if obj.type != "MESH" or obj.name not in view_layer_object_names:
             continue
         if export_usd:
             apply_all_modifiers(obj)
@@ -1228,7 +1239,7 @@ def export_curr_scene(
                 obj.type != "MESH"
                 or obj.hide_render
                 or len(obj.data.vertices) == 0
-                or obj not in list(bpy.context.view_layer.objects)
+                or obj.name not in view_layer_object_names
             ):
                 continue
 

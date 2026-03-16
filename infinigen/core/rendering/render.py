@@ -43,6 +43,10 @@ TRANSPARENT_SHADERS = {Nodes.TranslucentBSDF, Nodes.TransparentBSDF}
 logger = logging.getLogger(__name__)
 
 
+def _visible_render_objects():
+    return tuple(obj for obj in bpy.data.objects if not obj.hide_render)
+
+
 def remove_translucency():
     # The asserts were added since these edge cases haven't appeared yet -Lahav
     for material in bpy.data.materials:
@@ -68,13 +72,16 @@ def remove_translucency():
 
 def set_pass_indices():
     tree_output = {}
+    visible_objects = _visible_render_objects()
+    visible_names = {obj.name for obj in visible_objects}
     index = 1
-    for obj in bpy.data.objects:
-        if obj.hide_render:
-            continue
+
+    for obj in visible_objects:
         if obj.pass_index == 0:
             obj.pass_index = index
             index += 1
+
+    for obj in visible_objects:
         object_dict = {"type": obj.type, "object_index": obj.pass_index, "children": []}
         if obj.type == "MESH":
             object_dict["num_verts"] = len(obj.data.vertices)
@@ -83,11 +90,8 @@ def set_pass_indices():
             object_dict["unapplied_modifiers"] = obj.modifiers.keys()
         tree_output[obj.name] = object_dict
         for child_obj in obj.children:
-            if child_obj.pass_index == 0:
-                child_obj.pass_index = index
-                index += 1
-            object_dict["children"].append(child_obj.pass_index)
-        index += 1
+            if child_obj.name in visible_names:
+                object_dict["children"].append(child_obj.pass_index)
     return tree_output
 
 
