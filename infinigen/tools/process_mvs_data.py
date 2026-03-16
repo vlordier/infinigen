@@ -7,6 +7,7 @@ import argparse
 import os
 import shutil
 from pathlib import Path
+from typing import Dict, Tuple
 
 import cv2
 import numpy as np
@@ -29,7 +30,7 @@ def from_homog(x):
     return x[..., :-1] / x[..., [-1]]
 
 
-_coords_cache = {}
+_coords_cache: Dict[Tuple[str, int, int, int], torch.Tensor] = {}
 
 
 def coords_grid(batch, ht, wd, device):
@@ -176,41 +177,51 @@ if __name__ == "__main__":
     setup_torch_runtime(device)
 
     def worker(scene):
-        cam_ids = [
+        cam_ids = sorted(
+            [
             x[:-4]
             for x in os.listdir(target_folder / scene / "images")
             if x.endswith(".png")
-        ]
+            ]
+        )
         depth_cache = {
             cam_id: np.load(target_folder / scene / f"depths/{cam_id}.npy")
             for cam_id in cam_ids
         }
-        cam_cache = {
-            cam_id: np.load(target_folder / scene / f"cameras/{cam_id}.npz")
-            for cam_id in cam_ids
-        }
+        cam_cache = {}
+        for cam_id in cam_ids:
+            with np.load(target_folder / scene / f"cameras/{cam_id}.npz") as cam_npz:
+                cam_cache[cam_id] = {"K": cam_npz["K"], "T": cam_npz["T"]}
+
+        n_cams = len(cam_ids)
+        cov_matrix = np.ones((n_cams, n_cams), dtype=np.float32)
+        for i in range(n_cams):
+            depth0 = depth_cache[cam_ids[i]]
+            camview0 = cam_cache[cam_ids[i]]
+            for j in range(i + 1, n_cams):
+                depth1 = depth_cache[cam_ids[j]]
+                camview1 = cam_cache[cam_ids[j]]
+                cov = compute_covisibility(depth0, depth1, camview0, camview1, device=device)
+                cov_matrix[i, j] = cov
+                cov_matrix[j, i] = cov
+
         with open(target_folder / scene / "pairs.txt", "w") as f:
-            for cam_id0 in cam_ids:
+            for i, cam_id0 in enumerate(cam_ids):
                 f.write(f"{cam_id0} ")
-                depth0 = depth_cache[cam_id0]
-                camview0 = cam_cache[cam_id0]
-                for cam_id1 in cam_ids:
-                    if cam_id1 == cam_id0:
+                for j, cam_id1 in enumerate(cam_ids):
+                    if i == j:
                         continue
-                    depth1 = depth_cache[cam_id1]
-                    camview1 = cam_cache[cam_id1]
-                    cov = compute_covisibility(
-                        depth0, depth1, camview0, camview1, device=device
-                    )
+                    cov = cov_matrix[i, j]
                     f.write(f" {cam_id1} {cov}")
                 f.write("\n")
+
         thumbnails = []
-        for image in os.listdir(target_folder / scene / "images"):
-            im = cv2.imread(target_folder / scene / "images" / image)
+        for cam_id in cam_ids:
+            im = cv2.imread(str(target_folder / scene / "images" / f"{cam_id}.png"))
             H, W = im.shape[:2]
             thumbnails.append(cv2.resize(im, (W // 10, H // 10)))
         thumbnails = np.concatenate(thumbnails, 1)
-        cv2.imwrite(target_folder / scene / "thumbnails.png", thumbnails)
+        cv2.imwrite(str(target_folder / scene / "thumbnails.png"), thumbnails)
 
     log_folder = "~/sc/logs/%j"
     executor = submitit.AutoExecutor(folder=log_folder)
