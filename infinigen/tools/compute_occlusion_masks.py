@@ -72,36 +72,66 @@ def _torch_neighbor_offsets(device):
 
 
 def get_mask_torch(depth, flow, dst_depth, device):
+    return get_mask_torch_batch(depth[None], flow[None], dst_depth[None], device)[0]
+
+
+def get_mask_torch_batch(depth, flow, dst_depth, device):
     depth_t = torch.as_tensor(depth, device=device, dtype=torch.float32)
     flow_t = torch.as_tensor(flow, device=device, dtype=torch.float32)
     dst_depth_t = torch.as_tensor(dst_depth, device=device, dtype=torch.float32)
 
-    H, W = depth_t.shape
-    base_xy = _torch_base_grid(H, W, device)
+    B, H, W = depth_t.shape
+    base_xy = _torch_base_grid(H, W, device).unsqueeze(0)
     target_xy = base_xy + flow_t[..., :2] * 2.0
     target_z = depth_t + flow_t[..., 2]
 
-    dst_depth_t = dst_depth_t[None, None]
+    dst_depth_t = dst_depth_t[:, None]
     denom_x = max(W - 1, 1)
     denom_y = max(H - 1, 1)
     offsets = _torch_neighbor_offsets(device)
-    sx = target_xy[..., 0].unsqueeze(0) + offsets[:, 0].view(-1, 1, 1)
-    sy = target_xy[..., 1].unsqueeze(0) + offsets[:, 1].view(-1, 1, 1)
+    K = offsets.shape[0]
+    sx = target_xy[..., 0].unsqueeze(1) + offsets[:, 0].view(1, -1, 1, 1)
+    sy = target_xy[..., 1].unsqueeze(1) + offsets[:, 1].view(1, -1, 1, 1)
     gx = 2.0 * sx / float(denom_x) - 1.0
     gy = 2.0 * sy / float(denom_y) - 1.0
-    grid = torch.stack((gx, gy), dim=-1)
+    grid = torch.stack((gx, gy), dim=-1).reshape(B * K, H, W, 2)
 
     sampled = F.grid_sample(
-        dst_depth_t.expand(offsets.shape[0], -1, -1, -1),
+        dst_depth_t.unsqueeze(1).expand(-1, K, -1, -1, -1).reshape(B * K, 1, H, W),
         grid,
         mode="bilinear",
         padding_mode="zeros",
         align_corners=True,
-    )[:, 0]
+    )[:, 0].reshape(B, K, H, W)
 
-    valid = target_z >= 0
-    mask = valid & (target_z.unsqueeze(0) <= sampled)
-    return mask.any(dim=0).cpu().numpy()
+    valid = target_z.unsqueeze(1) >= 0
+    mask = valid & (target_z.unsqueeze(1) <= sampled)
+    return mask.any(dim=1).cpu().numpy()
+
+
+def save_mask(file_path, data_type, mask):
+    np.save(
+        file_path.parent / (data_type + "Mask" + file_path.name[len(data_type) :]),
+        mask,
+    )
+    cv2.imwrite(
+        str(
+            file_path.parent
+            / (data_type + "Mask" + file_path.name[len(data_type) : -4] + ".png")
+        ),
+        mask.astype(np.uint8) * 255,
+    )
+
+
+def flush_torch_batch(pending, device):
+    if not pending:
+        return
+    depth = np.stack([x[2] for x in pending], axis=0)
+    flow = np.stack([x[4] for x in pending], axis=0)
+    dst_depth = np.stack([x[3] for x in pending], axis=0)
+    masks = get_mask_torch_batch(depth, flow, dst_depth, device)
+    for (file_path, data_type, *_), mask in zip(pending, masks):
+        save_mask(file_path, data_type, mask)
 
 
 def get_mask(depth, flow, dst_depth):
@@ -125,6 +155,7 @@ if __name__ == "__main__":
     parser.add_argument("target_frames_dir", type=Path)
     parser.add_argument("point_traj_source_frame", type=int)
     parser.add_argument("--device", type=str, default=None)
+    parser.add_argument("--batch-size", type=int, default=8)
     args = parser.parse_args()
     assert args.target_frames_dir.exists()
     assert args.target_frames_dir.name.startswith("frames_")
@@ -133,7 +164,8 @@ if __name__ == "__main__":
     setup_torch_runtime(device)
     use_torch = device.type != "cpu"
 
-    for file_path in args.target_frames_dir.glob("*.npy"):
+    pending = []
+    for file_path in sorted(args.target_frames_dir.glob("*.npy")):
         info = parse_suffix(file_path.name)
         data_type = file_path.name.split("_")[0]
         if not file_path.name.endswith(".npy"):
@@ -161,17 +193,16 @@ if __name__ == "__main__":
             continue
         flow = np.load(file_path)
         if use_torch:
-            mask = get_mask_torch(depth, flow, dst_depth, device)
+            sample_shape = flow.shape
+            if pending and pending[0][4].shape != sample_shape:
+                flush_torch_batch(pending, device)
+                pending = []
+            pending.append((file_path, data_type, depth, dst_depth, flow))
+            if len(pending) >= max(1, args.batch_size):
+                flush_torch_batch(pending, device)
+                pending = []
         else:
             mask = get_mask(depth, flow, dst_depth)
-        np.save(
-            file_path.parent / (data_type + "Mask" + file_path.name[len(data_type) :]),
-            mask,
-        )
-        cv2.imwrite(
-            str(
-                file_path.parent
-                / (data_type + "Mask" + file_path.name[len(data_type) : -4] + ".png")
-            ),
-            mask.astype(np.uint8) * 255,
-        )
+            save_mask(file_path, data_type, mask)
+    if use_torch:
+        flush_torch_batch(pending, device)
