@@ -50,6 +50,37 @@ def _base_coords_torch(H, W, device):
     _coord_cache_torch[key] = cached
     return cached
 
+
+def _warp_image_torch(image, coords, device):
+    H, W = image.shape[:2]
+    image_t = torch.as_tensor(image, dtype=torch.float32, device=device)
+    if image_t.ndim == 2:
+        image_t = image_t.unsqueeze(-1)
+    image_t = image_t.permute(2, 0, 1).unsqueeze(0)
+
+    if W > 1:
+        x = (coords[..., 0] / (W - 1)) * 2.0 - 1.0
+    else:
+        x = torch.zeros_like(coords[..., 0])
+    if H > 1:
+        y = (coords[..., 1] / (H - 1)) * 2.0 - 1.0
+    else:
+        y = torch.zeros_like(coords[..., 1])
+
+    grid = torch.stack((x, y), dim=-1).unsqueeze(0)
+    warped = F.grid_sample(
+        image_t,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=True,
+    )
+    warped = warped[0].permute(1, 2, 0).clamp(0, 255)
+    out = warped.to(dtype=torch.uint8).cpu().numpy()
+    if image.ndim == 2:
+        return out[..., 0]
+    return out
+
 """
 Usage: python -m tools.ground_truth.rigid_warp <scene-folder> <frame-index-i>
 Output:
@@ -87,14 +118,14 @@ if __name__ == "__main__":
         flow_t = flow_t.permute(2, 0, 1).unsqueeze(0)
         flow2d = F.interpolate(flow_t, size=(H, W), mode="bilinear", align_corners=False)
         flow2d = flow2d[0].permute(1, 2, 0)
-        new_coords = (flow2d + _base_coords_torch(H, W, device)).cpu().numpy()
+        new_coords = flow2d + _base_coords_torch(H, W, device)
+        warped_image = _warp_image_torch(image2, new_coords, device)
     else:
         flow2d = cv2.resize(flow, dsize=(W, H), interpolation=cv2.INTER_LINEAR)[..., :2]
         new_coords = flow2d.astype(np.float32, copy=False) + _base_coords(H, W)
-
-    warped_image = cv2.remap(
-        image2, new_coords.astype(np.float32, copy=False), None, interpolation=cv2.INTER_LINEAR
-    )
+        warped_image = cv2.remap(
+            image2, new_coords.astype(np.float32, copy=False), None, interpolation=cv2.INTER_LINEAR
+        )
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image1)

@@ -10,6 +10,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+import torch.nn.functional as F
 from imageio.v3 import imread, imwrite
 
 from infinigen.core.util.device import get_torch_device, setup_torch_runtime
@@ -65,6 +66,37 @@ def pixel_grid_torch(H, W, device, dtype=torch.float32):
     return cached
 
 
+def warp_image_torch(image, coords, device):
+    H, W = image.shape[:2]
+    image_t = torch.as_tensor(image, dtype=torch.float32, device=device)
+    if image_t.ndim == 2:
+        image_t = image_t.unsqueeze(-1)
+    image_t = image_t.permute(2, 0, 1).unsqueeze(0)
+
+    if W > 1:
+        x = (coords[..., 0] / (W - 1)) * 2.0 - 1.0
+    else:
+        x = torch.zeros_like(coords[..., 0])
+    if H > 1:
+        y = (coords[..., 1] / (H - 1)) * 2.0 - 1.0
+    else:
+        y = torch.zeros_like(coords[..., 1])
+
+    grid = torch.stack((x, y), dim=-1).unsqueeze(0)
+    warped = F.grid_sample(
+        image_t,
+        grid,
+        mode="bilinear",
+        padding_mode="zeros",
+        align_corners=True,
+    )
+    warped = warped[0].permute(1, 2, 0).clamp(0, 255)
+    out = warped.to(dtype=torch.uint8).cpu().numpy()
+    if image.ndim == 2:
+        return out[..., 0]
+    return out
+
+
 def reproject(depth1, pose1, pose2_inv, K1_inv, K2):
     H, W = depth1.shape
     img_1_coords = pixel_grid(H, W)
@@ -88,7 +120,7 @@ def reproject_torch(depth1, pose1, pose2_inv, K1_inv, K2, device):
     cam2_coords = torch.matmul(cam1_coords, rel_pose[:3, :3].T) + rel_pose[:3, 3]
     proj = torch.matmul(cam2_coords, K2_t.T)
     z = proj[..., 2:3].clamp_min(1e-8)
-    return (proj[..., :2] / z).cpu().numpy()
+    return proj[..., :2] / z
 
 
 if __name__ == "__main__":
@@ -120,18 +152,27 @@ if __name__ == "__main__":
     K1_inv = np.linalg.inv(K1)
 
     H, W, _ = image1.shape
-    depth1 = cv2.resize(
-        np.load(depth_path), dsize=(W, H), interpolation=cv2.INTER_LINEAR
-    )
+    depth_raw = np.load(depth_path)
+    if use_torch:
+        depth1 = (
+            F.interpolate(
+                torch.as_tensor(depth_raw, dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0),
+                size=(H, W),
+                mode="bilinear",
+                align_corners=False,
+            )[0, 0]
+        )
+    else:
+        depth1 = cv2.resize(depth_raw, dsize=(W, H), interpolation=cv2.INTER_LINEAR)
 
     if use_torch:
         img2_coords = reproject_torch(depth1, pose1, pose2_inv, K1_inv, K2, device)
+        warped_image = warp_image_torch(image2, img2_coords, device)
     else:
         img2_coords = reproject(depth1, pose1, pose2_inv, K1_inv, K2)
-
-    warped_image = cv2.remap(
-        image2, img2_coords.astype(np.float32), None, interpolation=cv2.INTER_LINEAR
-    )
+        warped_image = cv2.remap(
+            image2, img2_coords.astype(np.float32), None, interpolation=cv2.INTER_LINEAR
+        )
 
     args.output.mkdir(exist_ok=True)
     imwrite(args.output / "A.png", image1)
