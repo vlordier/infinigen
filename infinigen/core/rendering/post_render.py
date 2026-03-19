@@ -29,7 +29,53 @@ logger = logging.getLogger(__name__)
 def load_exr(path):
     assert Path(path).exists() and Path(path).suffix == ".exr", path
     img = cv2.imread(str(path), cv2.IMREAD_ANYCOLOR | cv2.IMREAD_ANYDEPTH)
-    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    if img is None:
+        return _load_exr_openexr(path)
+
+    # cv2 may return HxW (single channel) or HxWxC depending on EXR layout.
+    if img.ndim == 2:
+        return np.repeat(img[..., None], 3, axis=2)
+
+    if img.ndim == 3:
+        if img.shape[2] == 1:
+            return np.repeat(img, 3, axis=2)
+        if img.shape[2] == 2:
+            pad = np.zeros_like(img[..., :1])
+            img = np.concatenate([img, pad], axis=2)
+        if img.shape[2] >= 3:
+            return cv2.cvtColor(img[..., :3], cv2.COLOR_BGR2RGB)
+
+    # Last-resort path for unusual EXR channel encodings
+    return _load_exr_openexr(path)
+
+
+def _load_exr_openexr(path):
+    file = OpenEXR.InputFile(str(path))
+    header = file.header()
+    channels = header["channels"]
+    dw = header["dataWindow"]
+    h = dw.max.y - dw.min.y + 1
+    w = dw.max.x - dw.min.x + 1
+
+    def _read_chan(name):
+        c = channels.get(name)
+        if c is None:
+            return None
+        data = np.frombuffer(file.channel(name, c.type), np.float32)
+        return data.reshape((h, w))
+
+    r = _read_chan("R")
+    g = _read_chan("G")
+    b = _read_chan("B")
+
+    if r is not None and g is not None and b is not None:
+        return np.stack([r, g, b], axis=2)
+
+    # Fallback to first available channel replicated to RGB
+    first_name, first_meta = next(iter(channels.items()))
+    data = np.frombuffer(file.channel(first_name, first_meta.type), np.float32)
+    single = data.reshape((h, w))
+    return np.repeat(single[..., None], 3, axis=2)
 
 
 load_flow = load_exr
@@ -77,11 +123,72 @@ def load_normals(path, camera=None) -> np.ndarray:
 
 
 def load_seg_mask(p):
-    return load_single_channel(p).astype(np.int64)
+    # load_single_channel reads the first channel in the EXR, which may be
+    # IndexOB.A (alpha=1.0) rather than the actual IndexOB.R data.  Read
+    # IndexOB.R explicitly when that channel is present.
+    import OpenEXR
+    file = OpenEXR.InputFile(str(p))
+    hdr = file.header()
+    channels = hdr["channels"]
+    dw = hdr["dataWindow"]
+    h = dw.max.y - dw.min.y + 1
+    w = dw.max.x - dw.min.x + 1
+
+    def _read_chan(name):
+        c = channels.get(name)
+        if c is None:
+            return None
+        return np.frombuffer(file.channel(name, c.type), np.float32).reshape((h, w))
+
+    r = _read_chan("IndexOB.R")
+    if r is None:
+        r = _read_chan("IndexMA.R")
+    if r is not None:
+        data = r
+    else:
+        data = load_single_channel(p)
+    if np.issubdtype(data.dtype, np.floating):
+        data = np.rint(data)
+    return data.astype(np.int64)
 
 
 def load_uniq_inst(p):
-    return load_exr(p).view(np.int32)
+    """Load unique-instance segmentation from an emission-render EXR.
+
+    Flat-shading renders write emission RGB colors (one unique color per
+    instance) to the "UniqueInstances" file.  The EXR channels are named
+    ``UniqueInstances.A``, ``UniqueInstances.B``, ``UniqueInstances.G``,
+    ``UniqueInstances.R`` — we must read them in the correct RGB order
+    rather than relying on the arbitrary ordering that OpenEXR returns.
+    """
+    import OpenEXR
+    file = OpenEXR.InputFile(str(p))
+    hdr = file.header()
+    channels = hdr["channels"]
+    dw = hdr["dataWindow"]
+    h = dw.max.y - dw.min.y + 1
+    w = dw.max.x - dw.min.x + 1
+
+    def _read_chan(name):
+        c = channels.get(name)
+        if c is None:
+            return None
+        data = np.frombuffer(file.channel(name, c.type), np.float32)
+        return data.reshape((h, w))
+
+    r = _read_chan("UniqueInstances.R")
+    g = _read_chan("UniqueInstances.G")
+    b = _read_chan("UniqueInstances.B")
+    if r is not None and g is not None and b is not None:
+        data = np.stack([r, g, b], axis=2)
+    else:
+        # Fallback: load_exr handles generic channel layouts
+        data = load_exr(p)
+
+    if np.issubdtype(data.dtype, np.floating):
+        # Scale emission floats to [0, 65535] uint16 for stable color hashing
+        data = np.clip(np.rint(data * 65535.0), 0, 65535).astype(np.uint16)
+    return data
 
 
 def colorize_flow(optical_flow):
@@ -122,18 +229,53 @@ def colorize_int_array(data, color_seed=0):
     H, W, *_ = data.shape
     data = data.reshape((H * W, -1))
     uniq, indices = unique_rows(data, return_inverse=True)
-    random_states = [
-        np.random.RandomState(e[:2].astype(np.uint32) + color_seed) for e in uniq
-    ]
-    unique_colors = (
-        np.asarray(
-            [
-                colorsys.hsv_to_rgb(s.uniform(0, 1), s.uniform(0.1, 1), 1)
-                for s in random_states
-            ]
-        )
-        * 255
-    ).astype(np.uint8)
+    # Keep visualization high-contrast: reserve pure black for the all-zero label
+    # (commonly background). For non-zero labels, use a vivid categorical palette
+    # first, then deterministic HSV colors as overflow for very high label counts.
+    unique_colors = np.zeros((len(uniq), 3), dtype=np.uint8)
+
+    vivid_palette = np.array(
+        [
+            (255, 0, 0),
+            (0, 255, 0),
+            (0, 0, 255),
+            (255, 255, 0),
+            (255, 0, 255),
+            (0, 255, 255),
+            (255, 128, 0),
+            (128, 0, 255),
+            (0, 128, 255),
+            (255, 0, 128),
+            (0, 255, 128),
+            (128, 255, 0),
+        ],
+        dtype=np.uint8,
+    )
+    palette_size = len(vivid_palette)
+    palette_offset = int(color_seed) % palette_size
+    palette_stride = 5  # coprime with 12 to traverse all palette entries
+
+    golden_ratio_conjugate = 0.6180339887498949
+    seed_phase = (float(color_seed) * 0.17320508075688773) % 1.0
+    nonzero_rank = 0
+    for i, row in enumerate(uniq):
+        if np.all(row == 0):
+            unique_colors[i] = (0, 0, 0)
+            continue
+
+        if nonzero_rank < palette_size:
+            palette_idx = (palette_offset + nonzero_rank * palette_stride) % palette_size
+            unique_colors[i] = vivid_palette[palette_idx]
+        else:
+            overflow_rank = nonzero_rank - palette_size
+            h = (seed_phase + overflow_rank * golden_ratio_conjugate) % 1.0
+            s = 0.95
+            v = 0.95
+            unique_colors[i] = (np.asarray(colorsys.hsv_to_rgb(h, s, v)) * 255).astype(
+                np.uint8
+            )
+        nonzero_rank += 1
+
     return unique_colors[indices].reshape((H, W, 3))
 
 

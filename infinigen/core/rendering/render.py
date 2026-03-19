@@ -43,6 +43,88 @@ TRANSPARENT_SHADERS = {Nodes.TranslucentBSDF, Nodes.TransparentBSDF}
 logger = logging.getLogger(__name__)
 
 
+# Blender 5 renamed many Render Layers output sockets from short IDs
+# (e.g. DiffDir) to human-readable labels (e.g. Diffuse Direct).
+LEGACY_RENDER_SOCKET_REMAP = {
+    "DiffDir": "Diffuse Direct",
+    "DiffCol": "Diffuse Color",
+    "DiffInd": "Diffuse Indirect",
+    "GlossDir": "Glossy Direct",
+    "GlossCol": "Glossy Color",
+    "GlossInd": "Glossy Indirect",
+    "TransDir": "Transmission Direct",
+    "TransCol": "Transmission Color",
+    "TransInd": "Transmission Indirect",
+    "VolumeDir": "Volume Direct",
+    "Emit": "Emission",
+    "Env": "Environment",
+    "AO": "Ambient Occlusion",
+    "IndexOB": "Object Index",
+    "IndexMA": "Material Index",
+}
+
+# Fallback socket names by pass identifier when configured socket names do not
+# exist in the current Blender version.
+PASS_TO_SOCKET_FALLBACKS = {
+    "z": ["Depth"],
+    "normal": ["Normal"],
+    "vector": ["Vector"],
+    "object_index": ["Object Index", "IndexOB"],
+    "material_index": ["Material Index", "IndexMA"],
+    "emit": ["Emission", "Emit"],
+    "environment": ["Environment", "Env"],
+    "ambient_occlusion": ["Ambient Occlusion", "AO"],
+    "diffuse_direct": ["Diffuse Direct", "DiffDir"],
+    "diffuse_color": ["Diffuse Color", "DiffCol"],
+    "diffuse_indirect": ["Diffuse Indirect", "DiffInd"],
+    "glossy_direct": ["Glossy Direct", "GlossDir"],
+    "glossy_color": ["Glossy Color", "GlossCol"],
+    "glossy_indirect": ["Glossy Indirect", "GlossInd"],
+    "transmission_direct": ["Transmission Direct", "TransDir"],
+    "transmission_color": ["Transmission Color", "TransCol"],
+    "transmission_indirect": ["Transmission Indirect", "TransInd"],
+    "volume_direct": ["Volume Direct", "VolumeDir"],
+}
+
+
+def _normalize_socket_name(name: str) -> str:
+    return "".join(ch for ch in name.lower() if ch.isalnum())
+
+
+def _resolve_render_socket(render_layers, viewlayer_pass: str, socket_name: str):
+    # 1) direct lookup
+    sock = render_layers.outputs.get(socket_name)
+    if sock is not None:
+        return sock, socket_name
+
+    # 2) explicit legacy remap
+    remapped = LEGACY_RENDER_SOCKET_REMAP.get(socket_name)
+    if remapped is not None:
+        sock = render_layers.outputs.get(remapped)
+        if sock is not None:
+            return sock, remapped
+
+    # 3) pass-based candidate list
+    for candidate in PASS_TO_SOCKET_FALLBACKS.get(viewlayer_pass, []):
+        sock = render_layers.outputs.get(candidate)
+        if sock is not None:
+            return sock, candidate
+
+    # 4) normalized-name match for robustness
+    target_norms = {
+        _normalize_socket_name(socket_name),
+        _normalize_socket_name(remapped) if remapped is not None else "",
+        *(_normalize_socket_name(x) for x in PASS_TO_SOCKET_FALLBACKS.get(viewlayer_pass, [])),
+    }
+    target_norms.discard("")
+
+    for out in render_layers.outputs:
+        if _normalize_socket_name(out.name) in target_norms:
+            return out, out.name
+
+    return None, None
+
+
 def _visible_render_objects():
     return tuple(obj for obj in bpy.data.objects if not obj.hide_render)
 
@@ -160,29 +242,61 @@ def configure_compositor_output(
     image_noisy,
     passes_to_save,
     saving_ground_truth,
+    ground_truth_image_name="UniqueInstances",
 ):
-    file_output_node_png = nw.new_node(
-        Nodes.OutputFile,
-        attrs={
-            "base_path": str(frames_folder),
-            "format.file_format": "PNG",
-            "format.color_mode": "RGB",
-        },
-    )
-    file_output_node_exr = nw.new_node(
-        Nodes.OutputFile,
-        attrs={
-            "base_path": str(frames_folder),
-            "format.file_format": "OPEN_EXR",
-            "format.color_mode": "RGB",
-        },
-    )
+    def _new_output_node(file_format: str):
+        node = nw.new_node(Nodes.OutputFile)
+        if hasattr(node, "base_path"):
+            node.base_path = str(frames_folder)
+        if hasattr(node, "directory"):
+            node.directory = str(frames_folder)
+        try:
+            node.format.file_format = file_format
+        except TypeError:
+            supported_formats = {
+                item.identifier
+                for item in node.format.bl_rna.properties["file_format"].enum_items
+            }
+            if "OPEN_EXR_MULTILAYER" in supported_formats:
+                node.format.file_format = "OPEN_EXR_MULTILAYER"
+            elif "OPEN_EXR" in supported_formats:
+                node.format.file_format = "OPEN_EXR"
+            else:
+                node.format.file_format = next(iter(supported_formats))
+        node.format.color_mode = "RGB"
+        return node
+
+    file_output_node_png = _new_output_node("PNG")
+    file_output_node_exr = _new_output_node("OPEN_EXR")
     default_file_output_node = (
         file_output_node_exr if saving_ground_truth else file_output_node_png
     )
-    file_slot_list = []
+    output_name_targets = []
+    use_legacy_file_slots = hasattr(file_output_node_png, "file_slots")
     viewlayer = bpy.context.scene.view_layers["ViewLayer"]
     render_layers = nw.new_node(Nodes.RenderLayers)
+
+    def _create_output_input(node, socket_name: str, socket_type: str | None = None):
+        if use_legacy_file_slots:
+            slot_input = node.file_slots.new(socket_name)
+            output_name_targets.append((socket_name, node.file_slots[slot_input.name]))
+            return slot_input
+
+        socket_types = []
+        if socket_type is not None:
+            socket_types.append(socket_type)
+        socket_types.extend(["RGBA", "VECTOR", "FLOAT"])
+        for socket_type in socket_types:
+            try:
+                item = node.file_output_items.new(socket_type, socket_name)
+                output_name_targets.append((socket_name, node))
+                return node.inputs[item.name]
+            except TypeError:
+                continue
+        raise RuntimeError(
+            f"Failed creating compositor output item for {socket_name=} in Blender API"
+        )
+
     for viewlayer_pass, socket_name in passes_to_save:
         if hasattr(viewlayer, f"use_pass_{viewlayer_pass}"):
             setattr(viewlayer, f"use_pass_{viewlayer_pass}", True)
@@ -195,8 +309,50 @@ def configure_compositor_output(
             else file_output_node_exr
         )
 
-        slot_input = file_output_node.file_slots.new(socket_name)
-        render_socket = render_layers.outputs[socket_name]
+        if not use_legacy_file_slots:
+            # Blender 5+ has node-level file naming (no per-slot path), so use one
+            # output node per pass to preserve distinct pass file names.
+            file_output_node = _new_output_node(
+                "OPEN_EXR"
+                if (saving_ground_truth or viewlayer_pass == "material_index")
+                else "PNG"
+            )
+
+        render_socket, resolved_socket_name = _resolve_render_socket(
+            render_layers, viewlayer_pass, socket_name
+        )
+        if render_socket is None:
+            logger.warning(
+                "Skipping unavailable render pass output socket %s for viewlayer pass %s",
+                socket_name,
+                viewlayer_pass,
+            )
+            continue
+
+        if resolved_socket_name != socket_name:
+            logger.info(
+                "Remapped render pass socket %s -> %s for viewlayer pass %s",
+                socket_name,
+                resolved_socket_name,
+                viewlayer_pass,
+            )
+
+        output_socket_type = render_socket.type
+        output_item_type = {
+            "RGBA": "RGBA",
+            "VECTOR": "VECTOR",
+            "VALUE": "FLOAT",
+        }.get(output_socket_type, "FLOAT")
+
+        if viewlayer_pass in {"object_index", "material_index"}:
+            # Blender 5 EEVEE may not emit scalar index passes reliably through
+            # modern OutputFile VALUE/FLOAT items. Pack them into RGB channels
+            # so the compositor writes a concrete EXR, then decode from channel 0.
+            output_item_type = "RGBA"
+
+        slot_input = _create_output_input(
+            file_output_node, socket_name, socket_type=output_item_type
+        )
         match viewlayer_pass:
             case "vector":
                 separate_color = nw.new_node(Nodes.CompSeparateColor, [render_socket])
@@ -206,27 +362,62 @@ def configure_compositor_output(
                 )
                 nw.links.new(comnbine_color.outputs[0], slot_input)
             case "normal":
-                color = nw.new_node(
-                    Nodes.CompositorMixRGB,
-                    [None, render_socket, (0, 0, 0, 0)],
-                    attrs={"blend_type": "ADD"},
-                ).outputs[0]
-                nw.links.new(color, slot_input)
+                try:
+                    color = nw.new_node(
+                        Nodes.CompositorMixRGB,
+                        [None, render_socket, (0, 0, 0, 0)],
+                        attrs={"blend_type": "ADD"},
+                    ).outputs[0]
+                    nw.links.new(color, slot_input)
+                except RuntimeError:
+                    logger.debug(
+                        "Compositor mix node unavailable; linking normal pass directly"
+                    )
+                    nw.links.new(render_socket, slot_input)
+            case "object_index" | "material_index":
+                packed_index = nw.new_node(
+                    Nodes.CompCombineColor,
+                    input_kwargs={"Alpha": 1.0},
+                    attrs={"mode": "RGB"},
+                )
+                nw.links.new(render_socket, packed_index.inputs["Red"])
+                nw.links.new(render_socket, packed_index.inputs["Green"])
+                nw.links.new(render_socket, packed_index.inputs["Blue"])
+                nw.links.new(packed_index.outputs[0], slot_input)
             case _:
                 nw.links.new(render_socket, slot_input)
-        file_slot_list.append(file_output_node.file_slots[slot_input.name])
 
-    slot_input = default_file_output_node.file_slots["Image"]
     image = image_denoised if image_denoised is not None else image_noisy
-    nw.links.new(image, default_file_output_node.inputs["Image"])
     if saving_ground_truth:
-        slot_input.path = "UniqueInstances"
+        if use_legacy_file_slots:
+            nw.links.new(image, default_file_output_node.inputs["Image"])
+            default_file_output_node.file_slots["Image"].path = ground_truth_image_name
+            output_name_targets.append(
+                (ground_truth_image_name, default_file_output_node.file_slots["Image"])
+            )
+        else:
+            ground_truth_node = _new_output_node("OPEN_EXR")
+            slot_input = _create_output_input(
+                ground_truth_node,
+                ground_truth_image_name,
+                socket_type="RGBA",
+            )
+            nw.links.new(image, slot_input)
     else:
-        nw.links.new(image, file_output_node_exr.inputs["Image"])
-        file_slot_list.append(file_output_node_exr.file_slots[slot_input.path])
-    file_slot_list.append(default_file_output_node.file_slots[slot_input.path])
+        if use_legacy_file_slots:
+            nw.links.new(image, default_file_output_node.inputs["Image"])
+            nw.links.new(image, file_output_node_exr.inputs["Image"])
+            output_name_targets.append(("Image", file_output_node_exr.file_slots["Image"]))
+            output_name_targets.append(
+                ("Image", default_file_output_node.file_slots["Image"])
+            )
+        else:
+            png_image_node = _new_output_node("PNG")
+            exr_image_node = _new_output_node("OPEN_EXR")
+            nw.links.new(image, _create_output_input(png_image_node, "Image"))
+            nw.links.new(image, _create_output_input(exr_image_node, "Image"))
 
-    return file_slot_list
+    return output_name_targets
 
 
 def shader_random(nw: NodeWrangler):
@@ -237,10 +428,14 @@ def shader_random(nw: NodeWrangler):
     white_noise_texture = nw.new_node(
         Nodes.WhiteNoiseTexture, input_kwargs={"Vector": object_info.outputs["Random"]}
     )
+    emission = nw.new_node(
+        Nodes.Emission,
+        input_kwargs={"Color": white_noise_texture.outputs["Color"]},
+    )
 
     nw.new_node(
         Nodes.MaterialOutput,
-        input_kwargs={"Surface": white_noise_texture.outputs["Color"]},
+        input_kwargs={"Surface": emission},
     )
 
 
@@ -251,12 +446,31 @@ def _replace_shader_with_randcolor(material: bpy.types.Material):
     logger.debug(f"Replacing shader with randcolor for {material.name}")
     nodes = nt.nodes
     object_info = nodes.new(type="ShaderNodeObjectInfo")
-    white_noise_texture = nodes.new(type="ShaderNodeTexWhiteNoise")
+    emission = nodes.new(type="ShaderNodeEmission")
     material_output = nodes["Material Output"]
-    nt.links.new(object_info.outputs["Random"], white_noise_texture.inputs["Vector"])
-    nt.links.new(
-        white_noise_texture.outputs["Color"], material_output.inputs["Surface"]
-    )
+    # Use object display color directly so each object gets a stable flat color,
+    # even when sharing materials.
+    nt.links.new(object_info.outputs["Color"], emission.inputs["Color"])
+    nt.links.new(emission.outputs[0], material_output.inputs["Surface"])
+
+
+def _replace_shader_with_object_index(material: bpy.types.Material):
+    """Replace material with a flat white emission.
+
+    Object indices are no longer encoded via per-material shader emission.
+    Instead, a dedicated EEVEE render pass uses compositor IDMask nodes
+    to read pass_index values directly from the scene, bypassing the
+    material layer entirely.
+    """
+    nt = material.node_tree
+    if nt is None:
+        return
+    nodes = nt.nodes
+    emission = nodes.new(type="ShaderNodeEmission")
+    emission.inputs["Color"].default_value = (1.0, 1.0, 1.0, 1.0)
+    emission.inputs["Strength"].default_value = 1.0
+    material_output = nodes["Material Output"]
+    nt.links.new(emission.outputs[0], material_output.inputs["Surface"])
 
 
 def _remove_volume_shading(material: bpy.types.Material):
@@ -272,7 +486,19 @@ def _remove_volume_shading(material: bpy.types.Material):
             nw.links.remove(vol_socket.links[0])
 
 
-def _replace_materials_with_flat_shading(obj: bpy.types.Object):
+def _replace_materials_with_flat_shading(
+    obj: bpy.types.Object, mode: Literal["random", "object_index"] = "random"
+):
+    if mode == "random":
+        # Seed object display color from pass_index for deterministic, per-object
+        # flat colors that do not depend on textures or shader randomness.
+        rng = np.random.default_rng(int(obj.pass_index))
+        obj.color = (*rng.uniform(0.1, 0.9, 3), 1.0)
+
+    shader_replacer = {
+        "random": _replace_shader_with_randcolor,
+        "object_index": _replace_shader_with_object_index,
+    }[mode]
     for i in range(len(obj.material_slots)):
         if obj.material_slots[i] is None or obj.material_slots[i].material is None:
             logger.debug(
@@ -280,22 +506,35 @@ def _replace_materials_with_flat_shading(obj: bpy.types.Object):
             )
             continue
         try:
-            _replace_shader_with_randcolor(obj.material_slots[i].material)
+            shader_replacer(obj.material_slots[i].material)
         except Exception as e:
             mat = obj.material_slots[i].material
             raise RuntimeError(
-                f"Error in blendergt flat_shading {_replace_shader_with_randcolor.__name__} for "
+                f"Error in blendergt flat_shading {shader_replacer.__name__} for "
                 f"{obj.name} with material slot {i} {mat.name}: {e}"
             ) from e
 
 
-def global_flat_shading():
-    # Remove all volumes in the scene as they cause noisy depth
+def _assign_atmosphere_flat_material(obj):
+    """Assign a pure-white emission material to the given object for flat annotation."""
+    mat = bpy.data.materials.new(name="flat_atmosphere")
+    mat.use_nodes = True
+    nw = NodeWrangler(mat.node_tree)
+    emission = nw.new_node(
+        Nodes.Emission,
+        input_kwargs={"Color": (1.0, 1.0, 1.0, 1.0), "Strength": 1.0},
+    )
+    nw.new_node(Nodes.MaterialOutput, input_kwargs={"Surface": emission})
+    obj.active_material = mat
+
+
+def global_flat_shading(mode: Literal["random", "object_index"] = "random"):
+    # Remove all volumes in the scene as they cause noisy depth and unstable
+    # segmentation colors under EEVEE flat shading.
     for obj in bpy.context.scene.view_layers["ViewLayer"].objects:
         if "fire_system_type" in obj and obj["fire_system_type"] == "volume":
             continue
-        if obj.name.lower() in {"atmosphere", "atmosphere_fine"}:
-            bpy.data.objects.remove(obj)
+        if obj.type not in {"MESH", "CURVE", "SURFACE", "META"}:
             continue
         if obj.active_material is None:
             continue
@@ -312,11 +551,15 @@ def global_flat_shading():
 
     # Get rid of all nondiffuse materials. e.g. glass becomes solid, or else we get noisy depth (as of bl3.6 at least)
     for obj in bpy.context.scene.view_layers["ViewLayer"].objects:
-        if obj.type != "MESH":
-            logger.debug(
-                f"{global_flat_shading.__name__} skipping {obj.name} with non-MESH type {obj.type}"
-            )
+        if obj.type not in {"MESH", "CURVE", "SURFACE", "META"}:
             continue
+
+        if mode == "object_index" and obj.name.lower() in {"atmosphere", "atmosphere_fine"}:
+            # Exclude atmosphere shell from object-index render; otherwise it can
+            # occlude the full view and collapse IDs to a single label.
+            obj.hide_render = True
+            continue
+
         obj.hide_viewport = False
         if "fire_system_type" in obj and obj["fire_system_type"] == "gt_mesh":
             obj.hide_viewport = False
@@ -326,11 +569,13 @@ def global_flat_shading():
             or obj.material_slots is None
             or len(obj.material_slots) == 0
         ):
-            logger.debug(
-                f"{global_flat_shading.__name__} skipping {obj.name} with no material slots"
-            )
+            # Objects with no material slots (e.g. atmosphere) get a white emission
+            # material so they still contribute to segmentation.
+            if mode == "object_index":
+                _assign_atmosphere_flat_material(obj)
+                logger.info("Assigned white emission to %s type=%s", obj.name, obj.type)
             continue
-        _replace_materials_with_flat_shading(obj)
+        _replace_materials_with_flat_shading(obj, mode=mode)
 
     nw = NodeWrangler(bpy.data.worlds["World"].node_tree)
     for link in nw.links:
@@ -338,62 +583,104 @@ def global_flat_shading():
 
 
 def postprocess_blendergt_outputs(frames_folder, output_stem, camera):
+    uniq_inst_array = None
+
     # Save flow visualization
     flow_dst_path = frames_folder / f"Vector{output_stem}.exr"
-    flow_array = load_flow(flow_dst_path)
-    np.save(flow_dst_path.with_name(f"Flow{output_stem}.npy"), flow_array)
+    if flow_dst_path.is_file():
+        try:
+            flow_array = load_flow(flow_dst_path)
+            np.save(flow_dst_path.with_name(f"Flow{output_stem}.npy"), flow_array)
 
-    flow_color = colorize_flow(flow_array)
-    if flow_color is not None:
-        imwrite(
-            flow_dst_path.with_name(f"Flow{output_stem}.png"),
-            flow_color,
-        )
-        flow_dst_path.unlink()
+            flow_color = colorize_flow(flow_array)
+            if flow_color is not None:
+                imwrite(
+                    flow_dst_path.with_name(f"Flow{output_stem}.png"),
+                    flow_color,
+                )
+            flow_dst_path.unlink()
+        except Exception as e:
+            logger.warning("Skipping flow postprocess for %s: %s", flow_dst_path, e)
+    else:
+        logger.warning("Missing flow pass output: %s", flow_dst_path)
 
     # Save surface normal visualization
     normal_dst_path = frames_folder / f"Normal{output_stem}.exr"
-    normal_array = load_normals(normal_dst_path, camera)
-    np.save(flow_dst_path.with_name(f"SurfaceNormal{output_stem}.npy"), normal_array)
-    imwrite(
-        flow_dst_path.with_name(f"SurfaceNormal{output_stem}.png"),
-        colorize_normals(normal_array),
-    )
-    normal_dst_path.unlink()
+    if normal_dst_path.is_file():
+        try:
+            normal_array = load_normals(normal_dst_path, camera)
+            np.save(
+                frames_folder / f"SurfaceNormal{output_stem}.npy", normal_array
+            )
+            imwrite(
+                frames_folder / f"SurfaceNormal{output_stem}.png",
+                colorize_normals(normal_array),
+            )
+            normal_dst_path.unlink()
+        except Exception as e:
+            logger.warning("Skipping normal postprocess for %s: %s", normal_dst_path, e)
+    else:
+        logger.warning("Missing normal pass output: %s", normal_dst_path)
 
     # Save depth visualization
     depth_dst_path = frames_folder / f"Depth{output_stem}.exr"
-    depth_array = load_depth(depth_dst_path)
-    np.save(flow_dst_path.with_name(f"Depth{output_stem}.npy"), depth_array)
-    imwrite(
-        depth_dst_path.with_name(f"Depth{output_stem}.png"), colorize_depth(depth_array)
-    )
-    depth_dst_path.unlink()
+    if depth_dst_path.is_file():
+        try:
+            depth_array = load_depth(depth_dst_path)
+            np.save(frames_folder / f"Depth{output_stem}.npy", depth_array)
+            imwrite(
+                depth_dst_path.with_name(f"Depth{output_stem}.png"),
+                colorize_depth(depth_array),
+            )
+            depth_dst_path.unlink()
+        except Exception as e:
+            logger.warning("Skipping depth postprocess for %s: %s", depth_dst_path, e)
+    else:
+        logger.warning("Missing depth pass output: %s", depth_dst_path)
 
     # Save segmentation visualization
     seg_dst_path = frames_folder / f"IndexOB{output_stem}.exr"
-    seg_mask_array = load_seg_mask(seg_dst_path)
-    np.save(
-        flow_dst_path.with_name(f"ObjectSegmentation{output_stem}.npy"), seg_mask_array
-    )
-    imwrite(
-        seg_dst_path.with_name(f"ObjectSegmentation{output_stem}.png"),
-        colorize_int_array(seg_mask_array),
-    )
-    seg_dst_path.unlink()
+    if seg_dst_path.is_file():
+        try:
+            seg_mask_array = load_seg_mask(seg_dst_path)
+            np.save(
+                frames_folder / f"ObjectSegmentation{output_stem}.npy", seg_mask_array
+            )
+            imwrite(
+                seg_dst_path.with_name(f"ObjectSegmentation{output_stem}.png"),
+                colorize_int_array(seg_mask_array),
+            )
+            seg_dst_path.unlink()
+        except Exception as e:
+            logger.warning(
+                "Skipping object segmentation postprocess for %s: %s", seg_dst_path, e
+            )
+    else:
+        logger.warning("Missing object index pass output: %s", seg_dst_path)
 
     # Save unique instances visualization
     uniq_inst_path = frames_folder / f"UniqueInstances{output_stem}.exr"
-    uniq_inst_array = load_uniq_inst(uniq_inst_path)
-    np.save(
-        flow_dst_path.with_name(f"InstanceSegmentation{output_stem}.npy"),
-        uniq_inst_array,
-    )
-    imwrite(
-        uniq_inst_path.with_name(f"InstanceSegmentation{output_stem}.png"),
-        colorize_int_array(uniq_inst_array),
-    )
-    uniq_inst_path.unlink()
+    if uniq_inst_path.is_file():
+        try:
+            if uniq_inst_array is None:
+                uniq_inst_array = load_uniq_inst(uniq_inst_path)
+            np.save(
+                frames_folder / f"InstanceSegmentation{output_stem}.npy",
+                uniq_inst_array,
+            )
+            imwrite(
+                uniq_inst_path.with_name(f"InstanceSegmentation{output_stem}.png"),
+                colorize_int_array(uniq_inst_array),
+            )
+            uniq_inst_path.unlink()
+        except Exception as e:
+            logger.warning(
+                "Skipping instance segmentation postprocess for %s: %s",
+                uniq_inst_path,
+                e,
+            )
+    else:
+        logger.warning("Missing unique instance pass output: %s", uniq_inst_path)
 
 
 def postprocess_materialgt_output(frames_folder, output_stem):
@@ -412,26 +699,62 @@ def postprocess_materialgt_output(frames_folder, output_stem):
         ma_seg_dst_path.unlink()
 
 
+def _get_compositor_node_tree():
+    """Return the compositor node tree, compatible with Blender 5+ API."""
+    scene = bpy.context.scene
+    # Blender 5+: scene.node_tree removed; use compositing_node_group
+    if hasattr(scene, "compositing_node_group"):
+        ng = scene.compositing_node_group
+        if ng is None:
+            scene.use_nodes = True
+            ng = scene.compositing_node_group
+            if ng is None:
+                ng = bpy.data.node_groups.new("Compositor", "CompositorNodeTree")
+                scene.compositing_node_group = ng
+        return ng
+    # Blender 4.x fallback
+    if hasattr(scene, "node_tree"):
+        if scene.node_tree is None:
+            scene.use_nodes = True
+        return scene.node_tree
+    raise AttributeError(
+        "Scene has neither 'node_tree' nor 'compositing_node_group'; "
+        "unsupported Blender version for compositor setup."
+    )
+
+
+def _reset_compositor_node_tree():
+    compositor_node_tree = _get_compositor_node_tree()
+    for node in list(compositor_node_tree.nodes):
+        compositor_node_tree.nodes.remove(node)
+    return compositor_node_tree
+
+
 def configure_compositor(
     frames_folder: Path,
     passes_to_save: list,
     flat_shading: bool,
+    ground_truth_image_name="UniqueInstances",
 ):
-    compositor_node_tree = bpy.context.scene.node_tree
+    compositor_node_tree = _reset_compositor_node_tree()
     nw = NodeWrangler(compositor_node_tree)
 
     render_layers = nw.new_node(Nodes.RenderLayers)
-    final_image_denoised = compositor_postprocessing(
-        nw, source=render_layers.outputs["Image"]
-    )
-
-    final_image_noisy = (
-        compositor_postprocessing(
-            nw, source=render_layers.outputs["Noisy Image"], show=False
+    if flat_shading:
+        final_image_denoised = render_layers.outputs["Image"]
+        final_image_noisy = None
+    else:
+        final_image_denoised = compositor_postprocessing(
+            nw, source=render_layers.outputs["Image"]
         )
-        if bpy.context.scene.cycles.use_denoising
-        else None
-    )
+
+        final_image_noisy = (
+            compositor_postprocessing(
+                nw, source=render_layers.outputs["Noisy Image"], show=False
+            )
+            if bpy.context.scene.cycles.use_denoising
+            else None
+        )
 
     return configure_compositor_output(
         nw,
@@ -440,7 +763,38 @@ def configure_compositor(
         image_noisy=final_image_noisy,
         passes_to_save=passes_to_save,
         saving_ground_truth=flat_shading,
+        ground_truth_image_name=ground_truth_image_name,
     )
+
+
+def _apply_output_names(output_name_targets, indices):
+    fileslot_suffix = get_suffix({"frame": "####", **indices})
+    for output_name, output_target in output_name_targets:
+        target_name = f"{output_name}{fileslot_suffix}"
+        if hasattr(output_target, "path"):
+            output_target.path = target_name
+        elif hasattr(output_target, "file_name"):
+            output_target.file_name = target_name
+
+
+def _render_eevee_object_index_pass(frames_folder: Path, indices: dict):
+    with Timer("Object Index Flat Shading"):
+        global_flat_shading(mode="object_index")
+
+    # Enable the object-index viewlayer pass for EEVEE
+    viewlayer = bpy.context.scene.view_layers["ViewLayer"]
+    viewlayer.use_pass_object_index = True
+
+    output_name_targets = configure_compositor(
+        frames_folder,
+        [],
+        flat_shading=True,
+        ground_truth_image_name="IndexOB",
+    )
+    _apply_output_names(output_name_targets, indices)
+
+    with Timer("Object Index Rendering"):
+        bpy.ops.render.render(animation=True)
 
 
 def _unlink_material_displacement_output(material: bpy.types.Material):
@@ -517,6 +871,10 @@ def render_image(
         if rt_pass_name not in (p[0] for p in active_passes):
             active_passes.append(list(init.RENDER_TIME_PASS_DESCRIPTOR))
 
+    main_active_passes = list(active_passes)
+    if using_eevee:
+        main_active_passes = [p for p in active_passes if p[0] != "object_index"]
+
     tmp_dir = frames_folder.parent.resolve() / "tmp"
     tmp_dir.mkdir(exist_ok=True)
     bpy.context.scene.render.filepath = f"{tmp_dir}{os.sep}"
@@ -543,7 +901,7 @@ def render_image(
             (frames_folder / f"Objects{suffix}.json").write_text(json_object)
 
         with Timer("Flat Shading"):
-            global_flat_shading()
+            global_flat_shading(mode="random")
     else:
         segment_materials = "material_index" in (x[0] for x in active_passes)
         if segment_materials:
@@ -563,14 +921,17 @@ def render_image(
 
     if not bpy.context.scene.use_nodes:
         bpy.context.scene.use_nodes = True
-    file_slot_nodes = configure_compositor(frames_folder, active_passes, flat_shading)
+    output_name_targets = configure_compositor(
+        frames_folder,
+        main_active_passes,
+        flat_shading,
+        ground_truth_image_name="UniqueInstances",
+    )
 
     indices = dict(cam_rig=camrig_id, resample=0, subcam=subcam_id)
 
     ## Update output names
-    fileslot_suffix = get_suffix({"frame": "####", **indices})
-    for file_slot in file_slot_nodes:
-        file_slot.path = f"{file_slot.path}{fileslot_suffix}"
+    _apply_output_names(output_name_targets, indices)
 
     if use_dof == "IF_TARGET_SET":
         use_dof = camera.data.dof.focus_object is not None
@@ -586,6 +947,9 @@ def render_image(
     bpy.context.scene.camera = camera
     with Timer("Actual rendering"):
         bpy.ops.render.render(animation=True)
+
+    if using_eevee and any(p[0] == "object_index" for p in active_passes):
+        _render_eevee_object_index_pass(frames_folder, indices)
 
     with Timer("Post Processing"):
         for frame in range(
