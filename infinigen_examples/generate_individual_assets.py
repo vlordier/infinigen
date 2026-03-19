@@ -288,11 +288,23 @@ def build_and_save_asset(payload: dict):
         idx = args.seed
 
     scene = bpy.context.scene
-    scene.render.engine = "CYCLES"
+    # Respect gin-configured EEVEE override (e.g. eevee_full_render.gin sets
+    # full/render_image.force_eevee = True)
+    try:
+        _force_eevee = gin.query_parameter("full/render_image.force_eevee")
+    except ValueError:
+        _force_eevee = False
+    if _force_eevee:
+        init.configure_eevee_next()
+        logger.info("Render engine: BLENDER_EEVEE_NEXT (force_eevee=True via gin)")
+    else:
+        scene.render.engine = "CYCLES"
+        logger.info("Render engine: CYCLES")
     scene.render.resolution_x, scene.render.resolution_y = map(
         int, args.resolution.split("x")
     )
-    scene.cycles.samples = args.samples
+    if not _force_eevee:
+        scene.cycles.samples = args.samples
     butil.clear_scene()
 
     if not args.fire:
@@ -346,7 +358,12 @@ def build_and_save_asset(payload: dict):
     with (output_folder / "polycounts.txt").open("w") as f:
         save_polycounts(f)
 
-    configure_cycles_devices()
+    try:
+        _force_eevee = gin.query_parameter("full/render_image.force_eevee")
+    except ValueError:
+        _force_eevee = False
+    if not _force_eevee:
+        configure_cycles_devices()
     set_displacement_mode()
 
     with FixedSeed(args.lighting + idx):

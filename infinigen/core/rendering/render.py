@@ -841,20 +841,20 @@ def render_image(
     override_num_samples=None,
     use_eevee_next_for_annotations=False,
     enable_render_time_pass=False,
+    force_eevee=False,
 ):
     tic = time.time()
 
     for exclude in excludes:
         bpy.data.objects[exclude].hide_render = True
 
-    using_eevee = flat_shading and use_eevee_next_for_annotations
+    using_eevee = force_eevee or (flat_shading and use_eevee_next_for_annotations)
     if using_eevee:
-        # EEVEE Next is 10–50× faster than Cycles for flat annotation passes
-        # (depth, normals, object index) because flat random-color materials
-        # don't benefit from path tracing.
         init.configure_eevee_next()
+        logger.info("Render engine: BLENDER_EEVEE_NEXT (force_eevee=%s, flat_shading=%s)", force_eevee, flat_shading)
     else:
         init.configure_cycles_devices()
+        logger.info("Render engine: CYCLES (force_eevee=%s, flat_shading=%s)", force_eevee, flat_shading)
     set_displacement_mode()
 
     # Inject the Blender 5.0 Render Time pass when requested.  This is a

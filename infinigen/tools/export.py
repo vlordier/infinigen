@@ -859,7 +859,7 @@ def run_blender_export(
     if format in ["usda", "usdc"]:
         bpy.ops.wm.usd_export(
             filepath=exportPath,
-            export_textures=True,
+            export_textures_mode='NEW',
             # use_instancing=True,
             overwrite_textures=True,
             selected_objects_only=individual_export,
@@ -908,9 +908,12 @@ def export_single_obj(
     bpy.context.scene.render.engine = "CYCLES"
     bpy.context.scene.cycles.device = "GPU"
     bpy.context.scene.cycles.samples = 1  # choose render sample
-    # Set the tile size
-    bpy.context.scene.cycles.tile_x = image_res
-    bpy.context.scene.cycles.tile_y = image_res
+    # Set the tile size (Blender 5.x removed tile_x/tile_y)
+    try:
+        bpy.context.scene.cycles.tile_x = image_res
+        bpy.context.scene.cycles.tile_y = image_res
+    except AttributeError:
+        pass
 
     view_layer_object_names = _view_layer_object_names()
 
@@ -1005,9 +1008,12 @@ def export_sim_ready(
     bpy.context.scene.render.engine = "CYCLES"
     bpy.context.scene.cycles.device = "GPU"
     bpy.context.scene.cycles.samples = 1  # choose render sample
-    # Set the tile size
-    bpy.context.scene.cycles.tile_x = image_res
-    bpy.context.scene.cycles.tile_y = image_res
+    # Set the tile size (Blender 5.x removed tile_x/tile_y)
+    try:
+        bpy.context.scene.cycles.tile_x = image_res
+        bpy.context.scene.cycles.tile_y = image_res
+    except AttributeError:
+        pass
 
     view_layer_object_names = _view_layer_object_names()
 
@@ -1198,9 +1204,12 @@ def export_curr_scene(
     bpy.context.scene.render.engine = "CYCLES"
     bpy.context.scene.cycles.device = "GPU"
     bpy.context.scene.cycles.samples = 1  # choose render sample
-    # Set the tile size
-    bpy.context.scene.cycles.tile_x = image_res
-    bpy.context.scene.cycles.tile_y = image_res
+    # Set the tile size (Blender 5.x removed tile_x/tile_y)
+    try:
+        bpy.context.scene.cycles.tile_x = image_res
+        bpy.context.scene.cycles.tile_y = image_res
+    except AttributeError:
+        pass
 
     # iterate through all objects and bake them
     bake_scene(

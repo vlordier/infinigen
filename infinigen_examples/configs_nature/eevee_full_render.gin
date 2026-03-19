@@ -1,0 +1,26 @@
+# EEVEE Next full photorealistic render preset for Infinigen (Blender 5.0+)
+#
+# Switches BOTH the full/photorealistic render AND the flat/GT annotation
+# passes to EEVEE Next rasterization.  EEVEE is 10–50x faster than Cycles
+# and is a good fit for real-time-quality previews or when Cycles path tracing
+# is not required (e.g. exporting for Genesis World or other engines).
+#
+# Usage:
+#   python -m infinigen_examples.generate_nature ... --configs base eevee_full_render
+#   python -m infinigen_examples.generate_indoors ... --configs base_indoors eevee_full_render
+#
+# Note: photorealistic Cycles-quality lighting is NOT produced; EEVEE uses
+# rasterization.  For highest-fidelity results keep the default Cycles config.
+
+# Use EEVEE for the photorealistic full render pass
+full/render_image.force_eevee = True
+
+# Use EEVEE for the flat/annotation pass as well
+flat/render_image.use_eevee_next_for_annotations = True
+
+# EEVEE Next quality settings for the full render
+configure_eevee_next.taa_render_samples = 64
+configure_eevee_next.use_shadows = True
+configure_eevee_next.use_gtao = True
+configure_eevee_next.use_bloom = False
+configure_eevee_next.use_high_quality_normals = True
