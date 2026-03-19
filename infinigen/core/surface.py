@@ -137,19 +137,45 @@ def smooth_attribute(obj, name, iters=20, weight=0.05, verbose=False):
     obj.data.edges.foreach_get("vertices", edges)
     edges = edges.reshape(-1, 2)
 
-    r = range(iters) if not verbose else trange(iters)
-    vertex_weight = np.ones(len(obj.data.vertices), dtype=np.float64)
-    edge_0 = edges[:, 0]
-    edge_1 = edges[:, 1]
-    if len(edges) > 0:
-        vertex_weight[edge_0] += weight
-        vertex_weight[edge_1] += weight
-    for _ in r:
-        data_out = work_data.copy()
+    n_verts = len(obj.data.vertices)
+    use_sparse = n_verts > 10000
+    try:
+        import scipy.sparse
+        import scipy.sparse.linalg
+        if use_sparse and len(edges) > 0:
+            # Build Laplacian matrix
+            row = np.concatenate([edges[:,0], edges[:,1]])
+            col = np.concatenate([edges[:,1], edges[:,0]])
+            data_w = np.full(len(row), weight, dtype=np.float64)
+            diag = np.ones(n_verts, dtype=np.float64)
+            for e0, e1 in edges:
+                diag[e0] += weight
+                diag[e1] += weight
+            L = scipy.sparse.coo_matrix((data_w, (row, col)), shape=(n_verts, n_verts)).tocsr()
+            D = scipy.sparse.diags(diag)
+            A = D - L
+            # Iterative smoothing
+            x = work_data.copy()
+            for _ in (trange(iters) if verbose else range(iters)):
+                x = scipy.sparse.linalg.spsolve(A, D @ x)
+            work_data = x
+        else:
+            raise ImportError  # fallback to original
+    except ImportError:
+        # Fallback: original loop
+        r = range(iters) if not verbose else trange(iters)
+        vertex_weight = np.ones(n_verts, dtype=np.float64)
+        edge_0 = edges[:, 0]
+        edge_1 = edges[:, 1]
         if len(edges) > 0:
-            data_out[edge_0] += work_data[edge_1] * weight
-            data_out[edge_1] += work_data[edge_0] * weight
-        work_data = data_out / vertex_weight[:, None]
+            vertex_weight[edge_0] += weight
+            vertex_weight[edge_1] += weight
+        for _ in r:
+            data_out = work_data.copy()
+            if len(edges) > 0:
+                data_out[edge_0] += work_data[edge_1] * weight
+                data_out[edge_1] += work_data[edge_0] * weight
+            work_data = data_out / vertex_weight[:, None]
 
     write_attr_data(obj, name, work_data[:, 0] if scalar_attr else work_data)
 

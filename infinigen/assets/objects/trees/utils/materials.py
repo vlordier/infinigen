@@ -114,7 +114,8 @@ def create_leaf_material(src_hue, glow=False):
         add2_node = nt.nodes.new("ShaderNodeVectorMath")
         noise_node = nt.nodes.new("ShaderNodeTexWhiteNoise")
         sep_node = nt.nodes.new("ShaderNodeSeparateXYZ")
-        hsv_node = nt.nodes.new("ShaderNodeCombineHSV")
+        hsv_node = nt.nodes.new("ShaderNodeCombineColor")
+        hsv_node.mode = 'HSV'
 
         sep_loc_node = nt.nodes.new("ShaderNodeSeparateXYZ")
         loc_mult_node = nt.nodes.new("ShaderNodeMath")

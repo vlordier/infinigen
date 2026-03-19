@@ -315,21 +315,24 @@ def nodegroup_adjust_v(nw):
     )
 
     separate_hsv = nw.new_node(
-        "ShaderNodeSeparateHSV", input_kwargs={"Color": group_input.outputs["Color"]}
+        Nodes.SeparateColor,
+        input_kwargs={"Color": group_input.outputs["Color"]},
+        attrs={"mode": "HSV"},
     )
 
     add = nw.new_node(
         Nodes.Math,
-        input_kwargs={0: separate_hsv.outputs["V"], 1: group_input.outputs["V Shift"]},
+        input_kwargs={0: separate_hsv.outputs[2], 1: group_input.outputs["V Shift"]},
     )
 
     combine_hsv = nw.new_node(
-        Nodes.CombineHSV,
+        Nodes.CombineColor,
         input_kwargs={
-            "H": separate_hsv.outputs["H"],
-            "S": separate_hsv.outputs["S"],
-            "V": add,
+            0: separate_hsv.outputs[0],
+            1: separate_hsv.outputs[1],
+            2: add,
         },
+        attrs={"mode": "HSV"},
     )
 
     group_output = nw.new_node(Nodes.GroupOutput, input_kwargs={"Color": combine_hsv})

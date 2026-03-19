@@ -302,7 +302,7 @@ class NodeWrangler:
                     self.modifier[id] = prepare_cast(type(curr_mod_inp_val.real), val)
             if attribute is not None:
                 self.modifier[f"{id}_attribute_name"] = attribute
-                self.modifier[f"{id}_use_attribute"] = 1
+                self.modifier[f"{id}_use_attribute"] = True
 
         assert len([o for o in group_input.outputs if o.name == name]) == 1
         return group_input.outputs[name]
@@ -344,9 +344,37 @@ class NodeWrangler:
             try:
                 input_socket.default_value = input_item
                 return
-            except TypeError as e:
-                logger.info(f'TypeError while assigning input_item={input_item!r} as default_value for {input_socket.name}')
-                raise e
+            except (TypeError, ValueError):
+                default_value = getattr(input_socket, "default_value", None)
+                if isinstance(input_item, (int, float, bool)) and hasattr(
+                    default_value, "__len__"
+                ):
+                    try:
+                        size = len(default_value)
+                    except TypeError:
+                        size = None
+
+                    if size is not None and size > 0:
+                        if size == 4:
+                            broadcast = (input_item, input_item, input_item, 1)
+                        else:
+                            broadcast = tuple(input_item for _ in range(size))
+                        try:
+                            input_socket.default_value = broadcast
+                            logger.debug(
+                                "Broadcast scalar default %r to %s for socket %s",
+                                input_item,
+                                broadcast,
+                                input_socket.name,
+                            )
+                            return
+                        except (TypeError, ValueError):
+                            pass
+
+                logger.info(
+                    f'Failed assigning input_item={input_item!r} as default_value for {input_socket.name}'
+                )
+                raise
 
         self.links.new(output_socket, input_socket)
 

@@ -595,22 +595,25 @@ def shader_material(nw: NodeWrangler, **kwargs):
     )
 
     separate_hsv = nw.new_node(
-        "ShaderNodeSeparateHSV", input_kwargs={"Color": kwargs["color_base"]}
+        Nodes.SeparateColor,
+        input_kwargs={"Color": kwargs["color_base"]},
+        attrs={"mode": "HSV"},
     )
 
     subtract = nw.new_node(
         Nodes.Math,
-        input_kwargs={0: separate_hsv.outputs["V"], 1: 0.2},
+        input_kwargs={0: separate_hsv.outputs[2], 1: 0.2},
         attrs={"operation": "SUBTRACT"},
     )
 
     combine_hsv = nw.new_node(
-        Nodes.CombineHSV,
+        Nodes.CombineColor,
         input_kwargs={
-            "H": separate_hsv.outputs["H"],
-            "S": separate_hsv.outputs["S"],
-            "V": subtract,
+            0: separate_hsv.outputs[0],
+            1: separate_hsv.outputs[1],
+            2: subtract,
         },
+        attrs={"mode": "HSV"},
     )
 
     mix_1 = nw.new_node(

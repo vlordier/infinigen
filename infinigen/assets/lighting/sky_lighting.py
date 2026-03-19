@@ -32,7 +32,7 @@ def nishita_lighting(
     camera_based_rotation=None,
 ):
     sky_texture = nw.new_node(Nodes.SkyTexture)
-    sky_texture.sky_type = "NISHITA"
+    sky_texture.sky_type = "PREETHAM"
     sky_texture.sun_size = np.deg2rad(clip_gaussian(0.5, 0.3, 0.25, 5))
     sky_texture.sun_intensity = rg(sun_intensity)
     sky_texture.sun_elevation = np.radians(rg(sun_elevation))
@@ -71,11 +71,6 @@ def nishita_lighting(
         sky_texture.keyframe_insert(
             data_path="sun_elevation", frame=bpy.context.scene.frame_start + 10
         )
-
-    sky_texture.altitude = rg(altitude)
-    sky_texture.air_density = rg(air_density)
-    sky_texture.dust_density = rg(dust_density)
-    sky_texture.ozone_density = rg(ozone_density)
 
     strength = rg(strength)
     return nw.new_node(

@@ -109,6 +109,40 @@ INSTALL_EXTRAS=dev,terrain,vis scripts/install/setup_local_bpy_env.sh
 INSTALL_EDITABLE=0 scripts/install/setup_local_bpy_env.sh
 ```
 
+### Upgrading OcMesher to vlordier develop (Rust + tch, CPU/MPS)
+
+Infinigen can use external OcMesher backends via `INFINIGEN_OCMESHER_CLASS`.
+For the latest CPU/MPS + Torch/Rust stack from `vlordier/OcMesher`:
+
+```bash
+bash scripts/install/setup_ocmesher_backend.sh
+```
+
+The script clones/updates `infinigen/OcMesher` from
+`https://github.com/vlordier/OcMesher` on branch `develop`, then installs the
+Python package into your active environment.
+
+Common runtime selections:
+
+```bash
+# Torch backend (recommended for Apple Silicon MPS / CUDA / CPU)
+export INFINIGEN_OCMESHER_CLASS=ocmesher.TorchOcMesher
+
+# Device hint for torch backend
+export INFINIGEN_OCMESHER_DEVICE=mps   # or cpu / cuda
+
+# Rust backend (requires rust toolchain + maturin build)
+export INFINIGEN_OCMESHER_CLASS=ocmesher.RustOcMesher
+```
+
+Optional installer overrides:
+
+```bash
+INFINIGEN_OCMESHER_MODE=rust bash scripts/install/setup_ocmesher_backend.sh
+INFINIGEN_OCMESHER_BRANCH=develop bash scripts/install/setup_ocmesher_backend.sh
+INFINIGEN_OCMESHER_INSTALL_RUST=0 bash scripts/install/setup_ocmesher_backend.sh
+```
+
 Equivalent Makefile helpers are also available:
 
 ```bash

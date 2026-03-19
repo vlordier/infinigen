@@ -1,3 +1,22 @@
+# --- Batch BVH and Attribute Operations ---
+def batch_bvh_ray_cast(obj, origins, directions, depsgraph=None):
+    """
+    Perform batch BVH ray casts for a mesh object.
+    Returns: list of (location, normal, index, distance) for each ray.
+    """
+    if depsgraph is None:
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+    bvh = mathutils.bvhtree.BVHTree.FromObject(obj, depsgraph)
+    results = [bvh.ray_cast(origin, direction) for origin, direction in zip(origins, directions)]
+    return results
+
+def batch_foreach_get(data, attr, out):
+    """
+    Efficiently extract attribute data for large arrays.
+    data: e.g. obj.data.vertices, attr: 'co', out: preallocated np.ndarray
+    """
+    data.foreach_get(attr, out.reshape(-1))
+    return out
 # Copyright (C) 2023, Princeton University.
 # This source code is licensed under the BSD 3-Clause license found in the LICENSE file in the root directory of this source tree.
 

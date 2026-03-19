@@ -138,6 +138,15 @@ echo "compiled lib/cpu/soil_machine/SoilMachine.so"
 
 cd -
 
-cd ./infinigen/OcMesher
-source install.sh
-cd -
+# OcMesher backend setup.
+# Default path upgrades to vlordier/OcMesher develop (torch/rust-capable backend).
+# Set INFINIGEN_OCMESHER_LEGACY_BUNDLED=1 to keep compiling the vendored C++ backend.
+if [ "${INFINIGEN_OCMESHER_LEGACY_BUNDLED:-0}" = "1" ]; then
+    echo "Using legacy bundled OcMesher build"
+    cd ./infinigen/OcMesher
+    source install.sh
+    cd -
+else
+    echo "Installing/upgrading OcMesher backend from vlordier/OcMesher develop"
+    bash ./scripts/install/setup_ocmesher_backend.sh
+fi

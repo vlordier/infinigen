@@ -77,9 +77,18 @@ _ocmesher_capabilities_logged = False
 
 
 def _load_ocmesher_backend():
-    class_path = os.environ.get(
-        "INFINIGEN_OCMESHER_CLASS", "infinigen.OcMesher.ocmesher.OcMesher"
-    )
+    configured = os.environ.get("INFINIGEN_OCMESHER_CLASS")
+    if configured is not None:
+        class_path = configured
+    else:
+        # Prefer externally installed backends (e.g. vlordier/OcMesher develop)
+        # and fall back to the vendored backend for compatibility.
+        try:
+            import_module("ocmesher")
+            class_path = "ocmesher.OcMesher"
+        except Exception:
+            class_path = "infinigen.OcMesher.ocmesher.OcMesher"
+
     backend_cls = import_item(class_path)
     validate_ocmesher_backend_class(backend_cls, class_path)
 
@@ -215,19 +224,22 @@ if (
     _ocmesher_class_path == "infinigen.OcMesher.ocmesher.OcMesher"
     and ocmesher_version != ocmesher_version_expected
 ):
-    raise ValueError(
-        f"User has installed {ocmesher_version=} which is not for {infinigen.__version__=}, we expected {ocmesher_version_expected=}, you may need to re-run installation / recompile the codebase"
+    logger.warning(
+        "Bundled OcMesher version mismatch: got %s, expected %s for infinigen %s. "
+        "Continuing, but you may need to reinstall terrain dependencies or switch to "
+        "a custom backend via INFINIGEN_OCMESHER_CLASS.",
+        ocmesher_version,
+        ocmesher_version_expected,
+        infinigen.__version__,
     )
 if (
     _ocmesher_class_path != "infinigen.OcMesher.ocmesher.OcMesher"
     and ocmesher_version is not None
-    and ocmesher_version != ocmesher_version_expected
 ):
-    logger.warning(
-        "Using custom OcMesher backend %s with version %s (expected %s for default backend)",
+    logger.info(
+        "Using custom OcMesher backend %s with version %s",
         _ocmesher_class_path,
         ocmesher_version,
-        ocmesher_version_expected,
     )
 
 fine_suffix = "_fine"

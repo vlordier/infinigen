@@ -177,7 +177,8 @@ class Nodes:
     LightOutput = "ShaderNodeOutputLight"
     OutputFile = "CompositorNodeOutputFile"
     WorldOutput = "ShaderNodeOutputWorld"
-    Composite = "CompositorNodeComposite"
+    # Blender 5 removed CompositorNodeComposite; use Viewer as fallback
+    Composite = "CompositorNodeViewer"
     Viewer = "CompositorNodeViewer"
     CompositorMixRGB = "CompositorNodeMixRGB"
 

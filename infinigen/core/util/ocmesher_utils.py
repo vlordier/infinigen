@@ -3,7 +3,9 @@
 
 # Authors: Zeyu Ma
 
+import os
 from ctypes import POINTER, c_float, c_int32
+from importlib import import_module
 
 import bpy
 import numpy as np
@@ -11,8 +13,20 @@ from numpy import ascontiguousarray as AC
 
 from infinigen.core.nodes.nodegroups import transfer_attributes
 from infinigen.core.util import blender as butil
-from infinigen.OcMesher.ocmesher import OcMesher
+from infinigen.core.util.test_utils import import_item
+from infinigen.terrain.mesher.backend_protocol import normalize_ocmesher_result
 from infinigen.terrain.utils import ASFLOAT, ASINT, Mesh, get_caminfo, load_cdll
+
+
+def _resolve_ocmesher_class_path() -> str:
+    configured = os.environ.get("INFINIGEN_OCMESHER_CLASS")
+    if configured is not None:
+        return configured
+    try:
+        import_module("ocmesher")
+        return "ocmesher.OcMesher"
+    except Exception:
+        return "infinigen.OcMesher.ocmesher.OcMesher"
 
 
 def create_sdf_from_mesh(mesh):
@@ -58,10 +72,25 @@ def run_ocmesher(obj, cameras):
     xyz_min -= xyz_size * 0.01
     xyz_max += xyz_size * 0.01
     bounds = (xyz_min[0], xyz_max[0], xyz_min[1], xyz_max[1], xyz_min[2], xyz_max[2])
-    mesher = OcMesher(
+    class_path = _resolve_ocmesher_class_path()
+    mesher_cls = import_item(class_path)
+    mesher = mesher_cls(
         get_caminfo(cameras)[0], bounds, pixels_per_cube=1.5, edge_fine_factor=1
     )
-    mesh = Mesh(mesh=mesher([room_sdf_func], structure_mesh=mesh)[0][0])
+
+    try:
+        result = mesher([room_sdf_func], structure_mesh=mesh)
+    except TypeError:
+        # Newer backends (e.g. torch/rust wrappers) do not accept structure_mesh.
+        result = mesher([room_sdf_func])
+
+    if isinstance(result, tuple):
+        meshes, _ = normalize_ocmesher_result(result, class_path)
+        ocmesher_mesh = meshes[0]
+    else:
+        ocmesher_mesh = result[0][0]
+
+    mesh = Mesh(mesh=ocmesher_mesh)
     ocmesh = mesh.export_blender(obj.name + ".ocmesher")
     transfer_attributes.transfer_all(source=obj, target=ocmesh, uvs=True)
     return ocmesh

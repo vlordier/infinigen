@@ -970,11 +970,8 @@ if __name__ == "__main__":
     parser.add_argument("--print_stats", type=int, default=1)
     args = parser.parse_args()
 
-    using_upload = any(
-        "upload" in x
-        for x in args.pipeline_configs
-        if args.pipeline_configs is not None
-    )
+    pipeline_configs = args.pipeline_configs or []
+    using_upload = any("upload" in x for x in pipeline_configs)
 
     if not using_upload and args.cleanup in ["except_logs", "except_crashed", "all"]:
         raise ValueError(

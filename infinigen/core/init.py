@@ -382,18 +382,43 @@ def configure_eevee_next(
         use_high_quality_normals: Use high-quality normal computation.
             Recommended for accurate normal annotation passes.
     """
-    bpy.context.scene.render.engine = "BLENDER_EEVEE_NEXT"
+    preferred_engines = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+    selected_engine = None
+    for engine in preferred_engines:
+        try:
+            bpy.context.scene.render.engine = engine
+            selected_engine = engine
+            break
+        except TypeError:
+            continue
+    if selected_engine is None:
+        available = bpy.context.scene.render.bl_rna.properties["engine"].enum_items
+        raise RuntimeError(
+            "No supported EEVEE engine found. Available engines: "
+            + ", ".join(item.identifier for item in available)
+        )
 
     eevee = bpy.context.scene.eevee
-    eevee.use_shadows = use_shadows
-    eevee.use_gtao = use_gtao
-    eevee.use_bloom = use_bloom
-    eevee.taa_render_samples = taa_render_samples
-    eevee.use_taa_reprojection = use_taa_reprojection
-    eevee.use_high_quality_normals = use_high_quality_normals
+
+    eevee_option_values = {
+        "use_shadows": use_shadows,
+        "use_gtao": use_gtao,
+        "use_bloom": use_bloom,
+        "taa_render_samples": taa_render_samples,
+        "use_taa_reprojection": use_taa_reprojection,
+        "use_high_quality_normals": use_high_quality_normals,
+    }
+    for option_name, option_value in eevee_option_values.items():
+        if hasattr(eevee, option_name):
+            setattr(eevee, option_name, option_value)
+        else:
+            logger.debug(
+                "Skipping unsupported EEVEE option %s for this Blender build",
+                option_name,
+            )
 
     logger.info(
-        "Configured EEVEE Next for annotation rendering "
+        f"Configured {selected_engine} for annotation rendering "
         f"({taa_render_samples} TAA sample(s), "
         f"{use_shadows=}, {use_gtao=})"
     )
@@ -475,6 +500,9 @@ def require_blender_addon(addon: str, fail: str = "fatal", allow_online=False):
         and (not allow_online)
     ):
         report_fail(f"{addon=} not found and online install is disabled")
+        # For warning mode, callers explicitly requested best-effort behavior.
+        # Skip install attempts when online installs are disallowed.
+        return False
 
     try:
         if long in builtin_local_addons:
