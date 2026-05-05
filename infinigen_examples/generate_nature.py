@@ -85,8 +85,11 @@ logger = logging.getLogger(__name__)
 
 
 @gin.configurable
-def compose_nature(output_folder, scene_seed, **params):
+def compose_nature(output_folder, scene_seed, season_state=None, season_name=None, **params):
     p = pipeline.RandomStageExecutor(scene_seed, output_folder, params)
+    season_state = weather.get_or_create_season_state(
+        season_state=season_state, season_name=season_name
+    )
 
     def add_coarse_terrain():
         terrain = Terrain(
@@ -116,7 +119,7 @@ def compose_nature(output_folder, scene_seed, **params):
 
     p.run_stage("fancy_clouds", weather.kole_clouds.add_kole_clouds)
 
-    season = p.run_stage("season", trees.random_season, use_chance=False)
+    season = p.run_stage("season", trees.random_season, season_state=season_state, use_chance=False)
     logging.info(f"{season=}")
 
     def choose_forest_params():
@@ -294,6 +297,19 @@ def compose_nature(output_folder, scene_seed, **params):
         primary_cams[0],
         use_chance=False,
     )
+
+    if season_state is not None:
+        def apply_seasonal_effects():
+            weather.apply_season_to_terrain(terrain_mesh, season_state)
+            water_objs = [
+                bpy.data.objects.get("water_fine"),
+                bpy.data.objects.get("simulated_river"),
+            ]
+            weather.apply_season_to_water(
+                [o for o in water_objs if o is not None], season_state
+            )
+
+        p.run_stage("seasonal_effects", apply_seasonal_effects, use_chance=False)
 
     # determine a small area of the terrain for the creatures to run around on
     # must happen before camera is animated, as camera may want to follow them around
@@ -842,7 +858,7 @@ def populate_scene(
     primary_cams = [rig.children[0] for rig in camera_rigs]
 
     season = p.run_stage(
-        "choose_season", trees.random_season, use_chance=False, default=[]
+        "choose_season", trees.random_season, season_state=season_state, use_chance=False, default=[]
     )
 
     fire_cache_system = fluid.FireCachingSystem() if params.get("cached_fire") else None
