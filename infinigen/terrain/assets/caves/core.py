@@ -148,8 +148,17 @@ class Cave:
 
     def __init__(self, name="Cave") -> None:
         self.modifier_stack = []
-        bpy.ops.mesh.primitive_vert_add()
-        bpy.context.active_object.name = name
+        # Blender 5.1 removed primitive_vert_add — create single-vertex mesh manually
+        import bmesh
+        bm = bmesh.new()
+        bm.verts.new((0, 0, 0))
+        mesh = bpy.data.meshes.new(name)
+        bm.to_mesh(mesh)
+        bm.free()
+        obj = bpy.data.objects.new(name, mesh)
+        bpy.context.scene.collection.objects.link(obj)
+        obj.select_set(True)
+        bpy.context.view_layer.objects.active = obj
         generated_string = generate_string(max_len=5000)
         # print(f"Using String", ''.join(generated_string))
         trace_string(["f"] * 2 + generated_string)

@@ -25,7 +25,7 @@ def scene(
     on_the_fly_asset_folder,
     reused_asset_folder,
     device,
-    caves_chance=0.5,
+    caves_chance=0,  # Disabled for Blender 5.1 compatibility
     landtiles_chance=1,
     ground_chance=1,
     warped_rocks_chance=0.3,

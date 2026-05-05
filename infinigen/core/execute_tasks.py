@@ -370,7 +370,7 @@ def execute_tasks(
 
 def main(input_folder, output_folder, scene_seed, task, task_uniqname, **kwargs):
     required_version = (5, 0, 1)
-    if bpy.app.version != required_version:
+    if bpy.app.version < required_version:
         raise RuntimeError(
             f"You are using blender={bpy.app.version_string} which is "
             f"not supported. Please use {'.'.join(str(v) for v in required_version)}"
