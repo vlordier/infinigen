@@ -298,8 +298,6 @@ Stage 4 (Expert): Severe damage, all IR bands, night conditions, adverse weather
 
 Each stage config is a `VisPosDatasetSpec` with different parameters. Models can be progressively trained through the curriculum.
 
-The `DomainRandomiser` class in `syndata/randomisation.py` provides the parameter-space definition for complexity.
-
 ### Component 8: Dataset Validation (`validation.py`)
 
 Automated checks run after generation:

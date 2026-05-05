@@ -35,6 +35,7 @@ infinigen/assets/damage/
 │   ├── facade_damage.py     # Building facade destruction (holes, scorch)
 │   ├── fire_effects.py      # Fire damage, scorch marks, smoke
 │   └── debris.py            # Debris field generation
+├── damage_progression.py    # Multi-stage degradation protocol
 ├── shared/
 │   ├── fracture.py          # Mesh fracture utilities (Voronoi shatter)
 │   ├── displacement.py      # Mesh displacement/deformation
@@ -206,7 +207,7 @@ After damage, some camera poses may be invalid (inside collapsed geometry, occlu
 ### Integration
 
 - Hooks into `compose_nature()` after standard stages but before `populate_scene()` (damage operates on coarse geometry)
-- Paired generation runs the scene pipeline twice: once without damage, once with damage
+- Paired generation produces the scene once, snapshots it, applies damage, then renders both the snapshot and damaged versions. Multi-stage generation reuses the same snapshot across all severity levels. Camera trajectories are computed on the intact scene and repaired once against the most severe damage stage.
 - `DamageStageExecutor` is gin-configurable and can be inserted into any scene generation config
 - When IR rendering is present (#1), damage includes thermal signature changes (exposed hot interior surfaces in crater walls, warm rubble)
 

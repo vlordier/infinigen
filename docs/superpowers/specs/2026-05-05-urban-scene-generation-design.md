@@ -8,6 +8,10 @@
 
 Generate urban and suburban landscapes using a hybrid asset sourcing strategy: OSM data for city layouts, procedural generation for structural elements, AI image-to-3D and static libraries for detail objects. Provides the structural assets that damage, flight camera, and visual positioning features depend on.
 
+## Motivation
+
+Infinigen currently generates nature landscapes (terrain, trees, rocks) and single indoor rooms. Visual positioning for drones, ISR, FPV, and UGVs operates primarily over built environments — cities, towns, industrial zones, infrastructure corridors, and harbours. Damage modeling (#2) requires structures to destroy. Platform cameras (#4) need urban canyons and building-scale obstacles. The regional style system enables generation of operationally relevant environments (Ukraine-like, Baltics-like, etc.). Without urban assets, the entire feature set is limited to rural/wilderness scenarios — insufficient for realistic GNSS-denied navigation training.
+
 ## Asset Sourcing Strategy
 
 Where assets come from, by category:
@@ -446,9 +450,9 @@ Reuses existing infinigen scatter systems for urban-appropriate small elements:
 
 ### Open Questions
 
-1. **Building architectural styles**: Should buildings vary by geographic region (European, Asian, Middle Eastern, American)? Initial scope: two styles (Western modern + one alternate). Add more as content.
+1. **Building architectural styles**: Regional styles are handled by Component 8 (7 presets: soviet, balkan, baltic, mediterranean, middle_eastern, east_asian, generic). Additional regional presets can be added as content without code changes.
 2. **Dynamic elements**: Should we simulate traffic (moving vehicles) or just static parked cars? Initial: static only. Dynamic traffic adds complexity with limited training benefit.
 3. **Building interior fraction**: What percentage of buildings get interiors? 10% as default, gin-configurable. Interiors are expensive (full constraint solve per building).
-4. **Historical/cultural landmarks**: Should special buildings (church, mosque, temple, stadium) be generated? Initial: no, too complex for procedural generation. Alternative: place pre-made landmark assets.
+4. **Landmark variety**: Landmarks (Component 4) cover water towers, churches, stadiums, cell towers, silos, wind turbines, cooling towers, lighthouses, bridges, and cranes. Additional landmark types can be added as content without code changes.
 5. **Underground**: Subways, tunnels, underground parking? Initial: no, subsurface is out of scope.
 6. **Road network scale**: How large an area? 1-4 km² seems reasonable for drone operations. Larger areas needed for satellite views? Satellite can use tiling: repeat urban pattern with variation.

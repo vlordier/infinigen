@@ -252,5 +252,4 @@ class MultiSensorRig:
 
 1. Should satellite mode actually simulate orbital mechanics (Keplerian elements) or just do straight-line push-broom? Start with straight-line for simplicity.
 2. FPV rolling shutter: is the per-scanline time offset worth the rendering overhead? Initial: approximate with motion blur + metadata flag.
-3. Should we include fixed-wing ISR platforms (different dynamics from multirotor)? Initial: multirotor only, add fixed-wing as enhancement.
-4. Does the satellite mode need atmospheric correction (Rayleigh scattering, aerosols at nadir)? Initial: use existing volume rendering with tuned density.
+3. Does the satellite mode need atmospheric correction (Rayleigh scattering, aerosols at nadir)? Initial: use existing volume rendering with tuned density.

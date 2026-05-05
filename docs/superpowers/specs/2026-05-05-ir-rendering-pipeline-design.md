@@ -143,7 +143,7 @@ IRThermalEnvironment.sky_emissivity = 0.8
 IRThermalEnvironment.ground_temperature = 288.15          # K
 ```
 
-### Integration with existing pipeline
+## Integration with existing pipeline
 
 Hooks into the render stage of `infinigen/core/execute_tasks.py`:
 
@@ -154,7 +154,7 @@ Hooks into the render stage of `infinigen/core/execute_tasks.py`:
 
 The existing `render_image()` in `infinigen/core/rendering/render.py` supports multiple render passes — IR passes are added alongside existing RGB/depth/normal passes.
 
-### Performance considerations
+## Performance considerations
 
 | Mode | Render cost vs RGB | Thermal solve cost |
 |------|-------------------|-------------------|
