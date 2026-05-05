@@ -1,0 +1,68 @@
+{
+  "scene_id": "vispos_demo_001",
+  "frame_index": 0,
+  "timestamp": 0.0,
+  "camera_intrinsics": null,
+  "camera_extrinsics": [
+    [
+      1,
+      0,
+      0,
+      0
+    ],
+    [
+      0,
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      1,
+      0
+    ],
+    [
+      0,
+      0,
+      0,
+      1
+    ]
+  ],
+  "lat": 0.0,
+  "lon": 0.0,
+  "alt": 0.0,
+  "gsd_meters": 0.1,
+  "season": "winter",
+  "time_of_day": "noon",
+  "sun_azimuth": 180.0,
+  "sun_elevation": 45.0,
+  "weather": {},
+  "is_damaged": true,
+  "damage_type": "earthquake",
+  "damage_severity": "mild",
+  "modality": "eo",
+  "place_id": "",
+  "sequence_id": "",
+  "gravity_vector_camera": [
+    0,
+    0,
+    -9.81
+  ],
+  "metric_scale": 1.0,
+  "stereo_baseline": 0.0,
+  "relocalization": false,
+  "loop_closure": [],
+  "gps_lat": 0.0,
+  "gps_lon": 0.0,
+  "gps_alt": 0.0,
+  "gps_mode": "nominal",
+  "gps_true_lat": 0.0,
+  "gps_true_lon": 0.0,
+  "gps_true_alt": 0.0,
+  "shadow_velocity_px_per_frame": 0.0,
+  "thermal_contrast_std": 0.0,
+  "exposure_time_s": 0.0,
+  "gain_iso": 100.0,
+  "feature_count": 0
+}
