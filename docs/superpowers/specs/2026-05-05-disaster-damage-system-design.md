@@ -157,7 +157,44 @@ Pipeline stages (runs after standard composition, before population):
 8. `validate_camera_trajectories()` — check and repair camera paths
 9. `finalize_damaged_scene()`
 
-### Component 5: Camera Trajectory Repair
+### Component 5: Multi-Stage Degradation (`damage_progression.py`)
+
+Beyond paired intact/damaged, generate progressive degradation sequences: the same scene degrading through multiple severity levels, with shared camera trajectories across all stages.
+
+**Why multi-stage**: A building doesn't collapse instantly. Visual positioning must work at every stage: a building with cracks (mild), partially collapsed (moderate), or a rubble pile (severe). Training on progressive sequences teaches the network that these are all the same place — invariance to structural change is learned from the data structure itself.
+
+**Progression protocol**:
+
+```
+Intact (stage 0)
+  → Mild damage (stage 1): render
+  → Moderate damage (stage 2): cumulative on stage 1, render
+  → Severe damage (stage 3): cumulative on stage 2, render
+  → Total destruction (stage 4): cumulative on stage 3, render
+```
+
+All stages share the same camera trajectories. Stage N is a strict superset of Stage N-1's damage — damage accumulates, it doesn't jump.
+
+**Severity level definitions**:
+
+| Level | Earthquake | War |
+|-------|-----------|-----|
+| 0 (intact) | No damage | No damage |
+| 1 (mild) | Hairline cracks in walls, shifted furniture, 5-10% trees toppled | Small craters (<5m), minor facade chips, 1-2 scorched areas |
+| 2 (moderate) | Partial wall collapse (20-40% walls failed), moderate rubble, 20-40% trees affected, road cracks | Medium craters (5-15m), facade holes, moderate scorching, debris fields |
+| 3 (severe) | Major structural failure (60-80% walls), extensive rubble, 50-70% trees down, road buckling | Large craters (>15m), collapsed facades, heavy scorching, vehicle wrecks |
+| 4 (total) | Building reduced to rubble pile, roads destroyed, all trees affected | Near-total destruction, overlapping craters, burned-out landscape |
+
+**Implementation**:
+- Each severity level is a configurable scalar (0.0-1.0) that scales all damage operators
+- `DamageStageExecutor` accepts a `severity` parameter
+- Multi-stage generation: run the pipeline 5 times with increasing severity, reusing the same scene snapshot and camera data
+- Storage: each stage gets its own output directory, with a `stage_index` in metadata
+- Configurable: generate all 5 stages, or just a subset (e.g., only stages 0, 2, 4 for sparse progression)
+
+**Camera repair across stages**: Camera trajectories are validated against the most damaged stage (stage 4) first. If a camera pose is invalid at stage 4, repair it. That repaired trajectory is then used for all stages, ensuring perfect frame correspondence.
+
+### Component 6: Camera Trajectory Repair
 
 After damage, some camera poses may be invalid (inside collapsed geometry, occluded by rubble). Repair strategy:
 

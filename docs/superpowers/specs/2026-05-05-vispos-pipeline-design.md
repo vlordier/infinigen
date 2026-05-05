@@ -57,10 +57,18 @@ class VisPosDatasetSpec:
     paired_damage: bool                    # Generate intact+damaged pairs
     damage_types: list[str]                # ["earthquake", "war"]
     damage_severities: list[str]           # ["mild", "moderate", "severe"]
+    damage_progression_stages: int         # 2 (intact+damaged), 3 (intact+mild+severe), 5 (full progression)
+    
+    # Weather degradation
+    weather_types: list[str]               # ["clear", "fog", "rain", "snow", "dust"]
+    weather_levels: list[int]              # [0, 1, 2] for light/medium/heavy degradation
     
     # Modality
     modalities: list[str]                  # ["eo", "lwir", "mwir", "swir"]
     ir_fidelity: str                       # "physics" or "heuristic"
+    
+    # Invariance axes (which pairs to generate for invariance training)
+    invariance_axes: list[str]             # ["altitude", "rotation", "time_of_day", "season", "weather", "modality", "damage", "platform"]
     
     # Task-specific configuration
     tasks: list[str]                       # ["geoloc", "vpr", "vo_slam"]
@@ -75,7 +83,53 @@ class VisPosDatasetSpec:
     render_engine: str                     # "cycles" or "eevee"
 ```
 
-This spec is resolved into a concrete `ScenePlan` — a list of `(scene_id, season, tod, platform, damage_type, damage_severity)` tuples to generate.
+This spec is resolved into a concrete `ScenePlan` — a list of `(scene_id, season, tod, platform, damage_type, damage_severity, weather_type, weather_level)` tuples to generate.
+
+### Invariance Design
+
+The core advantage of synthetic data for visual positioning: generate the **exact same scene** under different conditions with **perfect ground truth**. This enables training models that are invariant to nuisance factors while retaining place identity.
+
+**Invariance axes** — each represents a condition that changes visual appearance without changing location:
+
+| Axis | What changes | How it's generated | Training signal |
+|------|-------------|-------------------|-----------------|
+| **Altitude** | Camera height (0.5m → 500km) | Same scene, multiple camera rigs at different altitudes. Each frame pair = same location, different altitude. | Model learns that altitude changes scale/perspective but not place identity. |
+| **Rotation / viewpoint** | Camera orientation | Same scene, multiple camera poses. Positive pairs = nearby poses (same place, different angle). Negative pairs = far apart poses. | Model learns viewpoint invariance within a place. |
+| **Time of day** | Sun position, sky color, shadows, ambient light | Same scene, rendered at dawn/noon/dusk/night. Identical camera pose. | Model learns to ignore lighting, shadow changes. Critical for day/night relocalization. |
+| **Season** | Vegetation, snow cover, ground color, water state | Same scene, seasonal material overrides. Identical camera pose. | Model learns seasonal invariance. Winter snow can completely change visual appearance. |
+| **Weather** | Visibility, atmospheric scattering, precipitation | Same scene, different fog/rain/snow/dust levels. Identical camera pose. | Model learns to localize through degraded visibility, precipitation artifacts. |
+| **Modality** | EO ↔ LWIR ↔ MWIR ↔ SWIR | Same scene rendered in all bands via multi-sensor rig. Identical camera pose. | Cross-modal localization: query with IR, localize against EO reference (or vice versa). |
+| **Damage** | Structural integrity, rubble, craters, scorch | Same scene, progressive damage stages. Identical camera pose. | Model learns that a rubble pile is the same place as the intact building. |
+| **Platform** | ISR ↔ FPV ↔ UGV ↔ Satellite | Same location viewed from different platforms. Different motion blur, FOV, perspective. | Cross-platform localization. |
+
+**Pairing strategy**:
+
+For each invariance axis, generate positive pairs (same place, different axis value) and negative pairs (different place):
+
+```
+Scene A, summer, noon, clear  ──── positive ──── Scene A, winter, noon, clear
+     │
+     ├── positive ──── Scene A, summer, dusk, clear
+     │
+     ├── positive ──── Scene A, summer, noon, fog_heavy
+     │
+     └── negative ──── Scene B, summer, noon, clear
+```
+
+The `invariance_axes` field in the dataset spec controls which axes are varied. When `invariance_axes = ["altitude", "season", "damage"]`, the pipeline generates all combinations of those axes for each scene, producing a matrix of paired data.
+
+**Weather degradation levels** (structured visibility degradation):
+
+| Level | Fog/Haze | Rain | Snow | Dust |
+|-------|----------|------|------|------|
+| 0 (clear) | No fog, visibility >5km | No rain | No snow | No dust |
+| 1 (light) | Light haze, visibility 2-5km | Light drizzle, 5mm/h | Light flurries | Light dust haze |
+| 2 (medium) | Moderate fog, visibility 500m-2km | Moderate rain, 10-20mm/h | Moderate snowfall | Moderate dust, reduced contrast |
+| 3 (heavy) | Dense fog, visibility <500m | Heavy rain, >20mm/h, water on lens | Heavy snow, whiteout conditions | Dense dust storm, near-zero visibility |
+
+Each level is a gin-configurable preset that sets atmosphere density, particle emission rates, and lens effects (water droplets/condensation on lens). The same scene can be rendered at all 4 levels with identical camera poses.
+
+**Why this matters**: A dataset with 100 scenes × 4 seasons × 4 TOD × 4 weather levels × 2 damage states × 2 modalities ... produces ~25,600 condition variants from just 100 locations. With matched camera poses across all variants, this provides millions of positive/negative pairs for contrastive training. This is the superpower synthetic data has over real imagery — you can't take the same photo at noon and midnight, but you can render both.
 
 ### Component 2: Scene Plan Generation (`scene_plan.py`)
 

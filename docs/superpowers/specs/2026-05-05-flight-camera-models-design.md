@@ -1,4 +1,4 @@
-# Spec: Flight Camera Models
+# Spec: Platform Camera Models
 
 **Feature branch**: `feature/flight-cameras`
 **Date**: 2026-05-05
@@ -6,7 +6,7 @@
 
 ## Summary
 
-Add specialized camera placement, motion models, and sensor characteristics for aerial platforms: ISR drones, FPV drones, and satellite push-broom. Support multi-sensor EO/IR rigs and generate the diverse viewpoints needed for visual positioning training across altitudes from 5m to 500km.
+Add specialized camera placement, motion models, and sensor characteristics for aerial and ground platforms: ISR drones, fixed-wing ISR planes, FPV drones, UGV ground vehicles, and satellite push-broom. Support multi-sensor EO/IR rigs and generate the diverse viewpoints needed for visual positioning training across altitudes from 0.5m (ground) to 500km (orbital).
 
 ## Motivation
 
@@ -41,8 +41,11 @@ class FlightPlatform(Enum):
     ISR_ORBIT    = "isr_orbit"     # Orbiting ISR drone, gimbaled sensor
     ISR_RASTER   = "isr_raster"    # Raster-scan survey drone
     ISR_LOITER   = "isr_loiter"    # Loitering/stationary ISR
+    ISR_PLANE    = "isr_plane"     # Fixed-wing ISR aircraft (high alt, fast, long endurance)
     FPV_RACING   = "fpv_racing"    # High-speed aggressive FPV
     FPV_SCOUT    = "fpv_scout"     # Slower reconnaissance FPV
+    UGV_WHEELED  = "ugv_wheeled"   # Wheeled ground vehicle (0.5-2m AGL)
+    UGV_TRACKED  = "ugv_tracked"   # Tracked ground vehicle (0.5-2m AGL)
     SATELLITE    = "satellite"     # Orbital push-broom
 ```
 
@@ -71,8 +74,11 @@ class FlightRigSpec:
 | ISR Orbit | 100-500m | 15-40 m/s | 30-60° | 30-60° from nadir | Yes |
 | ISR Raster | 80-300m | 20-50 m/s | 40-80° | 0-10° from nadir | Yes |
 | ISR Loiter | 50-500m | 0-5 m/s | 20-60° | 45-90° from nadir | Yes |
+| ISR Plane | 500-5000m | 50-150 m/s | 5-30° | 30-60° from nadir | Yes |
 | FPV Racing | 5-50m | 30-80 m/s | 80-120° | 0-30° from forward | No (body-fixed) |
 | FPV Scout | 10-100m | 10-30 m/s | 60-100° | 0-20° from forward | Partial |
+| UGV Wheeled | 0.5-2m | 2-15 m/s | 60-100° | 0-20° from forward | Partial (pitch only) |
+| UGV Tracked | 0.5-2m | 1-10 m/s | 60-100° | 0-20° from forward | Partial (pitch only) |
 | Satellite | 200-500km | 7000 m/s | 1-5° | <1° from nadir | Yes |
 
 ### Component 3: Flight Motion Models (`flight_trajectories.py`)
@@ -110,6 +116,32 @@ class FlightRigSpec:
 - Waypoint-based path with gentle turns
 - Camera partially stabilized (limited gimbal range)
 - Can pause and orbit POIs briefly
+
+**ISR Plane** (`ISRPlanePolicy`):
+- Fixed-wing aircraft dynamics: constant forward velocity, coordinated turns (banked, constant radius)
+- High altitude (500-5000m AGL) with wide-area coverage
+- Flight patterns: race-track (parallel strips with 180° turns at ends), expanding spiral, or loiter circle around POI
+- Camera in gimbaled turret (pan/tilt stabilized, independent of aircraft attitude)
+- Turn radius constraint: min_radius = v² / (g × tan(max_bank)), typical bank angle 15-30°
+- Multiple sensor payloads: wide-area search camera + narrow-FOV spotter camera on same platform
+- Straight-and-level segments between turns (stable imaging periods, configurable duration)
+
+**UGV Wheeled** (`UGVWheeledPolicy`):
+- Ground vehicle following roads, paths, or cross-country terrain
+- Altitude: fixed 0.5-2m above ground (terrain-following with suspension model)
+- Motion: steering-based path following (Ackermann geometry), forward velocity with speed-dependent turn rate
+- Suspension bounce: vertical oscillation with configurable frequency/amplitude (1-3 Hz, ±5cm)
+- Camera: forward-facing or roof-mounted, limited pitch gimbal (±20°), no roll gimbal
+- Road following: prefer OSM road paths when available, cross-country when off-road
+- Speed variation: slow through urban areas, faster on open terrain
+- Dust kick-up: particle emitter at wheel contact points when on unpaved surfaces (configurable density)
+
+**UGV Tracked** (`UGVTrackedPolicy`):
+- Similar to wheeled but with skid-steering motion model (differential track speed)
+- Slower, more vibration (track clatter, 5-15 Hz)
+- Better off-road capability (steeper slopes, rougher terrain)
+- Camera stabilization less effective (more high-frequency jitter)
+- Dust/debris: more aggressive ground disturbance than wheeled
 
 **Satellite** (`SatellitePolicy`):
 - Straight-line push-broom trajectory

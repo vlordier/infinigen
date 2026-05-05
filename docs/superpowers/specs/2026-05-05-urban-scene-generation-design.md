@@ -39,6 +39,8 @@ infinigen/assets/urban/
 ├── __init__.py
 ├── urban_scene.py            # Urban scene composer (top-level)
 ├── osm_loader.py             # OSM download, parse, project to local coords
+├── regional_styles.py        # Geographic style presets (soviet, baltic, etc.)
+├── harbour.py                # Harbour/port extensions
 ├── road_network.py           # Road graph (OSM primary, procedural fallback)
 ├── road_mesher.py            # Road surface geometry from graph
 ├── intersection.py           # Intersection geometry
@@ -288,7 +290,74 @@ Detail objects are sourced from multiple pipelines:
 
 These are applied via the existing surface material system (`infinigen/core/surface.py`).
 
-### Component 8: Urban Scene Composer (`urban_scene.py`)
+### Component 8: Regional Style System (`regional_styles.py`)
+
+Geographic/architectural style presets that cascade through all urban subsystems. A single gin config (`regional_style = "soviet"`) changes buildings, vegetation, infrastructure, materials, and signage to match a specific region — producing Ukraine-like, Baltics-like, or harbour-like scenes.
+
+**Why regional styles**: Generic buildings produce generic training data. A visual positioning network trained on identical-looking cities won't generalize to real operational environments with distinct architectural character. Different regions have different building materials, roof shapes, vegetation, road layouts, and landmark types. These are strong visual cues for localization.
+
+**Style presets**:
+
+| Style | Building features | Vegetation | Infrastructure | Colors | Regions |
+|-------|------------------|------------|----------------|--------|---------|
+| `soviet` | Brutalist concrete panels, 5-9 story apartment blocks (khrushchyovka/brezhnevka), flat roofs, symmetric window grids, balcony railings | Steppe/prairie grasses, birch/pine stands, poplar windbreaks | Wide boulevards, tram lines, overhead trolleybus wires, industrial chimneys, district heating pipes | Gray concrete, pale yellow/beige panels, red brick accents | Ukraine, Eastern Europe, Caucasus |
+| `balkan` | Red tile roofs, stucco facades, irregular street patterns, hillside terracing, Ottoman-influenced older quarters | Cypress, olive-like shrubs, Mediterranean scrub | Narrow winding streets, stone retaining walls, satellite dish clusters | Terracotta, white/cream stucco, dark wood | Balkans, Adriatic |
+| `baltic` | Hanseatic brick (red/brown), steep pitched roofs (snow load), dormer windows, timber-frame accents, 3-5 story | Boreal forest (pine, spruce, birch), mossy ground, lakes | Cobblestone old town streets, ferry terminals, lighthouses, wooden jetties | Red/brown brick, white trim, copper green roofs | Baltics, Scandinavia, Northern Europe |
+| `mediterranean` | Whitewashed walls, flat roofs with terraces, arched windows/shutters, narrow alleyways, courtyard buildings | Olive/cypress/pine, bougainvillea vines, arid scrub | Stone walls, harbour infrastructure (docks, breakwaters), outdoor staircases | White, blue accents, terracotta, stone | Southern Europe, North Africa |
+| `middle_eastern` | Sand-colored stone/concrete, flat roofs, small windows (heat), decorative geometric screens (mashrabiya), courtyard layout | Palm trees, sparse desert scrub, date plantations | Minarets/mosques, covered souks, wind towers, desert-adapted roads (sand-colored) | Sand/beige, white, teal/turquoise accents | Middle East, North Africa, Central Asia |
+| `east_asian` | Mixed high-rise (glass/steel) + low-rise traditional (curved tile roofs, wooden frames), dense neighborhoods | Bamboo, cherry/plum, ginkgo, manicured gardens | Overhead expressways, dense signage clusters, train/transit infrastructure, rice paddies at edges | Gray/glass, dark wood, red/gold accents, white | East Asia |
+| `generic` (default) | Mixed — random selection from all styles weighted by zone type | Generic mixed vegetation | Generic infrastructure | Neutral palette | Fallback when no specific region needed |
+
+**How regional styles cascade**:
+
+A `RegionalStyle` object is a collection of parameter overrides:
+
+```python
+@gin.configurable
+@dataclass
+class RegionalStyle:
+    name: str
+    # Building overrides
+    building_material_weights: dict     # e.g. {"concrete_panel": 0.6, "brick": 0.3, "stucco": 0.1}
+    roof_style_weights: dict            # e.g. {"flat": 0.8, "pitched_shallow": 0.2}
+    window_style_weights: dict          # e.g. {"symmetric_grid": 0.9, "irregular": 0.1}
+    building_height_range: tuple        # e.g. (3, 9) stories for soviet
+    building_color_palette: list[str]   # Hex colors for facade materials
+    
+    # Vegetation overrides
+    tree_species_weights: dict          # e.g. {"birch": 0.4, "pine": 0.3, "spruce": 0.3} for baltic
+    undergrowth_density: float          # e.g. 0.3 for steppe, 0.8 for boreal
+    grass_color_shift: tuple            # Seasonal green hue shift
+    
+    # Infrastructure overrides
+    road_material: str                  # e.g. "asphalt_gray", "asphalt_dark"
+    sidewalk_material: str              # e.g. "concrete_tile", "cobblestone"
+    streetlight_style: str              # e.g. "soviet_concrete", "scandinavian_wood"
+    signage_language_weight: dict       # e.g. {"cyrillic": 1.0} for soviet
+    
+    # Landmark weights
+    landmark_type_weights: dict         # e.g. {"water_tower": 0.2, "silo": 0.3, "church_orthodox": 0.3}
+    
+    # Terrain preferences
+    preferred_elevation_range: tuple
+    terrain_flattening_aggressiveness: float  # 0-1, how much to flatten
+```
+
+Each subsystem reads from the active `RegionalStyle` when generating geometry/materials. A style is set once at scene composition time and automatically affects everything downstream.
+
+**Harbour/port scene extension**:
+
+When a regional style with coastline is selected, or when `scene_type = "harbour"`:
+- Terrain system generates a coastline (water edge) within the scene bounds
+- Harbour infrastructure placed along the waterfront: docks, piers, breakwaters, quay walls
+- Maritime landmarks: lighthouses, cranes, container stacks, warehouses
+- Ships/boats: cargo ships, fishing vessels, pleasure craft as static assets at docks
+- Waterfront buildings: warehouses, fish markets, customs houses with appropriate regional style
+- Container terminal option: stacked container geometry, gantry cranes, truck loading areas
+
+The harbour extension is part of the regional style system because harbours look completely different in different regions (Baltic timber piers vs Mediterranean stone quays vs industrial container ports).
+
+### Component 9: Urban Scene Composer (`urban_scene.py`)
 
 Top-level composition orchestrating all urban systems:
 
@@ -323,7 +392,7 @@ This is a `RandomStageExecutor`-compatible pipeline, meaning each stage can be r
 | `coastal_city` | City on waterfront | High | Adapted to coast |
 | `infrastructure_corridor` | Highway + bridges + power lines | Minimal | Single highway + access |
 
-### Component 9: Urban Scatter via Existing Infrastructure
+### Component 10: Urban Scatter via Existing Infrastructure
 
 Reuses existing infinigen scatter systems for urban-appropriate small elements:
 
