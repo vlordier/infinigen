@@ -193,18 +193,38 @@ class SensorCharacteristics:
     # Degradations
     motion_blur: bool                   # Simulate integration-time blur
     rolling_shutter: bool               # Simulate rolling shutter (FPV)
+    rolling_shutter_mode: str           # "subframe" (accurate, expensive) or "compositor" (fast, approximate) or "none"
     lens_distortion: bool               # Apply radial distortion
     vibration_profile: str              # "none", "light", "heavy"
     noise_model: str                    # "none", "gaussian", "photon"
+    lens_flare: bool                    # Simulate lens flare and veiling glare
+    saturation_behavior: str            # "clip" or "bloom" (charge bleeding to adjacent pixels)
+    compression: str                    # "none", "jpeg_85", "h264_medium" (post-render degradation)
 ```
 
-**Motion blur**: Applied via Cycles with configurable shutter time. Fast FPV platforms get more blur.
+**Motion blur**: Applied via Cycles with configurable shutter time. Fast FPV platforms get more blur. Shutter time is constrained to be physically plausible for the platform: ISR raster at 30 fps gets max 33ms shutter; FPV at 80 m/s with 100° HFOV at 5m gets <1ms to avoid total frame smear.
 
-**Rolling shutter**: Simulated by rendering sequential scanlines at slightly different times (approximation via per-row time offset in the compositor, or render multiple sub-frames).
+**Rolling shutter**: Two modes:
+- **Subframe mode** (accurate): Render N sub-frames at evenly spaced times within the frame interval, then assemble using per-scanline subsampling. This correctly handles occlusion changes between scanlines — a fast-moving building that enters frame mid-exposure appears correctly sheared. Compute cost: N × single frame render. Use for high-fidelity datasets.
+- **Compositor mode** (fast, approximate): Per-row time offset applied in post-processing. No occlusion handling — a building that enters frame between scanlines always appears or doesn't, rather than being partially occluded. Acceptable for slow platforms (UGV, ISR loiter). Inadequate for FPV racing (>50 m/s) where rolling shutter is the dominant artifact.
 
 **Vibration**: Apply high-frequency low-amplitude jitter to camera transform keyframes. Configurable amplitude vs frequency profile.
 
 **Lens distortion**: Apply radial distortion model (k1, k2, k3) in post-processing on rendered frames. Distortion parameters stored in metadata for undistortion.
+
+**Lens flare and veiling glare**: When the sun is within ±30° of the camera FOV (common for dawn/dusk ISR orbits, satellite with low sun angle):
+- Veiling glare: global contrast reduction proportional to sun→FOV angle (configurable attenuation curve)
+- Ghost reflections: 2-4 aperture ghost images at positions symmetric around frame center relative to sun position
+- Configurable per platform: ISR gimbaled sensors typically have lens hoods (less flare); FPV wide-angle lenses have more
+
+**Sensor saturation bloom** (IR only, spec #1): When pixel irradiance exceeds well capacity:
+- `clip` mode: hard clip at saturation (unrealistic but fast)
+- `bloom` mode: excess charge bleeds to adjacent pixels in column-parallel direction (vertical streaks for CMOS). Configurable bloom factor.
+
+**Compression artifacts**: Optional post-render degradation simulating real video pipelines:
+- `jpeg_85`: JPEG compression at quality 85 — DCT blocking artifacts at high-contrast edges
+- `h264_medium`: H.264 compression at medium bitrate — inter-frame compression ringing, motion-adaptive quantization
+- Applied after all other passes, before metadata write. Metadata records compression parameters.
 
 ### Component 6: Multi-Sensor Rig
 

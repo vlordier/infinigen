@@ -171,6 +171,22 @@ For bulk dataset generation, the heuristic path with EEVEE is the default. Full 
 4. **Regression**: Existing RGB pipeline unaffected when IR not enabled
 5. **Validation**: Compare against reference scenes (known materials at known temperatures)
 
+### Known Limitations & Risk Assessment
+
+The steady-state thermal solver has systematic simplifications. These are documented so dataset consumers understand what their models are (and aren't) learning:
+
+| Limitation | Effect on IR imagery | Severity | Mitigation |
+|-----------|---------------------|----------|------------|
+| **No thermal inertia** | Temperature changes instantly with sun position. Shadow boundaries have sharp thermal edges rather than gradual gradients. | High | Add thermal time-constant per material in v2. For v1, apply Gaussian blur to temperature map at shadow boundaries as crude approximation. |
+| **No sky reflections** | Low-emissivity surfaces (metal roofs, glass, water) appear as pure emitters. Misses reflected cold-sky radiance that dominates metal-roof IR signatures. | High | Document that metal/glass IR appearance is physically wrong. In v2, add specular reflection pass to IR render. |
+| **No internal heat sources** | Buildings at night are at ambient (invisible in LWIR). Vehicles are cold. Streetlights emit no thermal radiation. Industrial areas flat. | Critical for night | Night IR data from this pipeline should not be used for thermal target detection training. For localization, night IR is still useful (terrain + sky contrast exists). |
+| **Exponential-only atmosphere** | Path radiance (atmospheric emission) is not modeled. Significant for satellite altitudes. | Medium for ISR, high for satellite | For ISR altitudes (<5km), path radiance is modest. Satellite IR should use heuristic mode or be validated against real satellite IR. |
+| **No solar reflection in MWIR/SWIR** | MWIR and SWIR have significant solar reflection components that the emission-only render misses. | High for MWIR/SWIR | MWIR/SWIR output from physics path is incomplete. Use heuristic path for MWIR/SWIR that includes configurable solar reflection ratio. |
+
+**Recommendation for v1**: Focus on LWIR with physics path for daytime scenes (solar loading dominates, simplifications less severe). Use heuristic path for MWIR/SWIR and all night scenes. Invest in real IR data collection (200-500 frames of real ISR/drone IR with GPS) for validation before committing to the full physics implementation — validate that the simplified model transfers, then decide whether the remaining physics gaps are worth engineering.
+
+**Thermal inertia approximation (v1)**: As a minimal fix for the sharp shadow boundary problem, apply a Gaussian blur (σ = 5-15 pixels at render resolution) to the temperature map at shadow boundaries. This crudely approximates the thermal smearing that real materials exhibit. Not physically correct, but it visually reduces the most obvious domain gap artifact.
+
 ### Dependencies
 
 - None on other new features. Purely additive to rendering pipeline.
@@ -178,6 +194,6 @@ For bulk dataset generation, the heuristic path with EEVEE is the default. Full 
 
 ### Open Questions
 
-1. Should internal heat sources (engines, electronics, bodies) be modeled? Initial scope: no, external solar-only.
-2. Atmospheric path radiance: full MODTRAN integration or simple empirical model? Start with simple exponential attenuation, upgrade path for MODTRAN.
+1. Should internal heat sources (engines, electronics, bodies) be modeled? Initial scope: no, external solar-only. Night IR from v1 should be used for localization (terrain/sky contrast) but not for thermal target detection.
+2. Atmospheric path radiance: full MODTRAN integration or simple empirical model? Start with simple exponential attenuation, upgrade path for MODTRAN. Path radiance is negligible at ISR altitudes (<5km) but significant for satellite.
 3. Should foliage/vegetation include evapotranspiration cooling? Initial scope: no, treat vegetation as passive thermal mass.

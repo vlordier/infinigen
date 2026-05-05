@@ -151,6 +151,21 @@ def plan_generation(spec: VisPosDatasetSpec) -> GenerationPlan:
 - **Sampled**: Randomly sample condition combinations (large datasets, manage compute)
 - **Stratified**: Ensure each condition appears at least N times across scenes
 
+**Dataset composition modes** (first-class presets):
+
+Localization research shows that *more unique places* often beats *more conditions per place* for geolocalization and VPR. The pipeline provides two modes:
+
+| Mode | Scenes | Conditions per scene | Total frames (est.) | Best for |
+|------|--------|---------------------|---------------------|----------|
+| **Diversity** (default) | 5,000-50,000 | 1-2 | 250K-5M | Geolocalization, VPR — learning what makes places different |
+| **Invariance** | 100-500 | Full matrix (up to 256) | 25K-640K | Cross-condition robustness — learning what doesn't change per place |
+
+**Diversity mode** maximizes unique place count at the cost of per-place condition coverage. Each scene gets one randomly assigned (season, TOD, weather, damage) combination. IR rendering is heuristic-only. Render engine is EEVEE for speed. This is the *default* because most localization training benefits more from place diversity.
+
+**Invariance mode** generates the full condition matrix for fewer scenes. Used when the research question is specifically about condition invariance (day/night relocalization, cross-season VPR, damage-robust localization). Typically run as a secondary dataset after the diversity-mode base.
+
+**Hybrid mode**: 5,000 diversity scenes + 100 invariance scenes. The diversity scenes provide place coverage; the invariance scenes provide explicit cross-condition training signal. This is the recommended configuration for production training.
+
 **Example plan** for `vispos_isr_summer_v1` (100 scenes, summer only, ISR orbit + FPV, EO + LWIR, paired earthquake):
 ```
 100 scenes × 1 season × 1 TOD × 2 platforms × 2 modalities × 2 damage_states
@@ -227,11 +242,46 @@ class FrameMetadata:
     # Task labels
     place_id: str                        # For VPR: unique location identifier
     sequence_id: str                     # For VO/SLAM: trajectory identifier
+
+@dataclass
+class PerPixelPasses:
+    """Optional per-pixel ground truth passes saved alongside frames."""
+    permanence: bool                     # 3-class: permanent / semi-permanent / transient
+    cross_condition_correspondence: bool # Pixel correspondences to same pose in ref condition
+    covisibility: bool                   # Which frames see which 3D points
+    valid_depth: bool                    # Sensor-realistic depth validity mask
 ```
 
-**Coordinate mapping**: Blender world coordinates → WGS84 via affine transform. A user-defined origin (lat, lon) + scale converts meters to degrees. This is not physically precise satellite imagery — it's synthetic data. The mapping is documented transparently.
+**Feature permanence labels** (`permanence` pass, new):
 
-**Output format**: JSON for metadata, NPY for dense data (depth, flow, segmentation).
+A per-pixel 3-class label that only synthetic data can provide perfectly:
+
+| Class | Value | Examples | Behavior across conditions |
+|-------|-------|----------|---------------------------|
+| **Permanent** | 2 | Terrain, bedrock, building structure, roads, bridges, permanent infrastructure | Always present at same 3D location. May change appearance (winter snow on road) but geometry persists. |
+| **Semi-permanent** | 1 | Trees, streetlights, signs, landmarks, power poles | Present for months/years. Seasonal appearance change. Damageable. May disappear in severe damage stages. |
+| **Transient** | 0 | Vehicles, pedestrians, construction equipment, debris, seasonal snow cover, vegetation undergrowth, parked objects | May not exist days later. Free to use or ignore depending on task. |
+
+This is ground truth that no real-world dataset can provide — real data only captures one moment in time with no knowledge of what will persist. The permanence mask is computed from the scene graph: objects tagged with their permanence class at generation time, rendered as a flat-shaded segmentation pass alongside RGB.
+
+**Cross-condition segmentation consistency**: Object and instance IDs are guaranteed consistent across all condition variants of the same scene. Building_0042 has ID 37 in summer/intact, summer/damaged, winter/intact, and winter/damaged. The segmentation is stored once per scene and referenced by per-variant metadata — not regenerated per variant.
+
+**Cross-condition pixel correspondences**: When the same 3D surface point is visible from the same camera pose in two condition variants (e.g., summer/noon and winter/dusk), the pipeline provides a 2-channel float32 EXR mapping `(u, v)` from each pixel in variant A to its corresponding pixel in variant B. Pixels with no correspondence (occluded, out of frame) are `(-1, -1)`. This is the ground-truth supervision signal for cross-condition descriptor learning.
+
+**Covisibility graphs**: Per scene, a sparse matrix of which frame pairs share >N visible 3D points. Computed from depth+pose projection. Enables efficient positive/negative pair mining for VPR training.
+
+**GPS noise model** (in `FrameMetadata`):
+
+GPS coordinates are provided at two fidelity levels:
+- **Clean**: Exact Blender→WGS84 transform (for validation, debugging)
+- **Noisy**: Realistic GPS error applied based on scene context:
+  - Open terrain: 2-5m horizontal, 3-8m vertical (low PDOP)
+  - Urban canyon (buildings nearby): 10-30m horizontal, 15-50m vertical (multipath)
+  - Under bridge/overpass: GPS dropout with configurable probability
+  - Noise characteristics: non-zero-mean bias from multipath + Gaussian jitter
+  - Configurable via `gps_noise_preset`: "clean", "urban", "harsh", "custom"
+
+This enables training models that learn to fuse noisy GPS with visual positioning rather than overtrusting perfect coordinates.
 
 ### Component 5: Output Layout (`output_layout.py`)
 
@@ -298,7 +348,59 @@ Stage 4 (Expert): Severe damage, all IR bands, night conditions, adverse weather
 
 Each stage config is a `VisPosDatasetSpec` with different parameters. Models can be progressively trained through the curriculum.
 
-### Component 8: Dataset Validation (`validation.py`)
+### Component 8: Evaluation Methodology
+
+A held-out test protocol for measuring whether models trained on this data actually work. The pipeline is a tool — this section defines what success looks like and how to measure it.
+
+**Held-out test methodology**:
+
+| Split | What | Purpose |
+|-------|------|---------|
+| **Training** | 70% of scenes, baseline conditions | Standard training data |
+| **Validation** | 15% of scenes, same conditions as training | Hyperparameter tuning, early stopping |
+| **Test (in-domain)** | 15% of scenes, same conditions as training | Measure baseline localization performance |
+| **Test (cross-condition)** | Same test scenes, different conditions | Measure robustness: how much does accuracy drop in winter vs summer? |
+| **Test (cross-region)** | New scenes from held-out regional style | Generalization: can the model localize in a region it never saw during training? |
+| **Test (cross-damage)** | Same test scenes, held-out damage stage | Damage robustness: trained on mild+moderate, tested on severe |
+
+**Held-out conditions for generalization testing** (configurable):
+
+```python
+@gin.configurable
+class EvaluationSplit:
+    held_out_styles: list[str]       # Regional styles excluded from training, e.g. ["soviet"]
+    held_out_damage: list[int]       # Damage stages excluded, e.g. [4] (total destruction)
+    held_out_weather: list[int]      # Weather levels excluded, e.g. [3] (heavy)
+    held_out_platforms: list[str]    # Platforms excluded, e.g. ["satellite"]
+    held_out_seasons: list[str]      # Seasons excluded, e.g. ["winter"]
+```
+
+**Target metrics** (for baseline validation):
+
+| Task | Metric | Target threshold |
+|------|--------|-----------------|
+| Geolocalization | Mean haversine error (km) | <1km at country scale, <100m at city scale |
+| VPR | Recall@1, Recall@5 | >80% R@1 on in-domain, >60% R@1 on cross-condition |
+| VO/SLAM | ATE RMSE (m), RPE (%) | <5% drift per 100m traveled |
+
+**Real-data validation** (recommended, not in v1):
+- A small set of real ISR/UAS imagery (200-500 frames) with GPS ground truth, collected in conditions matching the synthetic data (same season, similar environment)
+- Measure domain gap: compute feature distributions or train a domain classifier between synthetic and real
+- If available, fine-tune on real data and measure improvement — quantifies the pretraining value of synthetic data
+
+**Ablation framework**:
+The invariance axes enable systematic ablation. Train N models, each with one axis removed from the training data, test all models on the held-out condition for that axis:
+
+```
+Baseline: trained on all 8 axes → test on cross-condition winter
+- TOD:      train without TOD variation  → test on winter
+- Season:   train without season variation → test on winter  
+- Weather:  train without weather variation → test on winter
+```
+
+The delta between baseline and each ablation measures the marginal training value of each axis. This answers the research question: "Does adding winter training data actually improve winter localization?"
+
+### Component 9: Dataset Validation (`validation.py`)
 
 Automated checks run after generation:
 
