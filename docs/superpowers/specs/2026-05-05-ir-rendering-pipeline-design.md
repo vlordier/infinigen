@@ -185,6 +185,8 @@ The steady-state thermal solver has systematic simplifications. These are docume
 
 **Recommendation for v1**: Focus on LWIR with physics path for daytime scenes (solar loading dominates, simplifications less severe). Use heuristic path for MWIR/SWIR and all night scenes. Invest in real IR data collection (200-500 frames of real ISR/drone IR with GPS) for validation before committing to the full physics implementation — validate that the simplified model transfers, then decide whether the remaining physics gaps are worth engineering.
 
+**Thermal crossover**: At dawn and dusk, all outdoor surfaces approach the same temperature as ambient air (thermal equilibrium). This creates near-zero thermal contrast — a canonical IR navigation failure mode. The steady-state solver naturally produces low-contrast output at these times (when solar loading ≈ 0 and all surfaces approach ambient). The pipeline should explicitly generate dawn/dusk IR data (TOD = "dawn" or "dusk", modality = "lwir") for crossover-condition robustness training. Metadata includes per-frame `thermal_contrast_std` (standard deviation of scene temperatures) so datasets can be filtered by contrast level.
+
 **Thermal inertia approximation (v1)**: As a minimal fix for the sharp shadow boundary problem, apply a Gaussian blur (σ = 5-15 pixels at render resolution) to the temperature map at shadow boundaries. This crudely approximates the thermal smearing that real materials exhibit. Not physically correct, but it visually reduces the most obvious domain gap artifact.
 
 ### Dependencies

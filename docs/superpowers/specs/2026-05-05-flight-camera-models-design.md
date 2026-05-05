@@ -222,17 +222,44 @@ class SensorCharacteristics:
     # Detector
     resolution: tuple[int, int]         # pixels
     pixel_pitch_um: float               # microns
+    render_pyramid_levels: int          # Render at N resolution levels (e.g., 3 = 2K, 1K, 512)
+    
+    # Auto-exposure
+    auto_exposure: bool                 # Enable frame-to-frame exposure variation
+    exposure_target_mean: float         # Target mean pixel value (0-1)
+    exposure_slew_rate_stops_per_frame: float  # Max stops of exposure change per frame
+    exposure_min_stops: float           # Minimum exposure offset from baseline
+    exposure_max_stops: float           # Maximum exposure offset from baseline
+    exposure_metering_mode: str         # "center_weighted", "spot", "matrix"
     
     # Degradations
     motion_blur: bool                   # Simulate integration-time blur
     rolling_shutter: bool               # Simulate rolling shutter (FPV)
     rolling_shutter_mode: str           # "subframe" (accurate, expensive) or "compositor" (fast, approximate) or "none"
     lens_distortion: bool               # Apply radial distortion
-    vibration_profile: str              # "none", "light", "heavy"
+    vibration_profile: str              # "none", "light", "heavy", "tracked_ugv", "wheeled_ugv", "isr_plane", "fpv_racing"
     noise_model: str                    # "none", "gaussian", "photon"
     lens_flare: bool                    # Simulate lens flare and veiling glare
     saturation_behavior: str            # "clip" or "bloom" (charge bleeding to adjacent pixels)
     compression: str                    # "none", "jpeg_85", "h264_medium" (post-render degradation)
+    water_specular: bool                # Maritime: simulate sun glint on water surfaces
+```
+
+**Auto-exposure**: Real platform cameras continuously adjust gain and exposure to maintain target brightness. When transitioning from dark forest to bright concrete, the exposure slews over 2-5 frames — changing apparent brightness of all scene points. Frame metadata includes:
+- `exposure_time_s`, `gain_iso`, `aperture_f`: Actual per-frame exposure parameters
+- `exposure_slewing`: True if exposure is still converging to target (frames 0-4 after scene change)
+
+For VO/SLAM, the exposure metadata enables exposure-compensated feature matching. For VPR, it provides photometric normalization parameters.
+
+**Vibration profiles** (platform-specific spectra):
+- `tracked_ugv`: 5-15 Hz track clatter, high amplitude (±10cm), strong high-frequency content
+- `wheeled_ugv`: 1-3 Hz suspension bounce, ±5cm, speed-dependent amplitude
+- `isr_plane`: 10-50 Hz engine vibration, ±1cm, narrowband
+- `fpv_racing`: 20-80 Hz motor/propeller vibration, ±2cm, broadband
+
+**Sun glint on water**: When `water_specular = True` for maritime/harbour scenes, the renderer enables specular sun reflection on water surfaces. Creates saturated, moving pixel patches that corrupt feature matching. Metadata includes `sun_glint_fraction` (fraction of frame pixels saturated by specular reflection).
+
+**Multi-resolution rendering**: When `render_pyramid_levels > 1`, render at multiple native resolutions (e.g., 2048×1088, 1024×544, 512×272). Higher-resolution frames are downsampled internally by Blender (not post-render resize) to avoid aliasing. Pyramid levels stored in `frame_0000_l1.exr` (level 1, half-res), `frame_0000_l2.exr` (quarter-res). Ground truth (depth, segmentation) rendered at full resolution only; lower pyramid levels inherit from full-res with nearest-neighbor label consistency.
 ```
 
 **Motion blur**: Applied via Cycles with configurable shutter time. Fast FPV platforms get more blur. Shutter time is constrained to be physically plausible for the platform: ISR raster at 30 fps gets max 33ms shutter; FPV at 80 m/s with 100° HFOV at 5m gets <1ms to avoid total frame smear.
@@ -283,16 +310,33 @@ class MultiSensorTimingSpec:
 **Timing semantics**: In real multi-sensor ISR rigs, exposures are interleaved to prevent cross-talk between EO and IR bands. Each sensor's frame timestamp is recorded independently. The pipeline stores per-sensor timestamps (not a single `timestamp`) in `FrameMetadata`. The nominal trigger time is `t=0` for the master sensor (EO); other sensors have configurable microsecond offsets.
 
 **Parallax concerns**: The physical baseline between EO and IR sensors creates parallax at close range. For ISR loiter at 50m staring at a building, a 5cm baseline = 1 mrad parallax = ~1 pixel at common resolutions. This is tracked in metadata so cross-modal pair filtering can exclude frames where parallax exceeds a threshold.
-    eo_camera: bpy.types.Object       # Main EO camera
-    ir_cameras: dict[str, bpy.types.Object]  # "lwir", "mwir", "swir" cameras
-    baseline_mm: float                 # Physical separation between EO and IR
+
+### Component 7: Stereo & Multi-Camera EO Rigs
+
+For depth estimation and metric-scale VIO, ISR platforms commonly fly dual-EO or trinocular stereo rigs:
+
+```python
+@gin.configurable
+@dataclass
+class StereoRigSpec:
+    camera_count: int                    # 2 (stereo) or 3 (trinocular triangle)
+    baseline_m: float                    # Inter-camera baseline in meters
+    baseline_orientation: str            # "horizontal", "vertical", "triangular"
+    camera_layout: list[list[float]]     # [[x,y,z] offsets from rig center per camera]
+    synchronization: str                 # "hardware_sync" (µs-level) or "software_sync" (ms-level)
+    depth_ground_truth: bool             # Render per-frame stereo depth (disparity + depth map)
 ```
 
-- All cameras parented to same rig empty → share trajectory
-- Small physical offset between EO and IR sensors (configurable)
-- IR cameras use IR-specific sensor specs from `IRSensorSpec` (#1)
-- Per-frame extrinsics saved for each sensor
-- Integrates with feature #1 (IR rendering) — multi-sensor rig triggers multi-pass rendering
+**Stereo ground truth**: For stereo rigs, render per-frame:
+- `frame_xxxx_disparity.exr`: Left→right disparity map (float32, NaN where occluded)
+- `frame_xxxx_depth_stereo.exr`: Depth map computed from disparity via baseline × focal_length / disparity
+- `frame_xxxx_depth_stereo_valid.exr`: Binary mask of valid stereo depth (non-occluded, within disparity range)
+
+This depth is geometrically exact (Cycles ray depth from each camera) — no stereo matching noise. For stereo matching training, apply configurable noise to the depth/disparity maps (Gaussian, salt-and-pepper) to simulate matching failures on textureless walls, repeating patterns, and specular surfaces.
+
+**Trinocular rig**: 3 cameras in an equilateral triangle. Provides two independent stereo baselines (camera 1-2 and camera 1-3) plus cross-validation. Enables training of multi-view stereo depth fusion networks.
+
+### Component 8: Platform Sensor Suite Integration
 
 ### Integration
 
