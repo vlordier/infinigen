@@ -1,0 +1,1 @@
+{"min_freq": ["uniform", 0.0005, 0.002], "max_freq": ["uniform", 0.003, 0.004], "height": ["uniform", 60, 90], "coverage": ["uniform", 0.4, 0.6], "slope_freq": ["uniform", 0.001, 0.004], "slope_height": ["uniform", 4, 6]}
