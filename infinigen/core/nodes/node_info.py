@@ -36,7 +36,8 @@ class Nodes:
     BrightContrast = "CompositorNodeBrightContrast"
     Exposure = "CompositorNodeExposure"
     CombineHSV = "ShaderNodeCombineHSV"
-    SeparateRGB = "ShaderNodeSeparateRGB"
+    SeparateRGB = "ShaderNodeSeparateRGB"  # Blender 5.x removed this; compat_separate_rgb maps to SeparateXYZ
+    SeparateXYZ = "ShaderNodeSeparateXYZ"
     SeparateColor = "ShaderNodeSeparateColor"
     CompSeparateColor = "CompositorNodeSeparateColor"
     CombineRGB = "ShaderNodeCombineRGB"
@@ -353,7 +354,7 @@ NODE_ATTRS_AVAILABLE = {
     Nodes.NamedAttribute: ["data_type"],
     Nodes.StoreNamedAttribute: ["data_type", "domain"],
     Nodes.CurveToPoints: ["mode"],
-    Nodes.FillCurve: ["mode"],
+    # Nodes.FillCurve 'mode' removed in Blender 5.x — handled via compat_fill_curve
     Nodes.ResampleCurve: ["mode"],
     Nodes.TrimCurve: ["mode"],
     Nodes.MeshLine: ["mode"],
@@ -370,7 +371,7 @@ NODE_ATTRS_AVAILABLE = {
     Nodes.VectorRotate: ["invert", "rotation_type"],
     Nodes.RotateEuler: ["space", "type"],
     Nodes.DuplicateElements: ["domain"],
-    Nodes.SeparateRGB: ["mode"],
+    Nodes.SeparateRGB: [],  # 'mode' attr removed in Blender 5.x; handled via compat_separate_rgb
     Nodes.SeparateColor: ["mode"],
     Nodes.DomainSize: ["component"],
 }

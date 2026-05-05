@@ -14,6 +14,13 @@ from mathutils import Vector
 from numpy.random import randint, uniform
 
 # NOTE: logging config has to be before imports that use logging
+import warnings
+# Silence landlab's use of the deprecated Dataset.dims API (removed in future xarray versions)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Dataset\.dims.*",
+    category=FutureWarning,
+)
 logging.basicConfig(
     format="[%(asctime)s.%(msecs)03d] [%(module)s] [%(levelname)s] | %(message)s",
     datefmt="%H:%M:%S",

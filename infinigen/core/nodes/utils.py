@@ -12,6 +12,53 @@ from infinigen.core.nodes import Nodes
 logger = logging.getLogger(__name__)
 
 
+class CompatOutputProxy:
+    """
+    Wraps a Blender node returned by new_node() and transparently remaps
+    deprecated output-socket names to their Blender 5.x equivalents.
+
+    This lets callers continue using old socket names (e.g. R/G/B from the
+    removed ShaderNodeSeparateRGB) even though the actual node now uses
+    different names (X/Y/Z for ShaderNodeSeparateXYZ).
+
+    The proxy wraps the node's ``outputs`` collection so that
+    ``node.outputs["R"]`` is transparently remapped to ``node.outputs["X"]``.
+    """
+
+    def __init__(self, node, output_remap):
+        object.__setattr__(self, "_node", node)
+        object.__setattr__(self, "_output_remap", output_remap)
+
+    class _CompatSocketCollection:
+        """Wraps bpy_prop_collection to remap socket names on lookup."""
+
+        def __init__(self, collection, output_remap):
+            object.__setattr__(self, "_collection", collection)
+            object.__setattr__(self, "_output_remap", output_remap)
+
+        def __getitem__(self, key):
+            remap = object.__getattribute__(self, "_output_remap")
+            key = remap.get(key, key)
+            return object.__getattribute__(self, "_collection")[key]
+
+        def __getattr__(self, name):
+            return getattr(object.__getattribute__(self, "_collection"), name)
+
+    @property
+    def outputs(self):
+        """Return a socket-collection wrapper that remaps deprecated names."""
+        return self._CompatSocketCollection(
+            object.__getattribute__(self, "_node").outputs,
+            object.__getattribute__(self, "_output_remap"),
+        )
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_node"), name)
+
+    def __repr__(self):
+        return f"CompatOutputProxy({object.__getattribute__(self, '_node')})"
+
+
 def infer_output_socket(item):
     """
     Figure out if `item` somehow represents a node with an output we can use.

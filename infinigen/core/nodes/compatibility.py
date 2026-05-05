@@ -222,6 +222,45 @@ def compat_principled_bsdf(nw, orig_type, input_args, attrs, input_kwargs):
     )
 
 
+def compat_fill_curve(nw, orig_type, input_args, attrs, input_kwargs):
+    # Blender 5.x removed the 'mode' property from GeometryNodeFillCurve.
+    if attrs:
+        attrs.pop("mode", None)
+    return nw.new_node(
+        node_type=orig_type,
+        input_args=input_args,
+        attrs=attrs,
+        input_kwargs=input_kwargs,
+        compat_mode=False,
+    )
+
+
+def compat_separate_rgb(nw, orig_type, input_args, attrs, input_kwargs):
+    # Blender 5.x removed ShaderNodeSeparateRGB; use ShaderNodeSeparateXYZ instead.
+    # SeparateRGB had R/G/B outputs; SeparateXYZ has X/Y/Z outputs (same data, just renamed).
+    from infinigen.core.nodes.utils import CompatOutputProxy
+
+    input_kwargs = dict(input_kwargs)  # shallow copy to avoid mutating caller's dict
+    input_kwargs["Vector"] = input_kwargs.pop("Image", None)
+    node = nw.new_node(
+        node_type=Nodes.SeparateXYZ,
+        input_args=input_args,
+        attrs=attrs,
+        input_kwargs=input_kwargs,
+        compat_mode=False,
+    )
+    # Remap output socket names so callers can keep using .outputs["R"] / .outputs["G"] / .outputs["B"]
+    output_remap = {
+        "R": "X",
+        "G": "Y",
+        "B": "Z",
+        "Red": "X",
+        "Green": "Y",
+        "Blue": "Z",
+    }
+    return CompatOutputProxy(node, output_remap)
+
+
 COMPATIBILITY_MAPPINGS = {
     Nodes.MixRGB: make_virtual_mixrgb,
     Nodes.TransferAttribute: make_virtual_transfer_attribute,
@@ -229,4 +268,6 @@ COMPATIBILITY_MAPPINGS = {
     Nodes.MusgraveTexture: compat_musgrave_texture,
     Nodes.CaptureAttribute: compat_capture_attribute,
     Nodes.PrincipledBSDF: compat_principled_bsdf,
+    Nodes.FillCurve: compat_fill_curve,
+    Nodes.SeparateRGB: compat_separate_rgb,
 }

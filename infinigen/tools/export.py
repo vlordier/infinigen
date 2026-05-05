@@ -37,6 +37,22 @@ SPECIAL_BAKE = {"METAL": "Metallic", "TRANSMISSION": "Transmission Weight"}
 ALL_BAKE = BAKE_TYPES | SPECIAL_BAKE
 
 
+def _usd_export_texture_settings(export_path: Path) -> dict:
+    textures_dir = export_path.parent / "textures"
+    has_existing_textures = textures_dir.exists() and any(textures_dir.iterdir())
+    if has_existing_textures:
+        logging.info(f"Reusing existing USD textures from {textures_dir}")
+        return {
+            "export_textures_mode": "PRESERVE",
+            "overwrite_textures": False,
+        }
+
+    return {
+        "export_textures_mode": "NEW",
+        "overwrite_textures": True,
+    }
+
+
 def _view_layer_object_names() -> set[str]:
     return {obj.name for obj in bpy.context.view_layer.objects}
 
@@ -857,11 +873,12 @@ def run_blender_export(
         )
 
     if format in ["usda", "usdc"]:
+        texture_export_kwargs = _usd_export_texture_settings(Path(exportPath))
         bpy.ops.wm.usd_export(
             filepath=exportPath,
-            export_textures_mode='NEW',
+            export_textures_mode=texture_export_kwargs["export_textures_mode"],
             # use_instancing=True,
-            overwrite_textures=True,
+            overwrite_textures=texture_export_kwargs["overwrite_textures"],
             selected_objects_only=individual_export,
             root_prim_path="/World",
         )
@@ -1150,6 +1167,9 @@ def export_curr_scene(
     vertex_colors=False,
     individual_export=False,
     omniverse_export=False,
+    skip_bake=False,
+    save_prepared_blend=False,
+    prepared_only=False,
     pipeline_folder=None,
     task_uniqname=None,
 ) -> Path:
@@ -1211,13 +1231,16 @@ def export_curr_scene(
     except AttributeError:
         pass
 
-    # iterate through all objects and bake them
-    bake_scene(
-        folderPath=export_folder / "textures",
-        image_res=image_res,
-        vertex_colors=vertex_colors,
-        export_usd=export_usd,
-    )
+    if skip_bake:
+        logging.info("Skipping texture baking and reusing prepared scene state")
+    else:
+        # iterate through all objects and bake them
+        bake_scene(
+            folderPath=export_folder / "textures",
+            image_res=image_res,
+            vertex_colors=vertex_colors,
+            export_usd=export_usd,
+        )
 
     for collection, status in collection_views.items():
         collection.hide_render = status
@@ -1229,6 +1252,13 @@ def export_curr_scene(
 
     for obj in bpy.data.objects:
         obj.hide_viewport = obj.hide_render
+
+    if save_prepared_blend:
+        prepared_blend = export_folder / "prepared_export.blend"
+        logging.info(f"Saving prepared export blend to {prepared_blend}")
+        bpy.ops.wm.save_as_mainfile(filepath=str(prepared_blend), copy=True)
+        if prepared_only:
+            return prepared_blend
 
     if omniverse_export:
         adjust_wattages()
@@ -1277,12 +1307,34 @@ def main(args):
         filemode="w+",
     )
 
+    # Support directly loading a single blend file via --input_blend
+    if hasattr(args, "input_blend") and args.input_blend is not None:
+        blendfile = args.input_blend
+        bpy.ops.wm.open_mainfile(filepath=str(blendfile))
+        export_folder = args.output_folder
+        export_folder.mkdir(exist_ok=True, parents=True)
+        export_curr_scene(
+            export_folder,
+            format=args.format,
+            image_res=args.resolution,
+            vertex_colors=args.vertex_colors,
+            individual_export=args.individual,
+            omniverse_export=args.omniverse,
+            skip_bake=args.skip_bake,
+            save_prepared_blend=args.save_prepared_blend,
+            prepared_only=args.prepared_only,
+        )
+        if not args.skip_zip:
+            subprocess.call(["zip", "-r", str(export_folder.with_suffix(".zip")), str(export_folder)])
+        bpy.ops.wm.quit_blender()
+        return
+
     targets = sorted(list(args.input_folder.iterdir()))
     for blendfile in targets:
         if blendfile.stem == "solve_state":
             shutil.copy(blendfile, args.output_folder / "solve_state.json")
 
-        if not blendfile.suffix == ".blend":
+        if not blendfile.is_file() or blendfile.suffix != ".blend":
             logger.info(f'Skipping non-blend file {blendfile}')
             continue
 
@@ -1296,9 +1348,13 @@ def main(args):
             vertex_colors=args.vertex_colors,
             individual_export=args.individual,
             omniverse_export=args.omniverse,
+            skip_bake=args.skip_bake,
+            save_prepared_blend=args.save_prepared_blend,
+            prepared_only=args.prepared_only,
         )
-        # wanted to use shutil here but kept making corrupted files
-        subprocess.call(["zip", "-r", str(folder.with_suffix(".zip")), str(folder)])
+        if not args.skip_zip:
+            # wanted to use shutil here but kept making corrupted files
+            subprocess.call(["zip", "-r", str(folder.with_suffix(".zip")), str(folder)])
 
     bpy.ops.wm.quit_blender()
 
@@ -1307,6 +1363,7 @@ def make_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--input_folder", type=Path)
+    parser.add_argument("--input_blend", type=Path, help="Load a single .blend file directly, bypassing folder scan")
     parser.add_argument("--output_folder", type=Path)
 
     parser.add_argument("-f", "--format", type=str, choices=FORMAT_CHOICES)
@@ -1315,6 +1372,10 @@ def make_args():
     parser.add_argument("-r", "--resolution", default=1024, type=int)
     parser.add_argument("-i", "--individual", action="store_true")
     parser.add_argument("-o", "--omniverse", action="store_true")
+    parser.add_argument("--skip_bake", action="store_true")
+    parser.add_argument("--save_prepared_blend", action="store_true")
+    parser.add_argument("--prepared_only", action="store_true")
+    parser.add_argument("--skip_zip", action="store_true")
 
     args = parser.parse_args()
 

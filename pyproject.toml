@@ -151,7 +151,8 @@ filterwarnings = [
     # ignore warnings from landlab, not our problem
     "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
     "ignore:Importing from numpy.matlib is deprecated since 1.19.0:PendingDeprecationWarning",
-    "ignore:Please import `label` from the `scipy.ndimage` namespace; the `scipy.ndimage.measurements` namespace is deprecated and will be removed in SciPy 2.0.0:DeprecationWarning"
+    "ignore:Please import `label` from the `scipy.ndimage` namespace; the `scipy.ndimage.measurements` namespace is deprecated and will be removed in SciPy 2.0.0:DeprecationWarning",
+    "ignore:.*Dataset.dims.*:FutureWarning",
 
 ]
 

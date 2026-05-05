@@ -6,6 +6,14 @@
 
 import os
 import sys
+import warnings
+
+# Silence landlab's deprecated Dataset.dims API (removed in future xarray versions)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Dataset\.dims.*",
+    category=FutureWarning,
+)
 
 pwd = os.getcwd()
 sys.path.append(pwd)

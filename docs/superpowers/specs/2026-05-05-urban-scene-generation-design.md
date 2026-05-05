@@ -1,4 +1,4 @@
-# Spec: Procedural Urban Scene Generation
+# Spec: Urban Scene Generation
 
 **Feature branch**: `feature/urban-scenes`
 **Date**: 2026-05-05
@@ -6,18 +6,28 @@
 
 ## Summary
 
-Generate procedurally-built urban and suburban landscapes — road networks, buildings (exteriors + interiors), infrastructure, and urban surface materials. This provides the structural assets that the disaster damage, flight camera, and visual positioning pipeline features depend on for realistic urban operations data.
+Generate urban and suburban landscapes using a hybrid asset sourcing strategy: OSM data for city layouts, procedural generation for structural elements, AI image-to-3D and static libraries for detail objects. Provides the structural assets that damage, flight camera, and visual positioning features depend on.
 
-## Motivation
+## Asset Sourcing Strategy
 
-Infinigen currently generates nature landscapes (terrain, trees, rocks) and single indoor rooms. Visual positioning for drones and ISR operates primarily over built environments — cities, towns, industrial zones, and infrastructure corridors. Damage modeling (#2) requires structures to destroy. Flight cameras (#4) need urban canyons and building-scale obstacles. Without urban assets, the entire feature set is limited to rural/wilderness scenarios.
+Where assets come from, by category:
 
-This feature adds the ability to generate landscapes with:
-- Road networks connecting populated areas
-- Multi-story buildings with varied architecture
-- Infrastructure (bridges, power lines, streetlights, signs)
-- Urban surface materials (asphalt, concrete, sidewalks)
-- Urban vegetation and street furniture
+| Category | Source | Rationale |
+|----------|--------|-----------|
+| **Road networks** | OSM data (primary) + procedural infill (gap filling) | Real city layouts provide authentic road topology. Procedural fills gaps where OSM is sparse or for purely synthetic cities. |
+| **Building footprints** | OSM data (primary) + procedural lot subdivision (fill) | OSM provides real building footprints where available. Procedural generates plausible infill for un-mapped areas. |
+| **Building shells, facades, roofs** | Procedural (infinigen-style) | Extruded from footprints. Too many variations, must integrate with damage system, needs structural metadata. |
+| **Bridges, power lines, streetlights, signs** | Procedural | Simple repeating geometry, placement logic is the hard part. |
+| **Vehicles (cars, trucks, buses)** | Static asset library + AI image-to-3D | Complex curved surfaces impractical for procedural. Curated CC0 library for common types. AI-generated for variety. |
+| **Street furniture (benches, bins, hydrants, planters)** | Static library + some AI-generated | Bespoke designs, small meshes. Procedural where simple (bollards, planters). |
+| **Terrain** | Existing infinigen terrain system | Reuses what works. |
+| **Vegetation** | Existing infinigen tree/plant factories | Reuses what works. |
+
+**OSM integration**: A pre-processing step downloads OSM data for a given bounding box, parses road graphs and building footprints into the internal representation. OSM data is optional — the system falls back to fully procedural generation when OSM is unavailable or undesired.
+
+**AI image-to-3D pipeline**: For generating variety in detail objects, use the latest image-to-3D models (e.g., TRELLIS, InstantMesh) to convert reference images into textured 3D meshes. A curation step filters outputs for quality. This produces meshes that feed into the static asset import pipeline. Generated assets are cached and reused across scenes.
+
+**Static asset pipeline**: Extends infinigen's existing static asset support (`StaticAssets.md`). A `StaticAssetFactory` wraps imported meshes with the standard placeholder/populate pattern for LOD and camera-culling.
 
 ## Design
 
@@ -27,12 +37,13 @@ This feature adds the ability to generate landscapes with:
 infinigen/assets/urban/
 ├── __init__.py
 ├── urban_scene.py            # Urban scene composer (top-level)
-├── road_network.py           # Procedural road graph generation
+├── osm_loader.py             # OSM download, parse, project to local coords
+├── road_network.py           # Road graph (OSM primary, procedural fallback)
 ├── road_mesher.py            # Road surface geometry from graph
 ├── intersection.py           # Intersection geometry
 ├── buildings/
 │   ├── building_generator.py # Building placement + type selection
-│   ├── exterior.py           # Building shell geometry
+│   ├── exterior.py           # Building shell geometry (from footprints)
 │   ├── facade.py             # Facade variation (windows, materials, style)
 │   ├── roof.py               # Roof geometry (flat, pitched, domed, etc.)
 │   ├── interior_bridge.py    # Integration with existing indoor solver
@@ -44,10 +55,14 @@ infinigen/assets/urban/
 │   ├── signage.py            # Traffic signs, billboards, signals
 │   └── barriers.py           # Guardrails, fences, walls, jersey barriers
 ├── urban_scatter/
-│   ├── vehicles.py           # Parked/stopped vehicles
+│   ├── vehicles.py           # Vehicle placement (from static + AI assets)
 │   ├── street_furniture.py   # Benches, trash cans, mailboxes, planters
 │   ├── parking.py            # Parking lot generation (lines, layout)
 │   └── construction.py       # Construction sites, scaffolding, barriers
+├── asset_pipeline/
+│   ├── static_importer.py    # Static mesh import + Factory wrapper
+│   ├── ai_asset_gen.py       # Image-to-3D pipeline
+│   └── asset_cache.py        # Cached asset management
 ├── urban_surface.py          # Asphalt, concrete, sidewalk materials
 ├── urban_terrain.py          # Terrain flattening + modification for urban use
 └── configs/                  # GIN configs for city types, building styles
@@ -59,39 +74,27 @@ infinigen_examples/
 
 ### Component 1: Road Network (`road_network.py`)
 
-Generate a graph-based road network on terrain:
+**Primary source: OpenStreetMap**. A pre-processing step (`osm_loader.py`) downloads OSM data for a bounding box via the Overpass API, parses ways tagged `highway=*` into the internal `RoadGraph`, and projects lat/lon to local coordinates.
 
-```python
-@dataclass
-class RoadGraph:
-    nodes: dict[str, RoadNode]       # Intersections / endpoints
-    edges: dict[str, RoadEdge]       # Road segments
-    
-@dataclass
-class RoadNode:
-    position: tuple[float, float]    # X, Y in world coords
-    elevation: float                 # Z from terrain
-    node_type: str                   # "intersection", "dead_end", "junction"
-    
-@dataclass
-class RoadEdge:
-    node_a: str
-    node_b: str
-    road_type: str                   # "highway", "arterial", "local", "alley"
-    lane_count: int
-    width: float                     # meters
-    sidewalk: bool
-```
+**Fallback: procedural generation**. When OSM data is insufficient or disabled, generate synthetically:
 
-**Generation algorithm** (modified tensor field / procedural):
+1. **Seed points**: Place N seed nodes across scene bounds, weighted by terrain flatness
+2. **Population centers**: Identify clusters of flat terrain → "city centers" with higher road density
+3. **Highway backbone**: Connect population centers with arterial roads using A* on a cost grid (cost = slope × curvature)
+4. **Grid infill**: Within each population center, generate a semi-regular grid of local roads with noise
+5. **Suburban sprawl**: Radiating local roads from grid edges, more organic, more cul-de-sacs
+6. **Terrain adaptation**: Roads follow terrain at configurable max grade (default 8%)
 
-1. **Seed points**: Place N seed nodes across scene bounds, weighted by terrain flatness (flatter areas get more roads)
-2. **Population centers**: Identify clusters of flat terrain → these become "city centers" with higher road density
-3. **Highway backbone**: Connect population centers with 2-4 lane arterial roads using A* pathfinding on a cost grid (cost = slope × curvature)
-4. **Grid infill**: Within each population center, generate a semi-regular grid of local roads. Grid orientation follows terrain contours or a random rotation. Add noise to grid positions for organic look.
-5. **Suburban sprawl**: Radiating local roads from grid edges, less regular, more cul-de-sacs
-6. **Terrain adaptation**: Roads follow terrain at configurable max grade (default 8%). If grade would be exceeded, route detours or add switchbacks.
-7. **River crossings**: Where roads intersect water, generate bridges (delegated to `bridges.py`)
+**OSM road tag mapping**:
+
+| OSM tag | Internal type | Lanes (default) |
+|---------|---------------|-----------------|
+| `motorway`, `trunk` | Highway | 2-3 per side |
+| `primary`, `secondary` | Arterial | 1-2 per side |
+| `tertiary`, `residential`, `unclassified` | Local | 1 per side |
+| `service`, `alley` | Alley | 1 total |
+
+OSM data is not projected onto terrain — roads are snapped to the generated terrain with smoothing. This may introduce slight deviations from real road alignments, which is acceptable (we're using OSM for topology, not centimeter-accurate georegistration).
 
 **Road types and parameters**:
 
@@ -129,14 +132,13 @@ Convert the road graph into 3D geometry:
 
 **Building placement**:
 
-1. **Lot subdivision**: For each city block (area enclosed by local roads), subdivide into buildable lots. Lots are rectangular with random aspect ratio variation.
-2. **Setbacks**: Buildings are offset from lot edges by configurable setback distance (front/side/back).
-3. **Type assignment**: Building type assigned by zone:
-   - **Commercial zones**: Along arterial roads, near intersections
-   - **Residential zones**: Interior blocks, suburban areas
-   - **Industrial zones**: Edge of populated area, near highways
-   - **Mixed-use**: Ground floor commercial, upper floors residential (along arterials)
-4. **Height variation**: Buildings in same block vary in height by ±20% for visual interest.
+1. **OSM footprints** (primary): When OSM data is available, parse `building=*` ways as building footprint polygons. OSM tags provide height/floors/type hints where available. Footprints are snapped to terrain elevation.
+2. **Procedural lot subdivision** (fallback/infill): For blocks with no OSM coverage, subdivide blocks enclosed by roads into buildable lots. Lots are rectangular with random aspect ratio variation. Infill also fills gaps between OSM buildings within the same block.
+3. **Setbacks**: Buildings are offset from lot edges by configurable setback distance (front/side/back). For OSM footprints, setbacks are already encoded in the footprint shape.
+4. **Type assignment**: Building type assigned by:
+   - OSM tags when available (`building=apartments` → residential tower, `building=commercial` → commercial, etc.)
+   - Zonal inference when no OSM tags: commercial along arterials, residential in interior blocks, industrial at edges
+5. **Height**: From OSM `height`/`building:levels` tags when available. Otherwise inferred from building type with ±20% variation.
 
 **Building exterior geometry** (`exterior.py`):
 
@@ -206,23 +208,32 @@ Connect building exteriors to the existing indoor constraint solver:
 
 ### Component 5: Urban Scatter (`urban_scatter/`)
 
+Detail objects are sourced from multiple pipelines:
+
+| Source | What it provides | How it works |
+|--------|-----------------|--------------|
+| **Static asset library** | Vehicles (sedan, SUV, truck, van, bus, motorcycle), common street furniture | Curated CC0 meshes from Poly Haven, BlendSwap. Imported via `StaticAssetFactory` with Blender import. |
+| **AI image-to-3D** | Vehicle variants, uncommon furniture, regional-specific objects | Reference images → image-to-3D model (TRELLIS, InstantMesh, or equivalent) → mesh decimation + UV repair → static asset import. Cached per asset type. |
+| **Procedural** | Simple objects (bollards, barriers, planters, trash piles), parking lines | Generated via Blender Python. |
+
+**AI asset pipeline** (`ai_asset_gen.py`):
+1. Curate a library of ~50 reference images spanning vehicle types, furniture, urban objects
+2. For each reference image, run image-to-3D model → outputs textured OBJ/GLB
+3. Post-process: decimate to ~5K faces, repair UVs, scale to real-world size, validate watertight
+4. Cache generated meshes in `~/.cache/infinigen/ai_assets/`
+5. Feed into `StaticAssetFactory` with same interface as manually curated assets
+6. Re-run periodically to refresh asset variety as models improve
+
 **Vehicles** (`vehicles.py`):
-- Parked along curbs (street parking) with configurable density
-- Parking lots with painted spaces
-- Vehicle types: sedan, SUV, truck, van, motorcycle — proportion configurable
-- Vehicle models: simple procedural low-poly with color variation
-- Traffic simulation (optional): vehicles moving along roads with simple car-following
+- Placed along curbs (street parking) with configurable density, in parking lots, and in driveways
+- Vehicle types drawn from asset library: sedan, SUV, truck, van, bus, motorcycle
+- Type proportions configurable per zone (more trucks in industrial, more buses on arterials)
+- Static only (no traffic simulation for v1)
 
 **Street furniture** (`street_furniture.py`):
-- Benches, trash cans, mailboxes, fire hydrants, planters
-- Bus stops with shelter structures
-- Newspaper boxes, bicycle racks
-- Density: higher in commercial areas, lower in residential
-
-**Parking lots** (`parking.py`):
-- Painted lines: white or yellow stripe geometry on asphalt
-- Layout: 90° or angled parking, single or double row
-- Adjacent to commercial buildings, arterial roads
+- Items: benches, trash bins, mailboxes, fire hydrants, planters, bicycle racks, bus shelters
+- Source: static library for detailed items, procedural for simple (bollards, planters)
+- Placement: density higher in commercial areas, along sidewalks, at bus stops
 
 ### Component 6: Urban Terrain & Surfaces (`urban_terrain.py`, `urban_surface.py`)
 

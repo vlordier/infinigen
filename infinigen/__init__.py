@@ -4,11 +4,19 @@
 # of this source tree.
 
 import logging
+import warnings
 from pathlib import Path
 
 __version__ = "1.19.1"
 
 __all__ = ["__version__", "repo_root"]
+
+# Silence landlab's use of the deprecated Dataset.dims API (removed in future xarray versions)
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Dataset\.dims.*",
+    category=FutureWarning,
+)
 
 
 def repo_root():
