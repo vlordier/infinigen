@@ -22,8 +22,11 @@ def generate_water_tower(center=(0, 0, 0), height=25, radius=3):
     bm = bmesh.new()
     leg_positions = [(-radius*0.5, -radius*0.5), (radius*0.5, -radius*0.5), (-radius*0.5, radius*0.5), (radius*0.5, radius*0.5)]
     for lx, ly in leg_positions:
-        bv = [bm.verts.new(Vector((lx + center[0], ly + center[1], center[2] + h))) for h in (0, height*0.7)]
-        bm.faces.new(bv + [bv[1], bv[0]])
+        v0 = bm.verts.new(Vector((lx + center[0], ly + center[1], center[2])))
+        v1 = bm.verts.new(Vector((lx + center[0], ly + center[1], center[2] + height * 0.7)))
+        v2 = bm.verts.new(Vector((lx + center[0] + 0.2, ly + center[1], center[2] + height * 0.7)))
+        v3 = bm.verts.new(Vector((lx + center[0] + 0.2, ly + center[1], center[2])))
+        bm.faces.new([v0, v1, v2, v3])
     tank_base = height * 0.7
     tank_h = height * 0.3
     segs = 12
