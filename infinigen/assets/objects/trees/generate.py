@@ -213,7 +213,10 @@ class GenericTreeFactory(AssetFactory):
 
 
 @gin.configurable
-def random_season(weights=None):
+def random_season(weights=None, season_state=None):
+    if season_state is not None:
+        return season_state.season
+
     options = ["autumn", "summer", "spring", "winter"]
 
     if weights is not None:
@@ -224,25 +227,25 @@ def random_season(weights=None):
 
 
 @gin.configurable
-def random_species(season="summer", pine_chance=0.0):
+def random_species(season="summer", pine_chance=0.0, season_state=None):
     tree_species_code = np.random.rand(32)
 
-    if season is None:
-        season = random_season()
+    if season_state is not None:
+        season = season_state.season
+    elif season is None:
+        season = random_season(season_state=season_state)
 
     if tree_species_code[-1] < pine_chance:
         return treeconfigs.pine_tree(), "leaf_pine"
-    # elif tree_species_code < 0.2:
-    #     tree_args = treeconfigs.palm_tree()
-    # elif tree_species_code < 0.3:
-    #     tree_args = treeconfigs.baobab_tree()
     else:
         return treeconfigs.random_tree(tree_species_code, season), None
 
 
-def random_tree_child_factory(seed, leaf_params, leaf_type, season, **kwargs):
-    if season is None:
-        season = random_season()
+def random_tree_child_factory(seed, leaf_params, leaf_type, season, season_state=None, **kwargs):
+    if season_state is not None:
+        season = season_state.season
+    elif season is None:
+        season = random_season(season_state=season_state)
 
     fruit_scale = 0.2
 
@@ -293,12 +296,14 @@ def random_tree_child_factory(seed, leaf_params, leaf_type, season, **kwargs):
 
 
 def make_leaf_collection(
-    seed, leaf_params, n_leaf, leaf_types, decimate_rate=0.0, season=None
+    seed, leaf_params, n_leaf, leaf_types, decimate_rate=0.0, season=None, season_state=None
 ):
     logger.debug(f"Starting make_leaf_collection({seed=}, {n_leaf=} ...)")
 
-    if season is None:
-        season = random_season()
+    if season_state is not None:
+        season = season_state.season
+    elif season is None:
+        season = random_season(season_state=season_state)
 
     weights = []
 
@@ -350,12 +355,15 @@ def make_twig_collection(
     n_twig,
     leaf_types,
     season=None,
+    season_state=None,
     twig_valid_dist=6,
 ):
     logger.debug(f"Starting make_twig_collection({seed=}, {n_leaf=}, {n_twig=}...)")
 
-    if season is None:
-        season = random_season()
+    if season_state is not None:
+        season = season_state.season
+    elif season is None:
+        season = random_season(season_state=season_state)
 
     if leaf_types is not None:
         child_col = make_leaf_collection(
@@ -430,9 +438,11 @@ class TreeFactory(GenericTreeFactory):
 
         return fruit_type
 
-    def __init__(self, seed, season=None, coarse=False, fruit_chance=1.0, **kwargs):
+    def __init__(self, seed, season=None, coarse=False, fruit_chance=1.0, season_state=None, **kwargs):
         with FixedSeed(seed):
-            if season is None:
+            if season_state is not None:
+                season = season_state.season
+            elif season is None:
                 season = np.random.choice(["summer", "winter", "autumn", "spring"])
 
         with FixedSeed(seed):

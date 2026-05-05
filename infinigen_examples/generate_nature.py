@@ -832,9 +832,12 @@ def compose_nature(output_folder, scene_seed, **params):
 
 @gin.configurable
 def populate_scene(
-    output_folder: Path, scene_seed: int, camera_rigs: list[bpy.types.Object], **params
+    output_folder: Path, scene_seed: int, camera_rigs: list[bpy.types.Object], season_state=None, season_name=None, **params
 ):
     p = RandomStageExecutor(scene_seed, output_folder, params)
+    season_state = weather.get_or_create_season_state(
+        season_state=season_state, season_name=season_name
+    )
 
     primary_cams = [rig.children[0] for rig in camera_rigs]
 
@@ -850,7 +853,7 @@ def populate_scene(
         use_chance=False,
         default=[],
         fn=lambda: placement.populate_all(
-            trees.TreeFactory, primary_cams, season=season, vis_cull=4
+            trees.TreeFactory, primary_cams, season=season, season_state=season_state, vis_cull=4
         ),
     )  # ,
     # meshing_camera=camera, adapt_mesh_method='subdivide', cam_meshing_max_dist=8))
@@ -907,6 +910,7 @@ def populate_scene(
             fluid.CachedTreeFactory,
             primary_cams,
             season=season,
+            season_state=season_state,
             vis_cull=4,
             dist_cull=70,
             cache_system=fire_cache_system,
