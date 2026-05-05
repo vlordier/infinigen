@@ -13,5 +13,6 @@ from .season_system import SeasonState, create_season_state, get_or_create_seaso
 from .seasonal_lighting import apply_seasonal_lighting, get_seasonal_sun_params
 from .seasonal_terrain import apply_season_to_terrain, get_snow_line
 from .seasonal_water import apply_season_to_water
+from .sky_lighting import apply_seasonal_sky
 from .time_of_day import TimeOfDay, get_tod_sun_params
 from .wind_effectors import TurbulenceEffector, WindEffector
