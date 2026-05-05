@@ -1,7 +1,6 @@
 import gin
 from dataclasses import dataclass, field
 
-
 @gin.configurable
 @dataclass
 class SensorCharacteristics:
@@ -28,7 +27,6 @@ class SensorCharacteristics:
     compression: str = "none"
     water_specular: bool = False
 
-
 @gin.configurable
 @dataclass
 class MultiSensorTimingSpec:
@@ -37,14 +35,12 @@ class MultiSensorTimingSpec:
     timestamp_convention: str = "exposure_center"
     frame_trigger_mode: str = "simultaneous"
 
-
 @dataclass
 class MultiSensorRig:
     eo_camera = None
     ir_cameras: dict = field(default_factory=dict)
     baseline_mm: float = 50.0
     timing: MultiSensorTimingSpec = field(default_factory=MultiSensorTimingSpec)
-
 
 @gin.configurable
 @dataclass
