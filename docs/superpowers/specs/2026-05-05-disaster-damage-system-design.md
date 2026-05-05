@@ -28,12 +28,15 @@ infinigen/assets/damage/
 ├── earthquake/
 │   ├── building_collapse.py # Structural failure physics
 │   ├── ground_fracture.py   # Terrain cracks, landslides
+│   ├── landslide.py         # Slope failure, debris flows, road burial
+│   ├── tree_damage.py       # Tree toppling, root-plate craters, snapped trunks
 │   ├── topple.py            # Object toppling, furniture displacement
 │   └── rubble.py            # Rubble generation from destroyed meshes
 ├── war/
-│   ├── craters.py           # Blast craters (terrain + buildings)
+│   ├── craters.py           # Blast craters (terrain + buildings, cluster patterns)
 │   ├── facade_damage.py     # Building facade destruction (holes, scorch)
 │   ├── fire_effects.py      # Fire damage, scorch marks, smoke
+│   ├── scorched_terrain.py  # Scorched vegetation, burnt clearings, hot spots
 │   └── debris.py            # Debris field generation
 ├── damage_progression.py    # Multi-stage degradation protocol
 ├── shared/
@@ -66,6 +69,22 @@ class SceneSnapshot:
     seed: int                               # RNG seed for reproducibility
     damage_config: dict                     # What damage was applied
 ```
+
+**Snapshot implementation** (critical design decision):
+
+The existing `RandomStageExecutor` (`infinigen/core/util/pipeline.py`) has no snapshot/restore API — it executes stages linearly. Two approaches:
+
+**Approach A — Save-as-blend (primary)**: After intact scene composition + camera placement, save the entire Blender scene to a temporary `.blend` file. This is a complete snapshot: every mesh, material, transform, keyframe, and collection is preserved. Damage is applied by loading the blend, running damage operators, then rendering. Multi-stage progression loads the blend N times with increasing severity.
+
+- **Pro**: Complete fidelity, no code changes to `RandomStageExecutor`, works with any scene composition pipeline
+- **Con**: Blend file I/O (~100-500MB per scene), loading adds 5-15 seconds overhead per stage
+
+**Approach B — Seed replay (fallback)**: Reconstruct the intact scene from its generation seed by re-running `compose_nature()` or `compose_urban()` with the same seed. Cameras are placed deterministically from the same seed. Only damage operators run on the replayed scene.
+
+- **Pro**: No blend file I/O, less disk usage
+- **Con**: Requires deterministic generation at every stage. Non-deterministic Blender operations (physics simulation, particle seeding) may produce different results on replay. Camera RRT* path planning may produce different paths.
+
+**Recommendation**: Approach A (save-as-blend) for v1. It's the safe option. Approach B is a performance optimization for v2 once determinism is validated.
 
 ### Component 2: Earthquake Damage
 
@@ -185,6 +204,22 @@ All stages share the same camera trajectories. Stage N is a strict superset of S
 | 2 (moderate) | Partial wall collapse (20-40% walls failed), moderate rubble, 20-40% trees affected, road cracks | Medium craters (5-15m), facade holes, moderate scorching, debris fields |
 | 3 (severe) | Major structural failure (60-80% walls), extensive rubble, 50-70% trees down, road buckling | Large craters (>15m), collapsed facades, heavy scorching, vehicle wrecks |
 | 4 (total) | Building reduced to rubble pile, roads destroyed, all trees affected | Near-total destruction, overlapping craters, burned-out landscape |
+
+**Nature-scene severity (forest, desert, mountain)**:
+
+| Level | Earthquake (nature) | War (nature) |
+|-------|--------------------|-------------|
+| 0 | Intact forest/terrain | Intact forest/terrain |
+| 1 | 5-10% tree toppling, hairline ground cracks, minor rockfall | 1-3 small craters in clearings, peripheral scorching on tree edges |
+| 2 | 20-40% trees down, landslides on steep slopes, root-plate craters, blocked streams | Cluster of 5-10 medium craters, scorched treeline (10-20% canopy loss), burnt clearings, smoke columns |
+| 3 | 50-70% forest flattened, major landslides burying roads, debris dams in rivers, snapped trunks, exposed bedrock | Extensive crater fields, 40-60% canopy scorched/burnt, smouldering hot spots, ash-covered ground |
+| 4 | Complete forest destruction, terrain unrecognizable, all water courses blocked/dammed with debris | Total burn scar, overlapping craters, zero living vegetation, continuous smoke/haze |
+
+Nature damage modules:
+- `earthquake/landslide.py`: Identify slopes >20°, trigger failure with configurable runout distance. Debris buries roads, blocks rivers, creates landslide-dam lakes.
+- `earthquake/tree_damage.py`: Tree toppling with root-plate crater geometry (trunk rotates, root mass lifts terrain). Snapped trunks at configurable height. Fallen trunks create debris dams across streams.
+- `war/scorched_terrain.py`: Scorch material applied to terrain + vegetation within blast radius. Charred tree trunks (darkened material, reduced geometry). Smouldering hot spots (emissive particles). Ash layer on ground (dark diffuse material). Burnt clearings where vegetation is completely removed.
+- **IR impact**: Scorched terrain has elevated temperature (hot in LWIR for hours post-fire). Smouldering spots are bright thermal point sources. Burnt vegetation is dark in SWIR (char absorbs SWIR). These are rich training signals for thermal change detection.
 
 **Implementation**:
 - Each severity level is a configurable scalar (0.0-1.0) that scales all damage operators

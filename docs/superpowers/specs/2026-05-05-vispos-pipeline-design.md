@@ -707,3 +707,203 @@ Evaluation protocol: For each task, train on the recommended training split, eva
 2. How to handle the Blender world → WGS84 transform for curved-Earth satellite views? Initial: planar approximation (scene is small enough that Earth curvature is negligible at 500m. For satellite: use orthographic projection.)
 3. Should we produce pre-computed image embeddings (e.g., from a pretrained model) alongside raw images? No — this is training data for other models. Let consumers compute their own features.
 4. Coordinate convention: OpenCV (Y-down, Z-forward) or OpenGL/Blender (Y-up, Z-backward)? Store in OpenCV convention to match standard vision libraries. Convert from Blender's convention using existing transform in `save_camera_parameters()`.
+
+## Operational Recipes (Gin Config Presets)
+
+Concrete, loadable gin configurations for common operational scenarios. Each recipe includes one `include` directive per subsystem:
+
+```
+configs/recipes/
+├── ukraine_contested_village_winter_dawn.gin
+├── ukraine_city_summer_noon_intact.gin
+├── baltic_harbour_autumn_dusk.gin
+├── baltic_suburban_spring_morning.gin
+├── middle_eastern_desert_summer_noon.gin
+├── generic_dense_city_day_night_cycle.gin
+├── satellite_reference_global.gin
+└── contested/
+    ├── jammed_approach_fog.gin
+    ├── post_strike_blackout.gin
+    ├── spoofed_ambush.gin
+    ├── urban_canyon_intermittent.gin
+    └── winter_whiteout.gin
+```
+
+Each recipe includes all subsystems via gin includes:
+
+```gin
+# Example: configs/recipes/ukraine_contested_village_winter_dawn.gin
+include "infinigen/assets/urban/configs/regional_styles/soviet.gin"
+include "infinigen/assets/damage/configs/war_moderate.gin"
+include "infinigen/assets/weather/configs/season/winter.gin"
+include "infinigen/assets/weather/configs/tod/dawn.gin"
+include "infinigen/core/placement/configs/platforms/isr_orbit.gin"
+include "infinigen/assets/materials/thermal/configs/presets/lwir_heuristic.gin"
+
+UrbanSceneConfig.scene_type = "rural_town"
+UrbanSceneConfig.bounds_km = 2.0
+SeasonState.snow_cover = 0.7
+SeasonState.ground_is_frozen = True
+GPSAvailabilitySchedule.mode = "last_known_position"
+GPSAvailabilitySchedule.denial_start_frame = 200
+DamageStageExecutor.severity = 2
+DamageStageExecutor.progression_stages = 3
+```
+
+The recipe concept means users at minimum need one gin file, not 6 separate configuration pieces.
+
+## Compute Budget
+
+Estimated GPU-hours for rendering. Baseline: single 1920×1080 frame, RTX 4090, Cycles with 128 samples, OptiX denoising:
+
+| Scene type | RGB EO | + LWIR physics | + LWIR heuristic | Notes |
+|-----------|--------|---------------|-----------------|-------|
+| Nature (forest) | 8-12 sec/frame | + 2-3 sec (solver) + 5-8 sec (render) | + 0.5 sec | Complex vegetation path tracing |
+| Urban (dense) | 15-25 sec/frame | + 3-5 sec + 7-12 sec | + 0.8 sec | Building geometry, glass, reflections |
+| Urban (suburban) | 10-18 sec/frame | + 2-4 sec + 6-10 sec | + 0.6 sec | Mixed geometry |
+| Nature (desert) | 4-8 sec/frame | + 1-2 sec + 3-5 sec | + 0.3 sec | Simple geometry, few occlusions |
+| Indoor (room) | 3-6 sec/frame | + 1-2 sec + 2-4 sec | + 0.2 sec | Enclosed, low complexity |
+| Harbour/coastal | 12-22 sec/frame | + 3-5 sec + 7-12 sec | + 0.7 sec | Water caustics, reflections |
+
+**Per-dataset estimates** (RTX 4090, EO only, heuristic LWIR):
+
+| Configuration | Frames | GPU-hours (1×GPU) | Wall-clock (8×GPU, 24h) |
+|-------------|--------|-------------------|------------------------|
+| Diversity 5K, EO only | 250K | 555-830 | 2.9-4.3 days |
+| Diversity 10K, EO+LWIRe | 500K | 1,200-1,800 | 6.3-9.4 days |
+| Invariance 100, 128 cond | 640K | 1,500-2,300 | 7.8-12.0 days |
+| Hybrid 5K+100 | 890K | 2,100-3,200 | 10.9-16.7 days |
+
+**Cost reduction options**:
+- EEVEE for heuristic IR: ~10× faster than Cycles (10-15× for flat-shaded GT passes)
+- Render at lower res, upsample: 960×540 → 1920×1080 saves ~4× render time
+- Lazy rendering: generate structure first, render only frames requested by dataloader
+- Pre-baked thermal solver: compute per-scene once, reuse across all camera poses
+- Adaptive sampling: Cycles early termination when noise < threshold (built-in, enabled)
+
+**Recommendation**: Budget 2× RTX 4090 per developer for interactive iteration, 8× for dataset-scale generation. Cloud: ~$3-5/GPU-hour (AWS g5.8xlarge with A10G, 2026 pricing) → $6K-16K per full hybrid dataset.
+
+## Consumer Tools
+
+Reference implementations so research teams don't reinvent data loading:
+
+```
+infinigen/tools/vispos/
+├── dataset.py        # VisPosDataset — PyTorch IterableDataset
+├── loader.py         # Multi-worker frame loader with caching
+├── viz.py            # CLI: vispos-viz --scene 42 --show eo+lwir
+├── filter.py         # CLI: vispos-filter --contrast > 5.0
+└── benchmark.py      # Run standard eval protocol on pretrained model
+```
+
+**`VisPosDataset`**: Lazy-loading PyTorch `Dataset` that:
+- Reads `dataset_spec.json` and `manifest.json` to discover available scenes/conditions
+- Returns `(frame_tensor, metadata_dict, imu_array, gps_dict)` per sample
+- Supports filtering by condition axis: `dataset = VisPosDataset(filter={"season": "winter", "damage_severity": ["moderate", "severe"]})`
+- Supports paired sampling for contrastive training: `dataset.sample_positive_pair(anchor_condition, positive_condition)`
+- Handles multi-modality: returns EO tensor + LWIR tensor + MWIR tensor when available
+- Integrates with `torch.utils.data.DataLoader` for multi-GPU training
+
+**`vispos-viz`**: CLI tool for visual inspection before committing compute:
+```bash
+vispos-viz --dataset my_dataset/ --scene 42 --variant winter_dawn_damaged
+# Opens interactive viewer showing EO, LWIR, depth, segmentation side by side
+vispos-viz --dataset my_dataset/ --compare --scene 42 \
+  --variant-a summer_noon_intact --variant-b winter_dawn_damaged
+# Shows side-by-side comparison of two condition variants
+```
+
+**`vispos-filter`**: Select frames by metadata criteria:
+```bash
+vispos-filter --dataset my_dataset/ \
+  --thermal_contrast_std "> 5.0" \
+  --feature_count "> 200" \
+  --skyline_distinctiveness "> 0.3" \
+  --output filtered_subset.json
+```
+
+## Multi-Platform Coordination
+
+Generate synchronized frames from multiple platforms observing the same scene:
+
+```python
+@gin.configurable
+@dataclass
+class MultiPlatformConfig:
+    platforms: list[str]              # e.g., ["isr_orbit", "ugv_wheeled", "satellite"]
+    synchronization_mode: str         # "simultaneous" (same timestamp) or "interleaved" (alternating)
+    temporal_offset_s: list[float]    # Per-platform time offset from master clock
+    shared_poi: list[float]           # [x, y, z] point all platforms observe (optional)
+```
+
+Each platform runs its own trajectory policy independently, but their frame timestamps are aligned to a master clock. Per-frame metadata adds `synchronized_frame_ids` — for each frame from platform A, which specific frames from platforms B and C were captured at the same instant.
+
+Use cases:
+- UGV at 2m + ISR at 300m observing same intersection → train cross-view localization
+- ISR loiter provides reference map for FPV scout doing low-level reconnaissance → train hierarchical SLAM
+- Satellite + ISR plane simultaneously → train coarse-to-fine geolocalization
+
+## Dataset Versioning & Integrity
+
+Minimal versioning that costs nothing:
+
+```json
+{
+  "dataset_name": "vispos_hybrid_v1",
+  "version": 1,
+  "created": "2026-06-15T12:00:00Z",
+  "generator_commit": "abc123def",
+  "manifest": {
+    "scene_0001": "sha256:abc...",
+    "scene_0002": "sha256:def...",
+    ...
+  },
+  "included_subsystems": {
+    "ir_rendering": true,
+    "damage_system": true,
+    "seasons_tod": true,
+    "flight_cameras": true,
+    "urban_scenes": true
+  }
+}
+```
+
+Version evolution rules:
+- New scenes added → version bump, manifest extended
+- New conditions on existing scenes → minor version bump
+- Re-rendered with improved renderer → major version bump + `generator_commit` updated
+
+## Quality Assurance Gates
+
+Beyond file-level checks, automated quality metrics per scene before dataset acceptance:
+
+| Gate | Metric | Threshold | Action on failure |
+|------|--------|-----------|-------------------|
+| Render noise | Per-frame STD in flat regions (sky, blank walls) | <0.02 (float32, 0-1) | Re-render frame with more samples |
+| Spatial conflicts | Buildings intersecting roads, bridges over empty space | 0 conflicts | Flag scene for manual review |
+| IR validity | Per-face temperature in [200K, 500K], emissivity in [0, 1] | 100% | Reject scene, fix thermal properties |
+| Depth consistency | Reprojection error: RGB pixel → depth → 3D → reproject → RGB | <1 pixel RMSE | Flag frame, likely render pipeline bug |
+| Feature density match | Actual `harris_corner_count` vs expected for scene type | Within ±30% of expected | Adjust feature-sparse tag |
+| Ground-truth pairing | Damaged frames have matching intact frames at same camera pose | 100% | Fill missing paired frames |
+| Temporal coherence | Adjacent VO/SLAM frames have pose change within platform speed limits | 100% | Fix trajectory keyframes |
+
+Each scene generates `scene_quality_report.json` with pass/fail per gate. Dataset acceptance requires 100% pass on critical gates (spatial conflicts, IR validity, GT pairing) and >95% pass on non-critical gates.
+
+Scene-specific quality issues are tracked in `rejected_scenes.json` for investigation.
+
+## Non-Goals (Explicitly Out of Scope for v1)
+
+- Dynamic objects: moving vehicles, pedestrians, animals (static placement only)
+- Underground/subway/tunnel environments
+- Indoor navigation (rooms exist but navigation focus is outdoor/platform-based)
+- Real-time rendering performance optimization
+- Orbital mechanics for satellite (straight-line push-broom only)
+- Internal heat sources in IR (solar-only thermal solver)
+- Traffic simulation
+- Audio/acoustic sensor simulation
+- Communication link modeling (comms-denied scenarios)
+- Incremental dataset building (each dataset is generated as a unit)
+- Pre-computed neural network embeddings in the dataset
+- Real-data validation (requires real ISR/drone IR data collection — separate project)
+- Human/face rendering (no people in scenes)
+- Physics-accurate fluid simulation for floods/tsunamis
