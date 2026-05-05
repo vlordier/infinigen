@@ -65,21 +65,25 @@ class FlightRigSpec:
     gimbal_stabilization: bool                # Sensor stabilized vs body-fixed
     multi_sensor: bool                        # EO + IR co-boresighted rig
     sensor_baseline: float                    # Meters, for stereo/multi-sensor
+    trajectory_total_distance_m: float        # Target trajectory length in meters
+    trajectory_duration_s: float              # Target trajectory duration in seconds
+    loop_closure: LoopClosureConfig           # Deliberate revisit configuration
+    gps_schedule: GPSAvailabilitySchedule     # GPS availability timeline per trajectory
 ```
 
 **Platform-specific defaults**:
 
-| Platform | Altitude | Speed | FOV | Look angle | Gimbal |
-|----------|---------|-------|-----|-----------|--------|
-| ISR Orbit | 100-500m | 15-40 m/s | 30-60° | 30-60° from nadir | Yes |
-| ISR Raster | 80-300m | 20-50 m/s | 40-80° | 0-10° from nadir | Yes |
-| ISR Loiter | 50-500m | 0-5 m/s | 20-60° | 45-90° from nadir | Yes |
-| ISR Plane | 500-5000m | 50-150 m/s | 5-30° | 30-60° from nadir | Yes |
-| FPV Racing | 5-50m | 30-80 m/s | 80-120° | 0-30° from forward | No (body-fixed) |
-| FPV Scout | 10-100m | 10-30 m/s | 60-100° | 0-20° from forward | Partial |
-| UGV Wheeled | 0.5-2m | 2-15 m/s | 60-100° | 0-20° from forward | Partial (pitch only) |
-| UGV Tracked | 0.5-2m | 1-10 m/s | 60-100° | 0-20° from forward | Partial (pitch only) |
-| Satellite | 200-500km | 7000 m/s | 1-5° | <1° from nadir | Yes |
+| Platform | Altitude | Speed | Distance | Duration | FOV | Look angle | Gimbal |
+|----------|---------|-------|----------|----------|-----|-----------|--------|
+| ISR Orbit | 100-500m | 15-40 m/s | 2-10 km | 60-600s | 30-60° | 30-60° from nadir | Yes |
+| ISR Raster | 80-300m | 20-50 m/s | 1-5 km | 30-300s | 40-80° | 0-10° from nadir | Yes |
+| ISR Loiter | 50-500m | 0-5 m/s | 0.5-2 km | 60-600s | 20-60° | 45-90° from nadir | Yes |
+| ISR Plane | 500-5000m | 50-150 m/s | 10-100 km | 60-1200s | 5-30° | 30-60° from nadir | Yes |
+| FPV Racing | 5-50m | 30-80 m/s | 0.5-5 km | 10-120s | 80-120° | 0-30° from forward | No (body-fixed) |
+| FPV Scout | 10-100m | 10-30 m/s | 0.5-3 km | 30-300s | 60-100° | 0-20° from forward | Partial |
+| UGV Wheeled | 0.5-2m | 2-15 m/s | 0.5-5 km | 60-600s | 60-100° | 0-20° from forward | Partial (pitch only) |
+| UGV Tracked | 0.5-2m | 1-10 m/s | 0.5-5 km | 60-1200s | 60-100° | 0-20° from forward | Partial (pitch only) |
+| Satellite | 200-500km | 7000 m/s | 50-500 km | 10-60s | 1-5° | <1° from nadir | Yes |
 
 ### Component 3: Flight Motion Models (`flight_trajectories.py`)
 
@@ -149,6 +153,35 @@ class FlightRigSpec:
 - TDI (time delay integration) simulation: frames rendered at regular along-track intervals
 - Orthographic projection approximation (long focal length → low perspective distortion)
 - Ground sample distance (GSD) computed from altitude + pixel pitch: GSD = altitude × pixel_pitch / focal_length
+
+**Loop closure trajectories** (shared infrastructure for all platform policies):
+
+Loop closure is the highest-value training signal for visual SLAM. Every trajectory policy supports a `loop_closure_config` parameter that adds deliberate revisits:
+
+```python
+@gin.configurable
+@dataclass
+class LoopClosureConfig:
+    enabled: bool
+    revisit_interval_frames: int        # Revisit previous position every N frames
+    revisit_count: int                  # Number of loop closure events per trajectory
+    min_approach_angle_deg: float       # Minimum angle difference from original viewpoint (avoid trivial same-view)
+    loop_difficulty_distribution: dict  # {"easy": 0.4, "medium": 0.4, "hard": 0.2}
+```
+
+When enabled, the trajectory policy periodically inserts a waypoint at a previously visited location, approached from a different direction. This creates realistic loop closure scenarios where the platform returns to a place it saw 30-120 seconds ago.
+
+**GPS availability schedule** (added to `FlightRigSpec`):
+
+```python
+@gin.configurable  
+@dataclass
+class GPSAvailabilitySchedule:
+    windows: list[tuple[int, int, str]]  # (start_frame, end_frame, mode)
+    # mode: "nominal" | "degraded" | "denied" | "spoofed" | "reacquire"
+```
+
+Enables the "last known position" paradigm: GPS available for first N frames, then denied. Intermittent GPS, spoofing, and gradual jamming scenarios are all configurable per trajectory.
 
 ### Component 4: Motion Model Implementation
 
@@ -233,6 +266,23 @@ For EO + IR co-boresighted platforms (ISR, satellite):
 ```python
 @dataclass
 class MultiSensorRig:
+    eo_camera: bpy.types.Object       # Main EO camera
+    ir_cameras: dict[str, bpy.types.Object]  # "lwir", "mwir", "swir" cameras
+    baseline_mm: float                 # Physical separation between EO and IR
+    timing: MultiSensorTimingSpec      # Inter-sensor synchronization
+    
+@gin.configurable
+@dataclass
+class MultiSensorTimingSpec:
+    exposure_stagger_us: list[int]    # [eo_offset, lwir_offset, mwir_offset, swir_offset] in microseconds
+    clock_drift_ppm: float             # Parts per million clock drift between sensors
+    timestamp_convention: str          # "exposure_center" or "exposure_start"
+    frame_trigger_mode: str            # "simultaneous" or "interleaved" (staggered exposures to prevent cross-talk)
+```
+
+**Timing semantics**: In real multi-sensor ISR rigs, exposures are interleaved to prevent cross-talk between EO and IR bands. Each sensor's frame timestamp is recorded independently. The pipeline stores per-sensor timestamps (not a single `timestamp`) in `FrameMetadata`. The nominal trigger time is `t=0` for the master sensor (EO); other sensors have configurable microsecond offsets.
+
+**Parallax concerns**: The physical baseline between EO and IR sensors creates parallax at close range. For ISR loiter at 50m staring at a building, a 5cm baseline = 1 mrad parallax = ~1 pixel at common resolutions. This is tracked in metadata so cross-modal pair filtering can exclude frames where parallax exceeds a threshold.
     eo_camera: bpy.types.Object       # Main EO camera
     ir_cameras: dict[str, bpy.types.Object]  # "lwir", "mwir", "swir" cameras
     baseline_mm: float                 # Physical separation between EO and IR

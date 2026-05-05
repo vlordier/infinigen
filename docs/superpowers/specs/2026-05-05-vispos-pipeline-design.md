@@ -45,7 +45,7 @@ class VisPosDatasetSpec:
     description: str
     
     # Scene parameters
-    scene_types: list[str]                 # ["nature_forest", "nature_desert", "indoor_urban", "urban_dense_city", "urban_suburban", "urban_industrial"]
+    scene_types: list[str]                 # ["nature_forest", "nature_desert", "nature_desert_dunes", "nature_ocean", "nature_snowfield", "nature_barren_steppe", "indoor_room", "urban_dense_city", "urban_suburban", "urban_industrial", "urban_harbour", "urban_coastal"]
     num_scenes: int                        # Number of unique scenes
     
     # Variation axes
@@ -130,6 +130,35 @@ The `invariance_axes` field in the dataset spec controls which axes are varied. 
 Each level is a gin-configurable preset that sets atmosphere density, particle emission rates, and lens effects (water droplets/condensation on lens). The same scene can be rendered at all 4 levels with identical camera poses.
 
 **Why this matters**: A dataset with 100 scenes × 4 seasons × 4 TOD × 4 weather levels × 2 damage states × 2 modalities ... produces ~25,600 condition variants from just 100 locations. With matched camera poses across all variants, this provides millions of positive/negative pairs for contrastive training. This is the superpower synthetic data has over real imagery — you can't take the same photo at noon and midnight, but you can render both.
+
+**Long-range traverses**: Visual odometry drift matters most on long traversals. Scene tiles can be stitched for extended trajectories:
+
+| Traverse type | Distance | Tiles | Use case |
+|--------------|----------|-------|----------|
+| Short (default) | 100-500m | 1 | FPV scouting, UGV local patrol |
+| Medium | 1-5 km | 2-4 | ISR orbit over urban area, UGV cross-town |
+| Long | 5-20 km | 4-16 | ISR plane transit, long-endurance survey |
+| Extended | 20-100 km | 16-64 | Satellite ground track, continental transit |
+
+Tiling: Adjacent terrain tiles are generated with matching edge geometry (shared terrain SDF, matching road endpoints at tile boundaries). A trajectory is planned across tiles; rendering stitches tiles at the camera frustum boundary. For tiled trajectories, `trajectory_total_distance_m` is recorded in metadata for drift analysis.
+
+**Feature-sparse environments**: Navigation must work when there's nothing to see. Explicit scene types:
+- `nature_desert_dunes`: Repeating sand dune patterns, zero vertical features — pure texture-based odometry challenge
+- `nature_ocean`: Open water with wave patterns only — no static features at all (optical flow from waves is all you get)
+- `nature_snowfield`: White terrain, overcast lighting, zero contrast — extreme feature poverty
+- `nature_barren_steppe`: Flat grassland, horizon is the only feature — tests long-range feature matching
+- Per-frame feature density metadata (`feature_count`, `harris_corner_count`) for dataset filtering by difficulty
+
+**Contested environment presets**: GNSS denial often comes with cascading effects. Bundled gin presets combine multiple degradation axes with a causal timeline:
+
+| Preset | Timeline | Effects |
+|--------|----------|---------|
+| `"clear_sky_ops"` | Nominal throughout | GPS nominal, clear weather, no damage — baseline |
+| `"jammed_approach"` | GPS nominal 0-200, degraded 200-300, denied 300+, fog level 1 throughout | Flying into jamming radius with marginal weather |
+| `"post_strike_blackout"` | GPS denied throughout, war damage stage 3, smoke/fog level 2, fire particles active | Operating after an attack — GPS denied, visual degraded by smoke and destruction |
+| `"spoofed_ambush"` | GPS nominal 0-100, spoofed 100-300 (dragged 5km east), denied 300+ | Platform deceived then jammed |
+| `"urban_canyon_degraded"` | Intermittent GPS (alternating 20-frame windows), urban multipath noise, no weather | Natural urban GPS denial without adversarial action |
+| `"winter_whiteout"` | GPS nominal, snowfield scene, snow weather level 3, overcast TOD | Extreme feature poverty with heavy snowfall — visual navigation near-impossible |
 
 ### Component 2: Scene Plan Generation (`scene_plan.py`)
 
@@ -242,6 +271,14 @@ class FrameMetadata:
     # Task labels
     place_id: str                        # For VPR: unique location identifier
     sequence_id: str                     # For VO/SLAM: trajectory identifier
+    loop_closure: list[tuple[int, float]]# List of (frame_index, relative_distance) for frames within loop closure radius
+    
+    # Navigation-specific ground truth
+    gravity_vector_camera: list[float]   # [gx, gy, gz] in camera frame, for VIO gravity alignment
+    metric_scale: float                  # World units → meters scale factor (1.0 for metric scenes)
+    stereo_baseline: float               # Stereo baseline in meters (0.0 for monocular)
+    relocalization: bool                 # True if this frame triggered relocalization (drift correction > threshold)
+    relocalization_correction: list[float] # [dx, dy, dz, droll, dpitch, dyaw] correction applied
 
 @dataclass
 class PerPixelPasses:
@@ -270,18 +307,149 @@ This is ground truth that no real-world dataset can provide — real data only c
 
 **Covisibility graphs**: Per scene, a sparse matrix of which frame pairs share >N visible 3D points. Computed from depth+pose projection. Enables efficient positive/negative pair mining for VPR training.
 
-**GPS noise model** (in `FrameMetadata`):
+**GNSS receiver model** — replaces simple GPS noise with a stateful denial-capable model:
 
-GPS coordinates are provided at two fidelity levels:
-- **Clean**: Exact Blender→WGS84 transform (for validation, debugging)
-- **Noisy**: Realistic GPS error applied based on scene context:
-  - Open terrain: 2-5m horizontal, 3-8m vertical (low PDOP)
-  - Urban canyon (buildings nearby): 10-30m horizontal, 15-50m vertical (multipath)
-  - Under bridge/overpass: GPS dropout with configurable probability
-  - Noise characteristics: non-zero-mean bias from multipath + Gaussian jitter
-  - Configurable via `gps_noise_preset`: "clean", "urban", "harsh", "custom"
+GPS is not just noisy; GNSS-denied navigation means GPS can disappear, degrade, or lie. The receiver model has a state machine:
 
-This enables training models that learn to fuse noisy GPS with visual positioning rather than overtrusting perfect coordinates.
+```
+            ┌─────────┐
+            │ NOMINAL │ ← normal operation, noise per preset ("clean"/"urban"/"harsh")
+            └────┬────┘
+                 │ signal degraded
+            ┌────▼────┐
+            │DEGRADED │ ← increasing error over N frames, SNR dropping
+            └────┬────┘
+           ┌─────┴─────┐
+           │            │
+      ┌────▼───┐   ┌───▼──────┐
+      │ DENIED │   │ SPOOFED  │ ← wrong position with high DOP confidence
+      │(silent)│   │(deceived)│
+      └────┬───┘   └───┬──────┘
+           │            │
+           └─────┬──────┘
+                 │ reacquisition
+            ┌────▼────┐
+            │REACQUIRE│ ← stale position, then convergence to true position over N frames
+            └────┬────┘
+                 │ lock reestablished
+            ┌────▼────┐
+            │ NOMINAL │
+            └─────────┘
+```
+
+**GPS availability timeline** (per trajectory):
+
+```python
+@gin.configurable
+@dataclass
+class GPSAvailabilitySchedule:
+    # List of (start_frame, end_frame, mode) tuples. 
+    # mode: "nominal" | "degraded" | "denied" | "spoofed" | "reacquire"
+    windows: list[tuple[int, int, str]]
+    spoofed_offset_m: tuple[float, float, float]  # ECEF offset when spoofed (e.g., 5000, 0, 0)
+    spoofed_drift_mps: float                      # Drift rate during spoofing (simulates dragging)
+    degraded_snr_decay_db_per_frame: float        # SNR decline rate during degradation
+    reacquisition_frames: int                     # How many frames to reacquire
+    denial_transition_frames: int                 # Frames of boundary degradation when entering/leaving denial
+```
+
+**Standard scenarios** (gin presets):
+
+| Scenario | GPS timeline | Training signal |
+|----------|-------------|-----------------|
+| `"always_on"` | Nominal throughout | Baseline — GPS always available |
+| `"last_known_position"` | Nominal frames 0-100, then denied | Standard GNSS-denied: start from fix, navigate without |
+| `"intermittent"` | Nominal [0-100, 350-400, 700-750], denied elsewhere | GPS returns sporadically (clearing, open terrain) |
+| `"spoofed_midflight"` | Nominal 0-200, spoofed 200-500, denied 500+ | GPS lies for a while, then disappears |
+| `"gradual_jamming"` | Nominal 0-50, degraded 50-150, denied 150+ | Progressive jamming as platform approaches emitter |
+| `"urban_canyon_dropout"` | Alternating nominal/denied with 10-30 frame periods | GPS cuts in and out between buildings |
+
+**FrameMetadata GPS fields** (per frame, from the receiver model):
+- `gps_lat`, `gps_lon`, `gps_alt`: Position reported by receiver (may be wrong during spoof)
+- `gps_horizontal_error_m`, `gps_vertical_error_m`: DOP-based error estimate reported by receiver (may be overconfident during spoof)
+- `gps_mode`: "nominal", "degraded", "denied", "spoofed", "reacquire"
+- `gps_true_lat`, `gps_true_lon`, `gps_true_alt`: Always correct ground truth (for validation)
+- `gps_snr_db`: Signal-to-noise ratio (NaN when denied)
+
+### Component 4b: IMU & VIO Sensor Data (`imu_sensor.py`)
+
+GNSS-denied navigation uses visual-inertial odometry (VIO) as the primary navigation source when GPS is unavailable. The pipeline must generate realistic synthetic IMU data rigidly attached to the camera.
+
+```python
+@gin.configurable
+@dataclass
+class IMUSpec:
+    # IMU parameters (realistic MEMS-grade defaults)
+    accel_noise_density: float          # μg/√Hz, e.g., 150 for consumer MEMS, 10 for tactical
+    accel_random_walk: float            # m/s²/√hr
+    gyro_noise_density: float           # °/√hr, e.g., 0.5 for tactical, 5 for consumer
+    gyro_random_walk: float             # °/√hr³/²
+    accel_bias_instability_ug: float    # μg, Allan variance bias instability
+    gyro_bias_instability_deg_per_hr: float # °/hr
+    accel_scale_factor_error_ppm: float # Scale factor error in parts per million
+    gyro_scale_factor_error_ppm: float
+    axis_misalignment_deg: float        # Cross-axis sensitivity
+    sample_rate_hz: int                 # 100-1000 Hz (IMU runs faster than camera)
+    temperature_drift_enabled: bool     # Simulate warm-up drift over first N seconds
+    
+    # Magnetometer (for heading when GPS lost)
+    mag_enabled: bool
+    mag_noise_uT: float                 # μT noise density
+    mag_hard_iron: list[float]          # 3-vector hard iron offset
+    mag_soft_iron: list[float]          # 3×3 soft iron matrix (flattened)
+    mag_declination_deg: float          # Local magnetic declination
+    
+    # IMU-camera calibration
+    T_cam_imu: list[float]              # 4×4 rigid transform camera→IMU (flattened)
+    T_cam_imu_noise_mm: float           # Per-axis calibration uncertainty
+    time_offset_cam_imu_us: int         # Microseconds, camera vs IMU clock offset
+```
+
+**IMU data generation**: From the camera trajectory (position keyframes), compute analytical velocity and acceleration via spline derivatives. Sample at the IMU rate (200-1000 Hz). Apply the IMU error model:
+1. Add bias instability (static offset + random walk)
+2. Add scale factor error (proportional to true signal)
+3. Add axis misalignment (cross-axis leakage)
+4. Add white noise (noise density × √bandwidth)
+5. Transform to IMU frame via `T_cam_imu`
+6. Add gravity vector in IMU frame (from camera orientation)
+
+**Output format**: IMU data stored as CSV per trajectory:
+```
+timestamp_ns, accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z, mag_x, mag_y, mag_z
+```
+Rates: IMU at sample_rate_hz, magnetometer at 50-100 Hz (configurable). Timestamps in nanoseconds since sequence start, shared clock with camera frames.
+
+**IMU-camera synchronization**: Each camera frame timestamp is the exposure center. IMU samples are time-stamped at their sample instant. The `time_offset_cam_imu_us` models real clock drift between sensor clocks. Multi-rate interpolation: IMU data is provided at native rate; consumers must interpolate to camera frame times for VIO training (realistic sensor fusion challenge).
+
+**VIO ground truth**: In addition to raw IMU, provide:
+- `vio_gravity_aligned_pose`: Camera pose in gravity-aligned world frame (Z=up, gravity=[0,0,-9.81]), for VIO initialization supervision
+- Per frame: gravity vector in camera frame (from `FrameMetadata.gravity_vector_camera`)
+- Integration ground truth: pre-integrated IMU deltas between camera frames (ΔR, Δv, Δp with covariance), using standard IMU preintegration formulation (Forster et al., 2015)
+
+### Component 4c: Loop Closure Annotations
+
+Loop closure is the critical failure point for visual SLAM. Provide explicit ground truth:
+
+```python
+@dataclass
+class LoopClosureAnnotations:
+    # Sparse N×N matrix: pairs (i,j) where ||pose_i - pose_j|| < radius
+    pairs: list[tuple[int, int]]
+    relative_transform: list[np.ndarray]  # T_ij for each pair
+    distance_m: list[float]               # Euclidean distance between poses
+    viewpoint_angle_deg: list[float]      # Angle between view directions (0=same, 180=opposite)
+    covisible_points: list[int]           # Number of 3D points visible in both frames
+    difficulty: list[str]                 # "easy" (same TOD/weather) / "medium" (different TOD) / "hard" (different season + weather)
+```
+
+Stored as NPZ per trajectory alongside frames. Enables training of loop closure detection networks with difficulty-stratified supervision.
+
+**Terrain-relative navigation ground truth**: For high-altitude ISR and satellite, horizon/ridgeline matching is a primary long-range navigation method. Optional per-frame outputs:
+
+- **Horizon profile**: For ISR loiter/plane frames (look angle >30° from nadir), extract the horizon line as an elevation-angle-vs-azimuth array (360 values at 1° resolution). Where the horizon is occluded by buildings/terrain, record the occlusion distance.
+- **Skyline distinctiveness**: Per-frame metric (0-1) quantifying horizon recognizability. Flat ocean = 0.0, mountain range = 1.0. Enables filtering datasets by skyline quality.
+- **DEM raster**: Per scene, export terrain height as a georeferenced raster at configurable resolution (5-30m/pixel). Reference for DEM-matching localization algorithms.
+- **Ridgeline peak annotations**: Persistent 3D point IDs for prominent terrain peaks visible above the horizon, with their 2D projections per frame. Stable across seasons/TOD (same peak IDs in summer and winter).
 
 ### Component 5: Output Layout (`output_layout.py`)
 

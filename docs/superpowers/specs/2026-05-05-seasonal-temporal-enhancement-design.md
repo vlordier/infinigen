@@ -186,3 +186,10 @@ For video sequences within one (season, TOD) combination:
 1. Should seasonal variation include different tree species composition (e.g., deciduous vs evergreen ratio)? Initial scope: no, keep species fixed per scene.
 2. Night lighting: how to handle scenes that have no indoor structures (pure nature)? Moon + starfield only. Low light = grainy rendering (like real night vision). Should we boost Cycles samples for night scenes?
 3. Should seasonal fog/haze be tied to time-of-day? Morning fog that burns off by noon? Add as a secondary stage — initial release ties fog to season only.
+
+**Feature-sparse seasonal variants**: Beyond the standard seasons, certain environments become effectively featureless under specific seasonal conditions:
+- **Winter overcast on snowfield** (`nature_snowfield` + winter + overcast): White terrain, white sky, zero contrast. Extreme feature poverty scenario for visual navigation.
+- **Summer haze on open ocean** (`nature_ocean` + summer + haze): Horizon blending into sky, wave-only features.
+- **Winter on barren steppe** (`nature_barren_steppe` + winter): Snow-covered flat terrain with no vertical features beyond the horizon.
+
+These are controlled by combined season×scene_type parameters in the dataset spec rather than being separate season presets.
