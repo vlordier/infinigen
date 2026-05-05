@@ -15,7 +15,7 @@ Visual positioning systems are deployed on diverse platforms with fundamentally 
 - **FPV drones** (5-100m): Agile, forward-facing, high speed, aggressive banking
 - **Satellites** (200km+): Nadir, push-broom scanning, near-orthographic
 
-Infinigen's current camera system supports pedestrian-level viewpoints (1.5-2.5m altitude, random walks). These don't match aerial platform behavior. Training on viewpoint-appropriate data is critical — a network trained on ground-level views won't generalize to drone perspectives.
+Infinigen's current camera system supports pedestrian-level viewpoints (1.5-2.5m altitude, random walks). These don't match aerial platform behavior. Training on viewpoint-appropriate data is critical — a network trained on ground-level views won't generalize to drone perspectives. Urban scenes (#6) add building-scale obstacles (urban canyons) that drive richer camera planning.
 
 ## Design
 

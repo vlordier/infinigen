@@ -70,15 +70,17 @@ class SceneSnapshot:
 
 **Building Collapse** (`earthquake/building_collapse.py`):
 
-For indoor scenes (rooms, structures):
-- Identify load-bearing walls via constraint graph (walls with `StableAgainst` relations)
-- Apply horizontal displacement to wall segments (simulated seismic shear)
-- Fracture walls that exceed stress thresholds using Voronoi shatter
+For urban buildings (from #6) and indoor rooms (existing):
+- **Input**: Building mesh + structural metadata (wall segments, floor count, construction type) from the urban building generator
+- **Load-bearing analysis**: Identify ground-floor walls and corner columns as primary load paths
+- Apply horizontal shear displacement to floor levels (each floor displaced ±X relative to floor below)
+- Fracture ground-floor walls and columns that exceed stress thresholds using Voronoi shatter
+- Progressive collapse: when lower floors fail, upper floors pancake downward
 - Let fractured pieces fall under gravity (rigid body simulation, Blender physics)
-- Generate rubble field from fragments that hit the floor
-- Remove or damage ceiling panels
+- Generate rubble field from fragments that hit the ground
+- For indoor rooms: use constraint-solver wall relationships (`StableAgainst`) instead of building metadata
 
-For outdoor structures: same principle applied to procedurally-placed structures.
+For nature terrain (no buildings): skip building collapse, apply only ground fracture + tree toppling.
 
 Severity levels:
 - **Mild**: Cracks in walls, minor object displacement, some toppled items
@@ -113,10 +115,11 @@ Two modes:
 Crater placement: random within scene bounds, weighted toward structures (buildings, roads). Multiple craters per scene.
 
 **Facade Damage** (`war/facade_damage.py`):
-- Procedural holes in building walls (Boolean cut with randomized shapes)
-- Exposed rebar geometry in larger holes
-- Scorch/soot material application around holes (darkened, charred)
-- Partial collapse of damaged sections
+- Operates on urban building exterior meshes (from #6) and indoor room walls
+- Procedural holes in building walls (Boolean cut with randomized shapes — circular for blast, irregular for collapse)
+- Exposed rebar geometry in larger concrete holes (procedural thin cylinders at hole edges)
+- Scorch/soot material application around holes (darkened, charred, emissive for recent damage)
+- Partial collapse of damaged upper-floor sections
 - Broken windows with glass shard scattering
 
 **Fire Effects** (`war/fire_effects.py`):
@@ -179,9 +182,18 @@ After damage, some camera poses may be invalid (inside collapsed geometry, occlu
 5. **Visual quality**: Rendered damaged scenes pass manual spot-check (no floating geometry, no Z-fighting)
 6. **Scale test**: Generate 100 paired scenes, verify no pipeline crashes
 
+### Damage Targets by Scene Type
+
+| Scene type | Damageable elements | Primary damage types |
+|-----------|-------------------|---------------------|
+| **Urban** (#6) | Buildings (exteriors), roads, bridges, infrastructure, vehicles, street trees | Earthquake: building collapse, road fracture, toppled poles. War: building craters, facade destruction, burned vehicles, road craters. |
+| **Indoor** (existing) | Walls, furniture, ceiling, doors/windows | Earthquake: wall collapse, toppled furniture, ceiling collapse. War: wall breach, interior scorch, glass shatter. |
+| **Nature** (existing) | Terrain, trees, rocks, water features | Earthquake: ground fractures, landslides, tree toppling. War: terrain craters, scorched vegetation, fire. |
+
 ### Dependencies
 
-- Requires indoor constraint solver to identify structural elements (wall relationships) — already exist in `infinigen/core/constraints/`
+- **Urban scenes (#6)**: Primary source of buildings and infrastructure to damage. Without this, damage operates on nature and indoor scenes only.
+- Building structure queries use urban scene's building metadata (wall polygons, floor count, structural type) and the indoor constraint solver's wall relationships
 - Uses Blender's rigid body physics for collapse simulation (bpy built-in)
 - Uses Blender mesh Boolean operations for crater/facade cutting (bpy built-in)
 - Fire simulation reuses existing `infinigen/assets/fluid/fluid.py`

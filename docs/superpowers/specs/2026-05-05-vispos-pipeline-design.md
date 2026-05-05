@@ -45,7 +45,7 @@ class VisPosDatasetSpec:
     description: str
     
     # Scene parameters
-    scene_types: list[str]                 # ["nature_forest", "nature_desert", "indoor_urban"]
+    scene_types: list[str]                 # ["nature_forest", "nature_desert", "indoor_urban", "urban_dense_city", "urban_suburban", "urban_industrial"]
     num_scenes: int                        # Number of unique scenes
     
     # Variation axes
@@ -278,10 +278,10 @@ Automated checks run after generation:
 
 ### Dependencies
 
-- Integrates with all other features (#1-4) but works with stubs when subsystems aren't available
-- When a subsystem is missing, the spec falls back gracefully: no IR → EO only, no damage → intact only
+- Integrates with all other features (#1-6) but works with stubs when subsystems aren't available
+- When a subsystem is missing, the spec falls back gracefully: no urban scenes → nature/indoor only, no IR → EO only, no damage → intact only
 - Depends on `manage_jobs.py`, `render.py`, `post_render.py`, `camera.py` (all existing)
-- No circular dependencies
+- Urban scenes (#6) provide the primary scene diversity for visual positioning in built environments
 
 ### Open Questions
 
