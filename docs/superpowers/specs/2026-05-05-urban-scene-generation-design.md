@@ -17,6 +17,7 @@ Where assets come from, by category:
 | **Road networks** | OSM data (primary) + procedural infill (gap filling) | Real city layouts provide authentic road topology. Procedural fills gaps where OSM is sparse or for purely synthetic cities. |
 | **Building footprints** | OSM data (primary) + procedural lot subdivision (fill) | OSM provides real building footprints where available. Procedural generates plausible infill for un-mapped areas. |
 | **Building shells, facades, roofs** | Procedural (infinigen-style) | Extruded from footprints. Too many variations, must integrate with damage system, needs structural metadata. |
+| **Landmarks** (water towers, churches, cell towers, stadiums, wind turbines) | Procedural | Distinctive shapes for visual positioning anchors. Parameterized templates per type. |
 | **Bridges, power lines, streetlights, signs** | Procedural | Simple repeating geometry, placement logic is the hard part. |
 | **Vehicles (cars, trucks, buses)** | Static asset library + AI image-to-3D | Complex curved surfaces impractical for procedural. Curated CC0 library for common types. AI-generated for variety. |
 | **Street furniture (benches, bins, hydrants, planters)** | Static library + some AI-generated | Bespoke designs, small meshes. Procedural where simple (bollards, planters). |
@@ -47,6 +48,7 @@ infinigen/assets/urban/
 │   ├── facade.py             # Facade variation (windows, materials, style)
 │   ├── roof.py               # Roof geometry (flat, pitched, domed, etc.)
 │   ├── interior_bridge.py    # Integration with existing indoor solver
+│   ├── landmarks.py           # Landmark generation (water towers, churches, etc.)
 │   └── templates/            # Gin configs per building type
 ├── infrastructure/
 │   ├── bridges.py            # Bridge generation over terrain gaps/rivers
@@ -179,7 +181,42 @@ Connect building exteriors to the existing indoor constraint solver:
 - Windows align between interior and exterior
 - This is optional — most buildings are exterior-only. Interiors are only needed when camera trajectories go inside or when damage reveals interior structure.
 
-### Component 4: Infrastructure (`infrastructure/`)
+### Component 4: Landmarks (`buildings/landmarks.py`)
+
+Visually distinctive structures that serve as anchor points for visual positioning. Unlike generic buildings, landmarks are designed to be recognizable from aerial views — they stand out in height, shape, silhouette, or material from surrounding structures.
+
+**Why landmarks matter**: Visual positioning networks learn to match features against reference data. Distinctive features improve localization accuracy and reduce ambiguity. Without landmarks, scene after scene of similar-looking buildings provides weak training signal. A single water tower or church spire can anchor an entire localization.
+
+**Landmark types** (procedural, parameterized):
+
+| Type | Height | Footprint | Key features | Placement |
+|------|--------|-----------|-------------|-----------|
+| Water tower | 15-40m | 5-10mØ | Tank on legs (spherical, cylindrical, or ellipsoid tank), ladder, piping | 1 per 2-5 km², near population centers |
+| Church/religious | 15-50m | 200-800m² | Spire/steeple, cross-shaped plan, bell tower, rose window | 1 per town/neighborhood, often on elevated ground |
+| Cell tower | 20-60m | 3-5m base | Lattice or monopole mast, antenna panels at top, warning lights | 1 per 1-3 km², often on high ground |
+| Stadium/arena | 20-40m | 5000-15000m² | Oval/circular bowl, floodlight towers, seating tiers | 1 per city, near arterials |
+| Grain silo complex | 20-40m | 100-500m² cluster | Cylindrical tower cluster, conveyor gantry, truck bay | Industrial zones, near rail/highway |
+| Wind turbine | 80-150m | 5m base | Tower + nacelle + 3 blades | Rural edges, hilltops, coastal (if terrain supports) |
+| Cooling tower | 60-120m | 30-50mØ | Hyperboloid concrete shell | Industrial/power zones |
+| Lighthouse | 10-30m | 5-10m base | Tapered tower, lantern room, gallery deck | Coastlines only |
+| Bridge (major) | Variable | Variable | Cable-stayed or suspension with towers | River crossings on arterials (extends bridges in Component 5) |
+| Crane (construction) | 30-80m | 5-10m base | Lattice tower + jib arm + counter-jib | Construction sites, ports |
+
+**Landmark placement logic**:
+1. **Density**: Configurable landmarks per km². Default: 2-4 per km² in dense areas, 1-2 in suburban.
+2. **Spacing constraint**: Minimum distance between landmarks (default 500m) to avoid clustering
+3. **Terrain preference**: Tall landmarks (cell towers, wind turbines) prefer elevated terrain for visibility
+4. **Zone matching**: Industrial landmarks in industrial zones, churches in residential, stadiums near arterials
+5. **Silhouette validation**: Raycast from cardinal directions to verify the landmark is visible above surrounding buildings. If occluded, increase height or move to a more exposed location.
+6. **Co-visibility**: For paired scenes (intact + damaged), landmarks survive damage at reduced rates (configurable) — they're critical for localization
+
+**Landmark integration with other systems**:
+- **Damage (#2)**: Landmarks are damageable but have higher survival probability. A collapsed water tower is itself a distinctive feature (rubble pile with recognizable tank). Partially damaged landmarks provide challenging training examples.
+- **Flight cameras (#4)**: Landmarks are annotated in camera metadata as POIs. Camera policies can prioritize landmark visibility.
+- **IR (#1)**: Landmarks have distinctive thermal signatures — water towers are thermally massive (stable temperature), church steeples are thin (fast thermal response), cell towers have warning lights (hot point sources at night).
+- **VisPos pipeline (#5)**: Landmark positions are included in ground truth metadata. Landmark IDs persist across season/TOD/damage variants of the same scene.
+
+### Component 5: Infrastructure (`infrastructure/`)
 
 **Bridges** (`bridges.py`):
 - Triggered when a road edge crosses a river or terrain depression
@@ -206,7 +243,7 @@ Connect building exteriors to the existing indoor constraint solver:
 - Highway signs (overhead gantry, roadside)
 - Billboards along highways and arterials
 
-### Component 5: Urban Scatter (`urban_scatter/`)
+### Component 6: Urban Scatter (`urban_scatter/`)
 
 Detail objects are sourced from multiple pipelines:
 
@@ -235,7 +272,7 @@ Detail objects are sourced from multiple pipelines:
 - Source: static library for detailed items, procedural for simple (bollards, planters)
 - Placement: density higher in commercial areas, along sidewalks, at bus stops
 
-### Component 6: Urban Terrain & Surfaces (`urban_terrain.py`, `urban_surface.py`)
+### Component 7: Urban Terrain & Surfaces (`urban_terrain.py`, `urban_surface.py`)
 
 **Terrain preparation**:
 1. **Flattening**: Areas designated for urban development are flattened to acceptable grade (<2% for building pads, <8% for roads). Terrain is modified using SDF-based deformation (smooth leveling with transition zones).
@@ -251,7 +288,7 @@ Detail objects are sourced from multiple pipelines:
 
 These are applied via the existing surface material system (`infinigen/core/surface.py`).
 
-### Component 7: Urban Scene Composer (`urban_scene.py`)
+### Component 8: Urban Scene Composer (`urban_scene.py`)
 
 Top-level composition orchestrating all urban systems:
 
@@ -286,7 +323,7 @@ This is a `RandomStageExecutor`-compatible pipeline, meaning each stage can be r
 | `coastal_city` | City on waterfront | High | Adapted to coast |
 | `infrastructure_corridor` | Highway + bridges + power lines | Minimal | Single highway + access |
 
-### Component 8: Urban Scatter via Existing Infrastructure
+### Component 9: Urban Scatter via Existing Infrastructure
 
 Reuses existing infinigen scatter systems for urban-appropriate small elements:
 
