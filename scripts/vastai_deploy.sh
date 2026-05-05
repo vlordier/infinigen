@@ -8,7 +8,7 @@ echo "=== INFINIGEN VISPOS DEPLOYMENT ==="
 echo "Started at $(date)"
 
 # === Configuration ===
-S3_BUCKET="s3://infinigen_gnss"
+S3_BUCKET="s3://infinigen-gnss"
 AWS_REGION="us-east-1"
 BLENDER_VERSION="5.1.1"
 REPO_URL="https://github.com/vlordier/infinigen.git"
