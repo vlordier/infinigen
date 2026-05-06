@@ -107,3 +107,6 @@ MUJOCO_LOG.TXT
 *tmp*
 *.orig
 *.rej
+output/ removed
+output/
+infinigen/datagen/customgt/dependencies/json
