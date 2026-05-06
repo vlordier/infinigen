@@ -5,7 +5,10 @@
 
 from infinigen.core import surface
 from infinigen.core.util.organization import SurfaceTypes
-from infinigen.infinigen_gpl.surfaces import snow
+try:
+    from infinigen.infinigen_gpl.surfaces import snow
+except ImportError:
+    snow = None
 
 
 class Snow:

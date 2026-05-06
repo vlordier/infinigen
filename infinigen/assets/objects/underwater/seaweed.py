@@ -4,7 +4,6 @@
 
 # Authors: Lingjie Mei
 
-
 import bpy
 import numpy as np
 from numpy.random import uniform
@@ -26,8 +25,11 @@ from infinigen.core.tagging import tag_object
 from infinigen.core.util.color import hsv2rgba
 from infinigen.core.util.math import FixedSeed
 from infinigen.core.util.random import log_uniform
-from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
-
+try:
+    try:
+    from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
+    except ImportError:
+        build_diff_growth = None
 
 class SeaweedFactory(AssetFactory):
     def __init__(self, factory_seed, coarse=False):

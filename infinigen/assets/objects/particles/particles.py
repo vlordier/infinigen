@@ -3,7 +3,6 @@
 
 # Authors: Hei Law, Alexander Raistrick
 
-
 import bpy
 from numpy.random import normal as N
 
@@ -13,8 +12,11 @@ from infinigen.core.nodes import node_utils
 from infinigen.core.nodes.node_wrangler import Nodes
 from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.tagging import tag_object
-from infinigen.infinigen_gpl.surfaces import snow
-
+try:
+    try:
+    from infinigen.infinigen_gpl.surfaces import snow
+    except ImportError:
+        snow = None
 
 def shader_raindrop(nw):
     glass_bsdf = nw.new_node(
@@ -29,7 +31,6 @@ def shader_raindrop(nw):
             "Surface": glass_bsdf,
         },
     )
-
 
 def geo_raindrop(nw):
     group_input = nw.new_node(
@@ -79,7 +80,6 @@ def geo_raindrop(nw):
         },
     )
 
-
 class RaindropFactory(AssetFactory):
     def create_asset(self, **kwargs):
         bpy.ops.mesh.primitive_ico_sphere_add(
@@ -100,7 +100,6 @@ class RaindropFactory(AssetFactory):
     def finalize_assets(self, assets):
         surface.add_material(assets, shader_raindrop)
 
-
 class DustMoteFactory(AssetFactory):
     def create_asset(self, **kwargs):
         bpy.ops.mesh.primitive_ico_sphere_add(
@@ -116,7 +115,6 @@ class DustMoteFactory(AssetFactory):
 
     def finalize_assets(self, assets):
         dirt.apply(assets)
-
 
 class SnowflakeFactory(AssetFactory):
     def create_asset(self, **params) -> bpy.types.Object:

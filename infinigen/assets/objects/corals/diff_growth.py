@@ -3,7 +3,6 @@
 
 # Authors: Lingjie Mei
 
-
 import numpy as np
 from numpy.random import uniform
 
@@ -19,8 +18,11 @@ from infinigen.assets.utils.object import data2mesh, mesh2obj
 from infinigen.core import surface
 from infinigen.core.tagging import tag_object
 from infinigen.core.util.math import FixedSeed
-from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
-
+try:
+    try:
+    from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
+    except ImportError:
+        build_diff_growth = None
 
 class DiffGrowthBaseCoralFactory(BaseCoralFactory):
     default_scale = [1] * 3
@@ -129,12 +131,10 @@ class DiffGrowthBaseCoralFactory(BaseCoralFactory):
         tag_object(obj, "diffgrowth_coral")
         return obj
 
-
 class LeatherBaseCoralFactory(DiffGrowthBaseCoralFactory):
     def __init__(self, factory_seed, coarse=False):
         super().__init__(factory_seed, coarse)
         self.maker = self.leather_make
-
 
 class TableBaseCoralFactory(DiffGrowthBaseCoralFactory):
     def __init__(self, factory_seed, coarse=False):

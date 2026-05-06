@@ -3,7 +3,6 @@
 
 # Authors: Lingjie Mei
 
-
 import bpy
 import numpy as np
 from numpy.random import normal as N
@@ -18,8 +17,11 @@ from infinigen.core.placement.factory import AssetFactory
 from infinigen.core.tagging import tag_object
 from infinigen.core.util import blender as butil
 from infinigen.core.util.color import hsv2rgba
-from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
-
+try:
+    try:
+    from infinigen.infinigen_gpl.extras.diff_growth import build_diff_growth
+    except ImportError:
+        build_diff_growth = None
 
 class LichenFactory(AssetFactory):
     def __init__(self, factory_seed):
