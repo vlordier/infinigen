@@ -331,7 +331,7 @@ def slither_along_path(obj, curve, speed, zoff_pct=0.7, orig_len=None):
     obj.location = (l, 0, zoff)
     obj.keyframe_insert(data_path="location", frame=bpy.context.scene.frame_end)
 
-        for fc in get_action_fcurves(obj):
+    for fc in get_action_fcurves(obj):
         for k in fc.keyframe_points:
             k.interpolation = "LINEAR"
 
