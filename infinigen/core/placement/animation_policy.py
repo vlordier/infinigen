@@ -572,9 +572,55 @@ def try_animate_with_pathfinding(
     return True
 
 
+def get_action_fcurves(obj):
+    animation_data = getattr(obj, "animation_data", None)
+    action = getattr(animation_data, "action", None)
+    if action is None:
+        return []
+
+    if hasattr(action, "fcurves"):
+        return action.fcurves
+
+    action_slot_handle = getattr(animation_data, "action_slot_handle", None)
+    for layer in getattr(action, "layers", []):
+        for strip in getattr(layer, "strips", []):
+            for channelbag in getattr(strip, "channelbags", []):
+                if (
+                    action_slot_handle is None
+                    or getattr(channelbag, "slot_handle", None) == action_slot_handle
+                ):
+                    return channelbag.fcurves
+
+    return []
+
+
+def find_fcurve(obj, data_path, index=None):
+    fcurves = get_action_fcurves(obj)
+    if hasattr(fcurves, "find"):
+        try:
+            if index is None:
+                return fcurves.find(data_path)
+            return fcurves.find(data_path, index=index)
+        except TypeError:
+            return fcurves.find(data_path)
+
+    matches = []
+    for fcurve in fcurves:
+        if fcurve.data_path == data_path:
+            matches.append(fcurve)
+
+    if index is None:
+        return matches[0] if matches else None
+
+    for fcurve in matches:
+        if getattr(fcurve, "array_index", None) == index:
+            return fcurve
+    return None
+
+
 def keyframe(obj, loc, rot, t, interp="BEZIER"):
     if obj.animation_data is not None and obj.animation_data.action is not None:
-        for fc in obj.animation_data.action.fcurves:
+        for fc in get_action_fcurves(obj):
             for kp in fc.keyframe_points:
                 if kp.co > t:
                     raise ValueError(
@@ -589,7 +635,7 @@ def keyframe(obj, loc, rot, t, interp="BEZIER"):
         obj.rotation_euler = rot
         obj.keyframe_insert(data_path="rotation_euler", frame=t)
 
-    for fc in obj.animation_data.action.fcurves:
+    for fc in get_action_fcurves(obj):
         for k in fc.keyframe_points:
             if k.co[0] == t:
                 k.interpolation = interp
@@ -659,36 +705,32 @@ def animate_trajectory(
                 kf_locs = []
                 kf_rots = []
                 kf_ts = []
-                for j in range(
-                    len(obj.animation_data.action.fcurves[0].keyframe_points)
-                ):
+                loc_fcurves = [
+                    find_fcurve(obj, "location", index=index) for index in range(3)
+                ]
+                rot_fcurves = [
+                    find_fcurve(obj, "rotation_euler", index=index)
+                    for index in range(3)
+                ]
+                if any(fc is None for fc in loc_fcurves + rot_fcurves):
+                    raise ValueError("Missing expected location or rotation fcurves")
+
+                for j in range(len(loc_fcurves[0].keyframe_points)):
                     kf_ts.append(
-                        obj.animation_data.action.fcurves[0].keyframe_points[j].co.x
+                        loc_fcurves[0].keyframe_points[j].co.x
                     )
                     kf_locs.append(
                         (
-                            obj.animation_data.action.fcurves[0]
-                            .keyframe_points[j]
-                            .co.x,
-                            obj.animation_data.action.fcurves[1]
-                            .keyframe_points[j]
-                            .co.y,
-                            obj.animation_data.action.fcurves[2]
-                            .keyframe_points[j]
-                            .co.z,
+                            loc_fcurves[0].keyframe_points[j].co.x,
+                            loc_fcurves[1].keyframe_points[j].co.y,
+                            loc_fcurves[2].keyframe_points[j].co.z,
                         )
                     )
                     kf_rots.append(
                         (
-                            obj.animation_data.action.fcurves[3]
-                            .keyframe_points[j]
-                            .co.x,
-                            obj.animation_data.action.fcurves[4]
-                            .keyframe_points[j]
-                            .co.y,
-                            obj.animation_data.action.fcurves[5]
-                            .keyframe_points[j]
-                            .co.z,
+                            rot_fcurves[0].keyframe_points[j].co.x,
+                            rot_fcurves[1].keyframe_points[j].co.y,
+                            rot_fcurves[2].keyframe_points[j].co.z,
                         )
                     )
                 obj.animation_data_clear()
@@ -729,11 +771,9 @@ def policy_create_bezier_path(
     # read off the keyframe locations
     positions = []
     if temp.animation_data is not None:
-        fc = next(
-            fc
-            for fc in temp.animation_data.action.fcurves
-            if fc.data_path == "location"
-        )
+        fc = find_fcurve(temp, "location")
+        if fc is None:
+            raise ValueError("Unable to find location fcurve for generated policy path")
         for p in fc.keyframe_points:
             f = int(p.co[0])
             bpy.context.scene.frame_set(f)

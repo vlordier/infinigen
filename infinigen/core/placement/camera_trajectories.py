@@ -149,7 +149,9 @@ def compute_trajectories(
                 continue
 
             # save the trajectory with deepcopies of rotation_euler and locations on keyframes
-            f_curve = cam.animation_data.action.fcurves.find("location")
+            f_curve = animation_policy.find_fcurve(cam, "location")
+            if f_curve is None:
+                raise ValueError("Unable to find camera location fcurve")
             keyframe_list = [
                 int(keyframe.co[0]) for keyframe in f_curve.keyframe_points
             ]
@@ -250,7 +252,9 @@ def animate_trajectories(
 
 # deletes keyframes on camera from prior animation phase
 def delete_prior_keyframes(cam):
-    f_curve = cam.animation_data.action.fcurves.find("location")
+    f_curve = animation_policy.find_fcurve(cam, "location")
+    if f_curve is None:
+        return
     keyframe_list = [int(keyframe.co[0]) for keyframe in f_curve.keyframe_points]
     for frame in keyframe_list:
         cam.keyframe_delete(data_path="location", frame=frame)
