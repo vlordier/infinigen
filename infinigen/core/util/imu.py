@@ -14,6 +14,28 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def get_action_fcurves(obj):
+    animation_data = getattr(obj, "animation_data", None)
+    action = getattr(animation_data, "action", None)
+    if action is None:
+        return []
+
+    if hasattr(action, "fcurves"):
+        return action.fcurves
+
+    action_slot_handle = getattr(animation_data, "action_slot_handle", None)
+    for layer in getattr(action, "layers", []):
+        for strip in getattr(layer, "strips", []):
+            for channelbag in getattr(strip, "channelbags", []):
+                if (
+                    action_slot_handle is None
+                    or getattr(channelbag, "slot_handle", None) == action_slot_handle
+                ):
+                    return channelbag.fcurves
+
+    return []
+
+
 def solve_cubic(c0, c1, c2, c3):
     ZERO = -1.0e-10
     ONE = 1.000001
@@ -217,7 +239,7 @@ def get_imu_tum_data(object, start, end):
     x, y, z, rx, ry, rz = None, None, None, None, None, None
 
     # find data
-    for curve in object.animation_data.action.fcurves:
+    for curve in get_action_fcurves(object):
         if curve.data_path == "location":
             if curve.array_index == 0:
                 ax, x = data_from_keyframes(curve.keyframe_points, start, end, True)

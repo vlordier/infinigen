@@ -21,6 +21,28 @@ resolution = 64
 buffered_frames = 10
 
 
+def get_action_fcurves(obj):
+    animation_data = getattr(obj, "animation_data", None)
+    action = getattr(animation_data, "action", None)
+    if action is None:
+        return []
+
+    if hasattr(action, "fcurves"):
+        return action.fcurves
+
+    action_slot_handle = getattr(animation_data, "action_slot_handle", None)
+    for layer in getattr(action, "layers", []):
+        for strip in getattr(layer, "strips", []):
+            for channelbag in getattr(strip, "channelbags", []):
+                if (
+                    action_slot_handle is None
+                    or getattr(channelbag, "slot_handle", None) == action_slot_handle
+                ):
+                    return channelbag.fcurves
+
+    return []
+
+
 @gin.configurable
 def ocean_asset(
     folder,
@@ -85,8 +107,10 @@ def ocean_asset(
         ]:
             mod.time = t
             mod.keyframe_insert("time", frame=f)
-        obj.animation_data.action.fcurves[0].keyframe_points[0].interpolation = "LINEAR"
-        obj.animation_data.action.fcurves[0].keyframe_points[1].interpolation = "LINEAR"
+        action_fcurves = list(get_action_fcurves(obj))
+        if action_fcurves and len(action_fcurves[0].keyframe_points) >= 2:
+            action_fcurves[0].keyframe_points[0].interpolation = "LINEAR"
+            action_fcurves[0].keyframe_points[1].interpolation = "LINEAR"
     with Timer("bake ocean", disable_timer=not verbose):
         bpy.ops.object.ocean_bake(modifier="ocean")
         while True:
