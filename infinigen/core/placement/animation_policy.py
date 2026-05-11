@@ -298,7 +298,7 @@ class AnimPolicyFollowObject:
     def __call__(self, obj, frame_curr, bvh, retry_pct):
         try:
             ts = []
-            for fc in self.follow_obj.animation_data.action.fcurves:
+            for fc in get_action_fcurves(self.follow_obj):
                 for kp in fc.keyframe_points:
                     ts.append(int(kp.co[0]))
             frame_next = min(t for t in ts if t > frame_curr)
@@ -417,7 +417,7 @@ def try_animate_trajectory(
                     f"validate_keyframe_range failed on moving {obj.location} to {loc}"
                 )
                 # clear out the candidate keyframes we just inserted, they were no good
-                for fc in obj.animation_data.action.fcurves:
+                for fc in get_action_fcurves(obj):
                     if fc.data_path == "":
                         continue
                     obj.keyframe_delete(data_path=fc.data_path, frame=step_end_frame)
@@ -492,7 +492,7 @@ def try_animate_with_pathfinding(
             #     bpy.ops.wm.save_mainfile(filepath="/u/zeyum/p/debug.blend")
             #     assert(0)
 
-            for fc in obj.animation_data.action.fcurves:
+            for fc in get_action_fcurves(obj):
                 if fc.data_path == "":
                     continue
                 obj.keyframe_delete(data_path=fc.data_path, frame=frame_curr + 1)
