@@ -68,14 +68,179 @@ class DCEL:
 
     def add_node(self, position: tuple[float, float],
                  target_face: DCEFace) -> DCELNode:
-        raise NotImplementedError("add_node not yet implemented")
+        import random
+        edges = []
+        he = target_face.half_edge
+        if he is None:
+            raise ValueError("Target face has no half-edge")
+        start = he
+        while True:
+            edges.append(he)
+            he = he.next
+            if he is start or he is None:
+                break
+        target_edge = random.choice(edges)
+        ax, ay = target_edge.origin.position
+        bx, by = target_edge.twin.origin.position if target_edge.twin else (ax, ay)
+        mid = ((ax + bx) / 2, (ay + by) / 2)
+        new_node = self.split_edge(target_edge, mid)
+        new_node.position = position
+        candidates = []
+        he = target_face.half_edge
+        if he is not None:
+            start = he
+            while True:
+                n = he.origin
+                is_new = n is new_node
+                adjacent = False
+                adj = new_node.half_edge
+                if adj is not None:
+                    adj_start = adj
+                    while True:
+                        if adj.twin is not None and adj.twin.origin is n:
+                            adjacent = True
+                            break
+                        adj = adj.twin.next if adj.twin is not None else None
+                        if adj is None or adj is adj_start:
+                            break
+                if not is_new and not adjacent:
+                    candidates.append(n)
+                he = he.next
+                if he is start or he is None:
+                    break
+        if candidates:
+            chosen = random.choice(candidates)
+            self.connect_nodes(new_node, chosen)
+        return new_node
+
+    def _find_shared_face(self, node0: DCELNode, node1: DCELNode) -> Optional[DCEFace]:
+        visited = set()
+        start_he = node0.half_edge
+        if start_he is None:
+            return None
+        he = start_he
+        while True:
+            face = he.face
+            if face is not None and not face.is_boundary and id(face) not in visited:
+                f_he = face.half_edge
+                if f_he is not None:
+                    f_start = f_he
+                    while True:
+                        if f_he.origin is node1:
+                            return face
+                        f_he = f_he.next
+                        if f_he is f_start or f_he is None:
+                            break
+                visited.add(id(face))
+            he = he.twin.next if he.twin is not None else None
+            if he is None or he is start_he:
+                break
+        return None
+
+    def _find_incident_half_edge(self, node: DCELNode, face: DCEFace) -> Optional[DCEHalfEdge]:
+        start_he = node.half_edge
+        if start_he is None:
+            return None
+        he = start_he
+        while True:
+            if he.face is face:
+                return he
+            he = he.twin.next if he.twin is not None else None
+            if he is None or he is start_he:
+                break
+        return None
 
     def connect_nodes(self, node0: DCELNode,
                       node1: DCELNode) -> DCEFace:
-        raise NotImplementedError(
-            "connect_nodes not yet implemented")
+        if node0 is node1:
+            raise ValueError("Cannot connect a node to itself")
+        face = self._find_shared_face(node0, node1)
+        if face is None:
+            raise ValueError("Nodes not on same interior face or cannot find shared face")
+        he_a_start = self._find_incident_half_edge(node0, face)
+        if he_a_start is None:
+            raise ValueError("Cannot find incident half-edge")
+        path_a = []
+        he = he_a_start
+        while he.origin is not node1:
+            path_a.append(he)
+            he = he.next
+            if he is he_a_start or he is None:
+                raise ValueError("Cannot find path from node0 to node1")
+        he_at_node1 = he
+        path_b = []
+        he = he_at_node1
+        while he is not None and he.origin is not node0:
+            path_b.append(he)
+            he = he.next
+            if he is he_at_node1:
+                break
+        if not path_b:
+            raise ValueError("Nodes are adjacent, cannot connect")
+        he_new = DCEHalfEdge(origin=node0)
+        he_new_twin = DCEHalfEdge(origin=node1, twin=he_new)
+        he_new.twin = he_new_twin
+        self.half_edges.append(he_new)
+        self.half_edges.append(he_new_twin)
+        new_face = DCEFace(half_edge=path_b[0])
+        self.faces.append(new_face)
+        for phe in path_b:
+            phe.face = new_face
+        he_new_twin.face = face
+        he_new.face = new_face
+        path_a[-1].next = he_new_twin
+        he_new_twin.prev = path_a[-1]
+        he_new_twin.next = he_a_start
+        he_a_start.prev = he_new_twin
+        he_new.next = path_b[0]
+        path_b[0].prev = he_new
+        path_b[-1].next = he_new
+        he_new.prev = path_b[-1]
+        return new_face
 
     def split_edge(self, he: DCEHalfEdge,
                    position: tuple[float, float]) -> DCELNode:
-        raise NotImplementedError(
-            "split_edge not yet implemented")
+        twin = he.twin
+        he_next = he.next
+        he_prev = he.prev
+        twin_next = twin.next
+        twin_prev = twin.prev
+        face = he.face
+        twin_face = twin.face
+        new_node = DCELNode(position=position)
+        self.nodes.append(new_node)
+        he_a = DCEHalfEdge(origin=he.origin, face=face)
+        he_a_twin = DCEHalfEdge(origin=new_node, twin=he_a, face=twin_face)
+        he_a.twin = he_a_twin
+        he_b = DCEHalfEdge(origin=new_node, face=face)
+        he_b_twin = DCEHalfEdge(origin=twin.origin, twin=he_b, face=twin_face)
+        he_b.twin = he_b_twin
+        self.half_edges.extend([he_a, he_a_twin, he_b, he_b_twin])
+        self.half_edges.remove(he)
+        self.half_edges.remove(twin)
+        he_a.next = he_b
+        he_a.prev = he_prev
+        he_b.next = he_next
+        he_b.prev = he_a
+        if he_prev is not None:
+            he_prev.next = he_a
+        if he_next is not None:
+            he_next.prev = he_b
+        he_b_twin.next = he_a_twin
+        he_b_twin.prev = twin_prev
+        he_a_twin.next = twin_next
+        he_a_twin.prev = he_b_twin
+        if twin_prev is not None:
+            twin_prev.next = he_b_twin
+        if twin_next is not None:
+            twin_next.prev = he_a_twin
+        if face is not None and face.half_edge is he:
+            face.half_edge = he_a
+        if twin_face is not None and twin_face.half_edge is twin:
+            twin_face.half_edge = he_a_twin
+        if he.origin.half_edge is he:
+            he.origin.half_edge = he_a
+        if twin.origin.half_edge is twin:
+            twin.origin.half_edge = he_b_twin
+        new_node.half_edge = he_b
+        return new_node
