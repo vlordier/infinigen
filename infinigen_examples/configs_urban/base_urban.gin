@@ -1,0 +1,16 @@
+include 'infinigen_examples/configs_nature/base.gin'
+
+compose_urban.city_size = 200
+compose_urban.streetlight_spacing = 30
+compose_urban.landmark_count = 3
+
+compose_urban.ground_chance = 1.0
+compose_urban.road_network_chance = 1.0
+compose_urban.buildings_chance = 1.0
+compose_urban.streetlights_chance = 0.8
+compose_urban.landmarks_chance = 0.5
+
+populate_scene_urban.slime_mold_chance = 0.0
+populate_scene_urban.ivy_chance = 0.0
+populate_scene_urban.lichen_chance = 0.0
+populate_scene_urban.snow_layer_chance = 0.0

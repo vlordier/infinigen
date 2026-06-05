@@ -29,6 +29,6 @@ def generate_buildings_from_lots(lots, regional_style=None, seed=42):
     buildings = []
     for lot in lots:
         height = random.randint(3, 20) if regional_style is None else random.randint(*regional_style.building_height_range) * 3
-        obj = generate_building_shell(lot, height)
+        obj = generate_building_shell(lot.boundary, height)
         buildings.append(obj)
     return buildings
