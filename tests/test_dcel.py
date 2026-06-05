@@ -80,7 +80,7 @@ def test_split_edge_preserves_invariants():
             assert he.next.prev is he
 
 
-def test_connect_nodes_rejected_on_different_faces():
+def test_connect_nodes_rejects_self_connection():
     dcel = DCEL.from_cycle([(0, 0), (0, 10), (10, 10), (10, 0)])
     with pytest.raises(ValueError):
-        dcel.connect_nodes(dcel.nodes[0], dcel.nodes[0])  # same node - should fail
+        dcel.connect_nodes(dcel.nodes[0], dcel.nodes[0])

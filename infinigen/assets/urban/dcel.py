@@ -1,4 +1,5 @@
 from __future__ import annotations
+import random
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -68,7 +69,6 @@ class DCEL:
 
     def add_node(self, position: tuple[float, float],
                  target_face: DCEFace) -> DCELNode:
-        import random
         edges = []
         he = target_face.half_edge
         if he is None:
@@ -82,9 +82,17 @@ class DCEL:
         target_edge = random.choice(edges)
         ax, ay = target_edge.origin.position
         bx, by = target_edge.twin.origin.position if target_edge.twin else (ax, ay)
-        mid = ((ax + bx) / 2, (ay + by) / 2)
-        new_node = self.split_edge(target_edge, mid)
-        new_node.position = position
+        # Project position onto the edge's line to find the split point
+        dx = bx - ax
+        dy = by - ay
+        edge_len_sq = dx * dx + dy * dy
+        if edge_len_sq > 0:
+            t = ((position[0] - ax) * dx + (position[1] - ay) * dy) / edge_len_sq
+            t = max(0.01, min(0.99, t))
+            split_pos = (ax + dx * t, ay + dy * t)
+        else:
+            split_pos = (ax, ay)
+        new_node = self.split_edge(target_edge, split_pos)
         candidates = []
         he = target_face.half_edge
         if he is not None:
@@ -196,10 +204,14 @@ class DCEL:
         path_b[0].prev = he_new
         path_b[-1].next = he_new
         he_new.prev = path_b[-1]
+        if face.half_edge is not None and face.half_edge.face is not face:
+            face.half_edge = path_a[0] if path_a else he_new_twin
         return new_face
 
     def split_edge(self, he: DCEHalfEdge,
                    position: tuple[float, float]) -> DCELNode:
+        if he.twin is None:
+            raise ValueError("Cannot split a half-edge with no twin")
         twin = he.twin
         he_next = he.next
         he_prev = he.prev
