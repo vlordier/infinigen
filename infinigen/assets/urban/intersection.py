@@ -1,6 +1,4 @@
-import bpy
 import gin
-from infinigen.core.util import blender as butil
 
 
 @gin.configurable
@@ -10,7 +8,8 @@ class IntersectionMesher:
         self.curb_radius = curb_radius
 
     def mesh_intersections(self, nodes: dict,
-                           road_ends: dict) -> list[bpy.types.Object]:
+                           road_ends: dict) -> list:
+        import bpy
         objects = []
         for node_id, pos in nodes.items():
             ends = road_ends.get(node_id, [])
@@ -22,7 +21,8 @@ class IntersectionMesher:
         return objects
 
     def _mesh_intersection(self, center: tuple[float, float],
-                           road_ends: list) -> bpy.types.Object | None:
+                           road_ends: list):
+        import bpy
         cx, cy = center
         all_verts = []
         for end_dir, half_width, _ in road_ends:

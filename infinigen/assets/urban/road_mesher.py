@@ -1,9 +1,4 @@
 import gin
-import bpy
-import math
-from infinigen.assets.urban.graph_parser import RoadSegment
-import gin
-import bpy
 import math
 from infinigen.assets.urban.graph_parser import RoadSegment
 
@@ -22,7 +17,8 @@ class RoadMesher:
         self.sidewalk_height = sidewalk_height
         self.wall_height = wall_height
 
-    def mesh_roads(self, road_segments: list[RoadSegment]) -> list[bpy.types.Object]:
+    def mesh_roads(self, road_segments: list) -> list:
+        import bpy
         objects = []
         for seg in road_segments:
             obj = self._mesh_road_segment(seg)
@@ -30,7 +26,7 @@ class RoadMesher:
                 objects.append(obj)
         return objects
 
-    def mesh_sidewalks(self, road_segments: list[RoadSegment]) -> list[bpy.types.Object]:
+    def mesh_sidewalks(self, road_segments: list) -> list:
         objects = []
         for seg in road_segments:
             if not seg.sidewalk:
@@ -43,7 +39,8 @@ class RoadMesher:
                 objects.append(obj)
         return objects
 
-    def _mesh_road_segment(self, seg: RoadSegment) -> bpy.types.Object | None:
+    def _mesh_road_segment(self, seg: RoadSegment):
+        import bpy
         x1, y1 = seg.source
         x2, y2 = seg.target
         dx = x2 - x1
@@ -51,10 +48,8 @@ class RoadMesher:
         length = math.sqrt(dx * dx + dy * dy)
         if length < 0.01:
             return None
-        nx = dx / length
-        ny = dy / length
-        px = -ny
-        py = nx
+        px = -dy / length
+        py = dx / length
         half_width = seg.width / 2.0
         n = max(1, int(length / self.vertex_distance))
         verts = []
@@ -83,7 +78,8 @@ class RoadMesher:
         bpy.context.scene.collection.objects.link(obj)
         return obj
 
-    def _mesh_sidewalk(self, seg: RoadSegment, side: str) -> bpy.types.Object | None:
+    def _mesh_sidewalk(self, seg: RoadSegment, side: str):
+        import bpy
         x1, y1 = seg.source
         x2, y2 = seg.target
         dx = x2 - x1
@@ -91,10 +87,8 @@ class RoadMesher:
         length = math.sqrt(dx * dx + dy * dy)
         if length < 0.01:
             return None
-        nx = dx / length
-        ny = dy / length
-        px = -ny
-        py = nx
+        px = -dy / length
+        py = dx / length
         half_width = seg.width / 2.0
         offset = half_width + 0.3
         sign = -1 if side == "left" else 1
