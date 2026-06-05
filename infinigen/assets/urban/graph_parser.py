@@ -6,10 +6,10 @@ from infinigen.assets.urban.dcel import DCEL
 class RoadSegment:
     source: tuple[float, float]
     target: tuple[float, float]
-    road_type: str
-    lane_count: int
-    width: float
-    sidewalk: bool
+    road_type: str = "local"
+    lane_count: int = 2
+    width: float = 12.0
+    sidewalk: bool = True
     length: float = 0.0
 
 

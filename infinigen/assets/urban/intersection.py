@@ -7,15 +7,28 @@ class IntersectionMesher:
         self.crosswalk_width = crosswalk_width
         self.curb_radius = curb_radius
 
-    def mesh_intersections(self, nodes: dict,
-                           road_ends: dict) -> list:
+    def mesh_intersections(self, dcel, road_segments: list) -> list:
         import bpy
+        roads_by_pos: dict[tuple[float, float], list] = {}
+        for seg in road_segments:
+            for pos, dx, dy in [
+                (seg.source, seg.target[0] - seg.source[0], seg.target[1] - seg.source[1]),
+                (seg.target, seg.source[0] - seg.target[0], seg.source[1] - seg.target[1]),
+            ]:
+                length = (dx * dx + dy * dy) ** 0.5
+                if length > 0:
+                    dx /= length
+                    dy /= length
+                roads_by_pos.setdefault(pos, []).append(
+                    ((dx, dy), seg.width / 2.0, seg.road_type)
+                )
         objects = []
-        for node_id, pos in nodes.items():
-            ends = road_ends.get(node_id, [])
+        for node in dcel.nodes:
+            ends = roads_by_pos.get(node.position, [])
             if len(ends) < 3:
                 continue
-            obj = self._mesh_intersection(pos, ends)
+            cx, cy = node.position
+            obj = self._mesh_intersection((cx, cy), ends)
             if obj:
                 objects.append(obj)
         return objects
