@@ -12,10 +12,10 @@ class DCELNode:
 @dataclass
 class DCEHalfEdge:
     origin: DCELNode
-    twin: DCEHalfEdge
-    next: DCEHalfEdge
-    prev: DCEHalfEdge
-    face: DCEFace
+    twin: Optional[DCEHalfEdge] = None
+    next: Optional[DCEHalfEdge] = None
+    prev: Optional[DCEHalfEdge] = None
+    face: Optional[DCEFace] = None
     road_type: str = "local"
 
 
@@ -68,14 +68,14 @@ class DCEL:
 
     def add_node(self, position: tuple[float, float],
                  target_face: DCEFace) -> DCELNode:
-        raise NotImplementedError("add_node — full impl with GraphGenerator")
+        raise NotImplementedError("add_node not yet implemented")
 
     def connect_nodes(self, node0: DCELNode,
                       node1: DCELNode) -> DCEFace:
         raise NotImplementedError(
-            "connect_nodes — full impl with GraphGenerator")
+            "connect_nodes not yet implemented")
 
     def split_edge(self, he: DCEHalfEdge,
                    position: tuple[float, float]) -> DCELNode:
         raise NotImplementedError(
-            "split_edge — full impl with GraphGenerator")
+            "split_edge not yet implemented")
