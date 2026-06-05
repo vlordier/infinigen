@@ -2,7 +2,10 @@ import gin
 import bpy
 import math
 from infinigen.assets.urban.graph_parser import RoadSegment
-from infinigen.core.util import blender as butil
+import gin
+import bpy
+import math
+from infinigen.assets.urban.graph_parser import RoadSegment
 
 
 @gin.configurable
@@ -77,7 +80,7 @@ class RoadMesher:
         mesh.from_pydata(verts, [], faces)
         mesh.update()
         obj = bpy.data.objects.new(name, mesh)
-        butil.add_obj(obj)
+        bpy.context.scene.collection.objects.link(obj)
         return obj
 
     def _mesh_sidewalk(self, seg: RoadSegment, side: str) -> bpy.types.Object | None:
@@ -119,5 +122,5 @@ class RoadMesher:
         mesh.from_pydata(verts, [], faces)
         mesh.update()
         obj = bpy.data.objects.new(name, mesh)
-        butil.add_obj(obj)
+        bpy.context.scene.collection.objects.link(obj)
         return obj
