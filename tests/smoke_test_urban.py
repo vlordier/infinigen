@@ -22,7 +22,7 @@ def main():
     road_count = sum(1 for o in bpy.data.objects if o.name.startswith("road_"))
     sidewalk_count = sum(1 for o in bpy.data.objects if o.name.startswith("sidewalk_"))
     intersection_count = sum(1 for o in bpy.data.objects if o.name.startswith("intersection"))
-    building_count = sum(1 for o in bpy.data.objects if o.name.startswith("building_shell"))
+    building_count = sum(1 for o in bpy.data.objects if o.name.startswith("building_shell_"))
     streetlight_count = sum(1 for o in bpy.data.objects if o.name.startswith("streetlight_"))
     landmark_count = sum(1 for o in bpy.data.objects if o.name.startswith("landmark_"))
     print(f"Total objects: {total}")

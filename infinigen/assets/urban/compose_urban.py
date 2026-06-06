@@ -101,7 +101,7 @@ def compose_urban(output_folder, scene_seed, preset_name="european_old", **param
 
     def add_streetlights():
         light_positions = [
-            [(seg.source, seg.target)]
+            ((seg.source[0] + seg.target[0]) * 0.5, (seg.source[1] + seg.target[1]) * 0.5)
             for seg in parser.road_segments
             if seg.sidewalk
         ]

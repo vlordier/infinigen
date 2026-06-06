@@ -3,6 +3,24 @@ import math
 from infinigen.assets.urban.graph_parser import RoadSegment
 
 
+_MATERIALS_CACHE = {}
+
+
+def _get_mat(name, color, roughness=0.8, metallic=0.0):
+    import bpy
+    if name in _MATERIALS_CACHE:
+        return _MATERIALS_CACHE[name]
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    if bsdf:
+        bsdf.inputs["Base Color"].default_value = color
+        bsdf.inputs["Roughness"].default_value = roughness
+        bsdf.inputs["Metallic"].default_value = metallic
+    _MATERIALS_CACHE[name] = mat
+    return mat
+
+
 @gin.configurable
 class RoadMesher:
     def __init__(self, vertex_distance=2.0, max_road_length=50.0,
@@ -18,7 +36,6 @@ class RoadMesher:
         self.wall_height = wall_height
 
     def mesh_roads(self, road_segments: list) -> list:
-        import bpy
         objects = []
         for seg in road_segments:
             obj = self._mesh_road_segment(seg)
@@ -74,6 +91,7 @@ class RoadMesher:
         mesh = bpy.data.meshes.new(name)
         mesh.from_pydata(verts, [], faces)
         mesh.update()
+        mesh.materials.append(_get_mat("Urban_Asphalt", (0.15, 0.15, 0.16, 1), roughness=0.9))
         obj = bpy.data.objects.new(name, mesh)
         bpy.context.scene.collection.objects.link(obj)
         return obj
@@ -115,6 +133,7 @@ class RoadMesher:
         mesh = bpy.data.meshes.new(name)
         mesh.from_pydata(verts, [], faces)
         mesh.update()
+        mesh.materials.append(_get_mat("Urban_Concrete", (0.7, 0.7, 0.72, 1), roughness=0.7))
         obj = bpy.data.objects.new(name, mesh)
         bpy.context.scene.collection.objects.link(obj)
         return obj

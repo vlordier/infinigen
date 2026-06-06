@@ -1,6 +1,24 @@
 import gin
 
 
+_MATERIALS_CACHE = {}
+
+
+def _get_mat(name, color, roughness=0.8, metallic=0.0):
+    import bpy
+    if name in _MATERIALS_CACHE:
+        return _MATERIALS_CACHE[name]
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    if bsdf:
+        bsdf.inputs["Base Color"].default_value = color
+        bsdf.inputs["Roughness"].default_value = roughness
+        bsdf.inputs["Metallic"].default_value = metallic
+    _MATERIALS_CACHE[name] = mat
+    return mat
+
+
 @gin.configurable
 class IntersectionMesher:
     def __init__(self, crosswalk_width=3.0, curb_radius=0.5):
@@ -53,6 +71,7 @@ class IntersectionMesher:
         mesh = bpy.data.meshes.new("intersection")
         mesh.from_pydata(verts_3d, [], faces)
         mesh.update()
+        mesh.materials.append(_get_mat("Urban_Asphalt", (0.15, 0.15, 0.16, 1), roughness=0.9))
         obj = bpy.data.objects.new("intersection", mesh)
         bpy.context.scene.collection.objects.link(obj)
         return obj

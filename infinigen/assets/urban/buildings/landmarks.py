@@ -17,33 +17,56 @@ class LandmarkType:
     CRANE = "crane"
 
 
+_MATERIALS_CACHE = {}
+
+
+def _get_mat(name, color, roughness=0.7, metallic=0.3):
+    if name in _MATERIALS_CACHE:
+        return _MATERIALS_CACHE[name]
+    if name in bpy.data.materials:
+        mat = bpy.data.materials[name]
+    else:
+        mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes.get("Principled BSDF")
+    if bsdf:
+        bsdf.inputs["Base Color"].default_value = color
+        bsdf.inputs["Roughness"].default_value = roughness
+        bsdf.inputs["Metallic"].default_value = metallic
+    _MATERIALS_CACHE[name] = mat
+    return mat
+
+
 @gin.configurable
 def generate_water_tower(center=(0, 0, 0), height=25, radius=3):
     bm = bmesh.new()
-    leg_positions = [(-radius*0.5, -radius*0.5), (radius*0.5, -radius*0.5), (-radius*0.5, radius*0.5), (radius*0.5, radius*0.5)]
+    cx, cy, cz = center
+    leg_positions = [(-radius*0.5, -radius*0.5), (radius*0.5, -radius*0.5),
+                     (-radius*0.5, radius*0.5), (radius*0.5, radius*0.5)]
     for lx, ly in leg_positions:
-        v0 = bm.verts.new(Vector((lx + center[0], ly + center[1], center[2])))
-        v1 = bm.verts.new(Vector((lx + center[0], ly + center[1], center[2] + height * 0.7)))
-        v2 = bm.verts.new(Vector((lx + center[0] + 0.2, ly + center[1], center[2] + height * 0.7)))
-        v3 = bm.verts.new(Vector((lx + center[0] + 0.2, ly + center[1], center[2])))
+        v0 = bm.verts.new(Vector((lx + cx, ly + cy, cz)))
+        v1 = bm.verts.new(Vector((lx + cx, ly + cy, cz + height * 0.7)))
+        v2 = bm.verts.new(Vector((lx + cx + 0.2, ly + cy, cz + height * 0.7)))
+        v3 = bm.verts.new(Vector((lx + cx + 0.2, ly + cy, cz)))
         bm.faces.new([v0, v1, v2, v3])
     tank_base = height * 0.7
     tank_h = height * 0.3
     segs = 12
+    cyl_verts = []
+    for i in range(segs + 1):
+        a = (i / segs) * math.pi * 2
+        bv = bm.verts.new(Vector((cx + math.cos(a)*radius, cy + math.sin(a)*radius, cz + tank_base)))
+        tv = bm.verts.new(Vector((cx + math.cos(a)*radius, cy + math.sin(a)*radius, cz + tank_base + tank_h)))
+        cyl_verts.append((bv, tv))
     for i in range(segs):
-        a1 = (i / segs) * math.pi * 2
-        a2 = ((i+1) / segs) * math.pi * 2
-        v1 = Vector((center[0] + math.cos(a1)*radius, center[1] + math.sin(a1)*radius, center[2] + tank_base))
-        v2 = Vector((center[0] + math.cos(a2)*radius, center[1] + math.sin(a2)*radius, center[2] + tank_base))
-        v3 = Vector((center[0] + math.cos(a2)*radius, center[1] + math.sin(a2)*radius, center[2] + tank_base + tank_h))
-        v4 = Vector((center[0] + math.cos(a1)*radius, center[1] + math.sin(a1)*radius, center[2] + tank_base + tank_h))
-        bm.verts.new(v1); bm.verts.new(v2); bm.verts.new(v3); bm.verts.new(v4)
-        vi = i * 4
-        bm.faces.new([bm.verts[vi], bm.verts[vi+1], bm.verts[vi+2], bm.verts[vi+3]])
+        j = (i + 1) % segs
+        bm.faces.new([cyl_verts[i][0], cyl_verts[j][0], cyl_verts[j][1], cyl_verts[i][1]])
     mesh = bpy.data.meshes.new("water_tower")
     bm.to_mesh(mesh); bm.free()
+    mesh.materials.append(_get_mat("Urban_Metal", (0.5, 0.45, 0.4, 1), metallic=0.7))
     obj = bpy.data.objects.new("water_tower", mesh)
     obj.location = Vector(center)
+    bpy.context.scene.collection.objects.link(obj)
     return obj
 
 
@@ -52,8 +75,7 @@ def generate_cell_tower(center=(0, 0, 0), height=40):
     bm = bmesh.new()
     cx, cy, cz = center
     segs = 8
-    base_r = 1.5
-    top_r = 0.5
+    base_r, top_r = 1.5, 0.5
     for i in range(segs):
         a1 = (i/segs)*math.pi*2; a2 = ((i+1)/segs)*math.pi*2
         b1x = cx+math.cos(a1)*base_r; b1y = cy+math.sin(a1)*base_r
@@ -73,7 +95,9 @@ def generate_cell_tower(center=(0, 0, 0), height=40):
         bm.faces.new(v)
     mesh = bpy.data.meshes.new("cell_tower")
     bm.to_mesh(mesh); bm.free()
+    mesh.materials.append(_get_mat("Urban_Metal", (0.5, 0.5, 0.55, 1), metallic=0.8))
     obj = bpy.data.objects.new("cell_tower", mesh)
+    bpy.context.scene.collection.objects.link(obj)
     return obj
 
 
