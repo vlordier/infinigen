@@ -71,8 +71,9 @@ def add_ground(city_size):
 
 def add_camera(scene, city_size, top_down=False, street_view=False):
     import bpy, mathutils
+    cam_data = bpy.data.cameras.new("Camera")
+    cam_data.clip_end = 10000
     if top_down:
-        cam_data = bpy.data.cameras.new("Camera")
         cam = bpy.data.objects.new("Camera", cam_data)
         cam.location = mathutils.Vector((city_size * 0.5, city_size * 0.5, city_size * 1.2))
         cam.rotation_euler = mathutils.Euler((math.radians(90), 0, 0))
@@ -84,7 +85,6 @@ def add_camera(scene, city_size, top_down=False, street_view=False):
     offset_x = city_size * 0.5
     offset_y = city_size * 0.5
     cx, cy = offset_x, offset_y
-    cam_data = bpy.data.cameras.new("Camera")
     if street_view:
         cam_data.lens = 24
         cam_pos = mathutils.Vector((cx - city_size * 0.25, cy - city_size * 0.3, 6))
@@ -97,13 +97,6 @@ def add_camera(scene, city_size, top_down=False, street_view=False):
     cam.location = cam_pos
     direction = (target - cam_pos).normalized()
     cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
-    scene.collection.objects.link(cam)
-    scene.camera = cam
-    return cam
-    cam.location = cam_pos
-    direction = (target - cam_pos).normalized()
-    rot_quat = direction.to_track_quat('-Z', 'Y')
-    cam.rotation_euler = rot_quat.to_euler()
     scene.collection.objects.link(cam)
     scene.camera = cam
     return cam
