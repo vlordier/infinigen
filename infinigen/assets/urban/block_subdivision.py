@@ -44,37 +44,52 @@ def _subdivide_block(boundary, area, rng, front_setback, side_setback, back_setb
     lot_depth = max(15.0, inner_h)
     n_lots = max(1, int(inner_h / lot_depth))
     actual_depth = inner_h / n_lots
+    jitter = rng.uniform(-1.5, 1.5) if n_lots > 1 else 0.0
     lots = []
     for i in range(n_lots):
+        depth_jitter = rng.uniform(-actual_depth * 0.1, actual_depth * 0.1) if n_lots > 1 else 0.0
+        offset_jitter = rng.uniform(-side_setback * 0.2, side_setback * 0.2)
+        ld = actual_depth + depth_jitter
+        lo = offset_jitter
         ly = inner_y + i * actual_depth
         if flipped:
             lot_boundary = [
-                (min_x + ly - min_y, min_y + inner_x - min_x),
-                (min_x + ly - min_y, min_y + inner_x + inner_w - min_x),
-                (min_x + ly + actual_depth - min_y, min_y + inner_x + inner_w - min_x),
-                (min_x + ly + actual_depth - min_y, min_y + inner_x - min_x),
+                (min_x + ly - min_y - lo, min_y + inner_x - min_x),
+                (min_x + ly - min_y - lo, min_y + inner_x + inner_w - min_x),
+                (min_x + ly + ld - min_y - lo, min_y + inner_x + inner_w - min_x),
+                (min_x + ly + ld - min_y - lo, min_y + inner_x - min_x),
             ]
         else:
             lot_boundary = [
-                (inner_x, ly),
-                (inner_x + inner_w, ly),
-                (inner_x + inner_w, ly + actual_depth),
-                (inner_x, ly + actual_depth),
+                (inner_x + lo, ly),
+                (inner_x + inner_w + lo, ly),
+                (inner_x + inner_w + lo, ly + ld),
+                (inner_x + lo, ly + ld),
             ]
-        lot_area = inner_w * actual_depth
+        lot_area = inner_w * ld
         if lot_area < 20:
             continue
-        btype = _infer_building_type(lot_area)
+        btype = _infer_building_type(lot_area, rng)
         lots.append(BuildingLot(
             boundary=lot_boundary, area=lot_area, building_type=btype,
         ))
     return lots
 
 
-def _infer_building_type(area: float) -> str:
+def _infer_building_type(area: float, rng: random.Random = None) -> str:
+    if rng is None:
+        rng = random.Random()
     if area > 2000:
+        if rng.random() < 0.15:
+            return "commercial"
         return "industrial"
     elif area > 500:
+        if rng.random() < 0.2:
+            return "residential"
+        elif rng.random() < 0.1:
+            return "industrial"
         return "commercial"
     else:
+        if rng.random() < 0.1:
+            return "commercial"
         return "residential"
