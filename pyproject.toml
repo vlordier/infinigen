@@ -24,10 +24,8 @@ classifiers = [
 
 requires-python = "==3.11.*"
 dependencies = [
-
     # NOTE: many less-than dependencies could likely be loosened
     #   we attempted to restrict to only versions that are known to be working
-
     "bpy==5.0.1",
     "gin_config>=0.5.0",
     "imageio>=2.33,<3",    # required by scikit-image
@@ -43,14 +41,12 @@ dependencies = [
     "tqdm",
     "trimesh<3.23.0",
     "OpenEXR",
-
     "submitit", # can be removed so long as you dont use slurm.gin or --slurm args
-
     "geomdl", # can be removed so long as you do not generate any creatures
-
     # used by trimesh, we could specify "trimesh[easy]" but this brings more packages
     "python-fcl",
     "rtree",
+    "osmnx",
 ]
 
 [project.optional-dependencies]
