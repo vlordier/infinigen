@@ -19,3 +19,27 @@ def test_clip_segments():
 def test_bbox_lots():
     lots = bbox_lots((0, 0), (100, 100), lot_width=50, lot_depth=50)
     assert len(lots) == 4
+
+
+import random
+
+from infinigen.assets.urban.templates import (
+    RectangularGridTemplate, OrganicGridTemplate, DistrictTemplateConfig,
+)
+
+
+def test_rectangular_grid_fill():
+    boundary = [(0, 0), (100, 0), (100, 100), (0, 100)]
+    config = DistrictTemplateConfig(lot_depth=25, lot_width=25)
+    rng = random.Random(42)
+    result = RectangularGridTemplate.fill(boundary, config, rng)
+    assert len(result.road_segments) >= 2
+    assert len(result.building_lots) >= 4
+
+
+def test_organic_grid_fill():
+    boundary = [(0, 0), (100, 0), (100, 100), (0, 100)]
+    config = DistrictTemplateConfig(lot_depth=25, lot_width=25, irregularity=0.2)
+    rng = random.Random(42)
+    result = OrganicGridTemplate.fill(boundary, config, rng)
+    assert len(result.road_segments) >= 2
