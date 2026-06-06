@@ -23,12 +23,12 @@ def _get_material():
 @gin.configurable
 def place_streetlights(road_positions, spacing=30, height=8, seed=42):
     random.seed(seed)
-    lights = []
+    mesh_objs = []
+    light_objs_packed = []
     mat = _get_material()
     for rid, pos in enumerate(road_positions):
         bm = bmesh.new()
 
-        # Pole: rectangular column (4 side faces)
         hw = 0.08
         pb = [bm.verts.new(Vector((pos[0]+dx, pos[1]+dy, 0))) for dx, dy in
               [(-hw, -hw), (hw, -hw), (hw, hw), (-hw, hw)]]
@@ -38,7 +38,6 @@ def place_streetlights(road_positions, spacing=30, height=8, seed=42):
             k = (j + 1) % 4
             bm.faces.new([pb[j], pb[k], pt[k], pt[j]])
 
-        # Lamp arm
         arm_len = 0.3
         ax, ay = pos[0] + arm_len, pos[1]
         a0 = bm.verts.new(Vector((pos[0]+hw, pos[1]-hw*0.5, height)))
@@ -47,7 +46,6 @@ def place_streetlights(road_positions, spacing=30, height=8, seed=42):
         a3 = bm.verts.new(Vector((ax, ay+hw*0.5, height)))
         bm.faces.new([a0, a1, a3, a2])
 
-        # Lamp housing
         lw, lh, lz = 0.15, 0.1, 0.12
         lb = [bm.verts.new(Vector((ax+dx, ay+dy, height+dz))) for dx, dy, dz in
               [(-lw, -lw, 0), (lw, -lw, 0), (lw, lw, 0), (-lw, lw, 0),
@@ -63,6 +61,7 @@ def place_streetlights(road_positions, spacing=30, height=8, seed=42):
         mesh.materials.append(mat)
         obj = bpy.data.objects.new(f"streetlight_{rid}", mesh)
         bpy.context.scene.collection.objects.link(obj)
+        mesh_objs.append(obj)
 
         light_data = bpy.data.lights.new(f"streetlight_light_{rid}", "POINT")
         light_data.energy = 50
@@ -70,6 +69,6 @@ def place_streetlights(road_positions, spacing=30, height=8, seed=42):
         light_obj = bpy.data.objects.new(f"streetlight_light_{rid}", light_data)
         light_obj.location = Vector((ax, ay, height + 0.05))
         bpy.context.scene.collection.objects.link(light_obj)
+        light_objs_packed.append(light_obj)
 
-        lights.append(obj)
-    return lights
+    return mesh_objs, light_objs_packed

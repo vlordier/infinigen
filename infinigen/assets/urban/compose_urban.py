@@ -107,7 +107,7 @@ def compose_urban(output_folder, scene_seed, preset_name="european_old", **param
         ]
         if not light_positions:
             return []
-        lights = place_streetlights(
+        lights, light_objs = place_streetlights(
             light_positions,
             spacing=params.get("streetlight_spacing", 30),
             seed=scene_seed + 4,
