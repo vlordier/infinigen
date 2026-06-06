@@ -1,4 +1,6 @@
-from infinigen.assets.urban.skeleton import RadialGenerator
+from infinigen.assets.urban.skeleton import (
+    GridGenerator, OrganicSpineGenerator, RadialGenerator, SingleSpineGenerator,
+)
 
 
 def test_radial_skeleton_basic():
@@ -21,3 +23,20 @@ def test_radial_different_seed():
     a = RadialGenerator.generate(200, seed=42)
     b = RadialGenerator.generate(200, seed=99)
     assert len(a.road_segments) == len(b.road_segments)
+
+
+def test_grid_skeleton():
+    result = GridGenerator.generate(size=200, rows=5, cols=5, seed=42)
+    assert len(result.blocks) == 5 * 5
+
+
+def test_organic_spine():
+    result = OrganicSpineGenerator.generate(size=200, seed=42)
+    assert len(result.road_segments) >= 3
+    assert len(result.blocks) >= 1
+
+
+def test_single_spine():
+    result = SingleSpineGenerator.generate(size=200, seed=42)
+    assert len(result.road_segments) >= 2
+    assert len(result.blocks) >= 1

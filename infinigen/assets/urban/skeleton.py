@@ -84,3 +84,126 @@ class RadialGenerator:
             ))
         road_segments.extend(boundary_segments)
         return CitySkeleton(road_segments=road_segments, blocks=blocks)
+
+
+class GridGenerator:
+    @staticmethod
+    def generate(size: float, rows: int = 5, cols: int = 5,
+                 irregularity: float = 0.0, seed: int = 0) -> CitySkeleton:
+        rng = random.Random(seed)
+        spacing_x = size / cols
+        spacing_y = size / rows
+        nodes = {}
+        segs = []
+        blocks = []
+        for r in range(rows + 1):
+            for c in range(cols + 1):
+                jx = rng.uniform(-irregularity * spacing_x, irregularity * spacing_x) if irregularity > 0 else 0
+                jy = rng.uniform(-irregularity * spacing_y, irregularity * spacing_y) if irregularity > 0 else 0
+                x = c * spacing_x + jx
+                y = r * spacing_y + jy
+                nodes[(c, r)] = (x, y)
+        for r in range(rows + 1):
+            for c in range(cols):
+                segs.append(RoadSegment(
+                    source=nodes[(c, r)], target=nodes[(c + 1, r)],
+                    road_type="local", lane_count=2, width=12.0, sidewalk=True,
+                ))
+        for c in range(cols + 1):
+            for r in range(rows):
+                segs.append(RoadSegment(
+                    source=nodes[(c, r)], target=nodes[(c, r + 1)],
+                    road_type="local", lane_count=2, width=12.0, sidewalk=True,
+                ))
+        for r in range(rows):
+            for c in range(cols):
+                blocks.append(BlockFace(
+                    boundary=[nodes[(c, r)], nodes[(c+1, r)], nodes[(c+1, r+1)], nodes[(c, r+1)]],
+                    zone_id="inner",
+                ))
+        return CitySkeleton(road_segments=segs, blocks=blocks)
+
+
+class OrganicSpineGenerator:
+    @staticmethod
+    def generate(size: float, n_branches: int = 8, irregularity: float = 0.4,
+                 seed: int = 0) -> CitySkeleton:
+        rng = random.Random(seed)
+        segs = []
+        blocks = []
+        cx = size * 0.5
+        cy = size * 0.5
+        spine_pts = []
+        x, y = cx - size * 0.3, cy
+        for i in range(6):
+            x += size * 0.12 + rng.uniform(-size * 0.03, size * 0.03)
+            y += rng.uniform(-size * 0.05, size * 0.05)
+            y = max(size * 0.1, min(size * 0.9, y))
+            spine_pts.append((x, y))
+        for i in range(len(spine_pts) - 1):
+            segs.append(RoadSegment(
+                source=spine_pts[i], target=spine_pts[i+1],
+                road_type="arterial", lane_count=2, width=16.0, sidewalk=True,
+            ))
+        for i in range(0, len(spine_pts), max(1, len(spine_pts) // n_branches)):
+            bx, by = spine_pts[i]
+            angle = rng.uniform(-math.pi * 0.4, math.pi * 0.4)
+            if rng.random() < 0.3:
+                angle += math.pi
+            length = rng.uniform(size * 0.1, size * 0.3)
+            ex = bx + length * math.cos(angle)
+            ey = by + length * math.sin(angle)
+            segs.append(RoadSegment(
+                source=(bx, by), target=(ex, ey),
+                road_type="local", lane_count=2, width=12.0, sidewalk=True,
+            ))
+            if rng.random() < 0.4:
+                lx = ex + rng.uniform(-20, 20)
+                ly = ey + rng.uniform(-20, 20)
+                segs.append(RoadSegment(
+                    source=(ex, ey), target=(lx, ly),
+                    road_type="alley", lane_count=1, width=5.0, sidewalk=False,
+                ))
+        blocks.append(BlockFace(
+            boundary=[(0, 0), (size, 0), (size, size), (0, size)],
+            zone_id="inner",
+        ))
+        return CitySkeleton(road_segments=segs, blocks=blocks)
+
+
+class SingleSpineGenerator:
+    @staticmethod
+    def generate(size: float, n_lanes: int = 6, seed: int = 0) -> CitySkeleton:
+        rng = random.Random(seed)
+        segs = []
+        blocks = []
+        spine_y = size * 0.5
+        jitter = size * 0.02
+        pts = []
+        for i in range(4):
+            x = size * (i + 0.5) / 4
+            y = spine_y + rng.uniform(-jitter, jitter)
+            pts.append((x, y))
+        spine_pts = [(0, spine_y)] + pts + [(size, spine_y)]
+        for i in range(len(spine_pts) - 1):
+            segs.append(RoadSegment(
+                source=spine_pts[i], target=spine_pts[i+1],
+                road_type="local", lane_count=2, width=12.0, sidewalk=True,
+            ))
+        lane_spacing = size * 0.7 / n_lanes
+        for i in range(1, len(spine_pts) - 1):
+            sx, sy = spine_pts[i]
+            for side in [-1, 1]:
+                for li in range(n_lanes // 2):
+                    ly = sy + side * (li + 1) * lane_spacing
+                    if ly < 0 or ly > size:
+                        continue
+                    segs.append(RoadSegment(
+                        source=(sx, sy), target=(sx, ly),
+                        road_type="alley", lane_count=1, width=5.0, sidewalk=False,
+                    ))
+        blocks.append(BlockFace(
+            boundary=[(0, 0), (size, 0), (size, size), (0, size)],
+            zone_id="outer",
+        ))
+        return CitySkeleton(road_segments=segs, blocks=blocks)
