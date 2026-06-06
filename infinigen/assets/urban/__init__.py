@@ -11,3 +11,4 @@ from . import road_to_dcel
 from . import template_utils
 from . import templates
 from . import city_presets
+from . import osmnx_skeleton

@@ -54,6 +54,38 @@ CITY_PRESETS = {
         },
         "regional_style": "soviet",
     },
+    "vatican": {
+        "skeleton_type": "osmnx",
+        "skeleton_params": {"place": "Vatican City", "network_type": "drive"},
+        "zone_templates": {
+            "inner": {"template": "medieval_organic", "config": DistrictTemplateConfig(lot_width=10, lot_depth=12, lot_min_area=30, dead_end_chance=0.2, density=0.8, internal_road_width=4.0)},
+        },
+        "regional_style": "mediterranean",
+    },
+    "paris_louvre": {
+        "skeleton_type": "osmnx",
+        "skeleton_params": {"place": "Louvre, Paris, France", "network_type": "drive"},
+        "zone_templates": {
+            "inner": {"template": "organic_grid", "config": DistrictTemplateConfig(lot_width=15, lot_depth=20, lot_min_area=100, irregularity=0.15, internal_road_width=6.0)},
+        },
+        "regional_style": "mediterranean",
+    },
+    "kyiv_center": {
+        "skeleton_type": "osmnx",
+        "skeleton_params": {"place": "Kyiv, Ukraine", "network_type": "drive"},
+        "zone_templates": {
+            "inner": {"template": "rectangular_grid", "config": DistrictTemplateConfig(lot_width=30, lot_depth=40, lot_min_area=300, internal_road_width=12.0)},
+        },
+        "regional_style": "soviet",
+    },
+    "berlin_mitte": {
+        "skeleton_type": "osmnx",
+        "skeleton_params": {"place": "Berlin, Germany", "network_type": "drive"},
+        "zone_templates": {
+            "inner": {"template": "organic_grid", "config": DistrictTemplateConfig(lot_width=20, lot_depth=25, lot_min_area=150, irregularity=0.1, internal_road_width=8.0)},
+        },
+        "regional_style": "mediterranean",
+    },
 }
 
 

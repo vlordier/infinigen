@@ -19,6 +19,9 @@ _SKELETON_GENERATORS = {}
 
 
 def _get_skeleton_generator(skeleton_type):
+    if skeleton_type == "osmnx":
+        from infinigen.assets.urban.osmnx_skeleton import OsmnxSkeleton
+        return OsmnxSkeleton
     from infinigen.assets.urban.skeleton import (
         RadialGenerator, GridGenerator, OrganicSpineGenerator, SingleSpineGenerator,
     )
