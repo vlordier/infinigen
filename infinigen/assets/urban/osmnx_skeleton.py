@@ -44,21 +44,7 @@ class OsmnxSkeleton:
             raise ImportError("Install osmnx: pip install osmnx")
         ox.settings.log_console = False
         ox.settings.use_cache = True
-        if crop_size and place:
-            from geopy.geocoders import Nominatim
-            from shapely.geometry import Point
-            geolocator = Nominatim(user_agent="infinigen")
-            loc = geolocator.geocode(place)
-            if loc:
-                G = ox.graph_from_point(
-                    (loc.latitude, loc.longitude), dist=crop_size,
-                    network_type=network_type, simplify=simplify,
-                )
-            else:
-                G = ox.graph_from_place(place, network_type=network_type,
-                                        simplify=simplify, retain_all=retain_all,
-                                        truncate_by_edge=truncate_by_edge)
-        elif place:
+        if place:
             G = ox.graph_from_place(place, network_type=network_type,
                                     simplify=simplify, retain_all=retain_all,
                                     truncate_by_edge=truncate_by_edge)
@@ -68,7 +54,21 @@ class OsmnxSkeleton:
         else:
             raise ValueError("Provide place= or point= + dist=")
         G_proj = ox.project_graph(G)
-        return OsmnxSkeleton.from_graph(G_proj)
+        skeleton = OsmnxSkeleton.from_graph(G_proj)
+        if crop_size and len(skeleton.road_segments) > 1000:
+            xs = [p[0] for seg in skeleton.road_segments for p in (seg.source, seg.target)]
+            ys = [p[1] for seg in skeleton.road_segments for p in (seg.source, seg.target)]
+            cx, cy = (min(xs)+max(xs))/2, (min(ys)+max(ys))/2
+            half = crop_size / 2
+            keep = []
+            for seg in skeleton.road_segments:
+                if (abs(seg.source[0]-cx) < half and abs(seg.source[1]-cy) < half) or \
+                   (abs(seg.target[0]-cx) < half and abs(seg.target[1]-cy) < half):
+                    keep.append(seg)
+            dcel = RoadToDCEL.build(keep)
+            blocks = OsmnxSkeleton._extract_blocks(dcel)
+            skeleton = CitySkeleton(road_segments=keep, blocks=blocks)
+        return skeleton
 
     @staticmethod
     def from_graph(G) -> CitySkeleton:
