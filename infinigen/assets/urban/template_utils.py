@@ -10,23 +10,27 @@ def make_grid_segments(bottom_left, top_right, spacing, road_type="local",
     segs = []
     cols = max(1, int((x1 - x0) / spacing))
     rows = max(1, int((y1 - y0) / spacing))
+    x_positions = []
     for c in range(cols + 1):
         x = x0 + c * spacing
         if rng and irregularity:
             x += rng.uniform(-irregularity, irregularity)
+        x_positions.append(x)
         segs.append(RoadSegment(
             source=(x, y0), target=(x, y1),
             road_type=road_type, lane_count=2, width=width, sidewalk=sidewalk,
         ))
+    y_positions = []
     for r in range(rows + 1):
         y = y0 + r * spacing
         if rng and irregularity:
             y += rng.uniform(-irregularity, irregularity)
+        y_positions.append(y)
         segs.append(RoadSegment(
             source=(x0, y), target=(x1, y),
             road_type=road_type, lane_count=2, width=width, sidewalk=sidewalk,
         ))
-    return segs
+    return segs, x_positions, y_positions
 
 
 def clip_segments_to_boundary(segments, boundary):
@@ -106,3 +110,49 @@ def bbox_lots(bottom_left, top_right, lot_width, lot_depth):
             x += lot_width
         y += lot_depth
     return lots
+
+
+def grid_lots(x_positions, y_positions, rng=None, jitter=0.5):
+    cols = len(x_positions) - 1
+    rows = len(y_positions) - 1
+    lots = []
+    for c in range(cols):
+        for r in range(rows):
+            gx0 = x_positions[c]
+            gy0 = y_positions[r]
+            gx1 = x_positions[c + 1]
+            gy1 = y_positions[r + 1]
+            if rng and jitter:
+                gx0 += rng.uniform(-jitter, jitter)
+                gy0 += rng.uniform(-jitter, jitter)
+                gx1 += rng.uniform(-jitter, jitter)
+                gy1 += rng.uniform(-jitter, jitter)
+            w, d = gx1 - gx0, gy1 - gy0
+            if w < 2 or d < 2:
+                continue
+            lots.append(BuildingLot(
+                boundary=[(gx0, gy0), (gx1, gy0), (gx1, gy1), (gx0, gy1)],
+                area=w * d,
+            ))
+    return lots
+
+
+def _point_in_polygon(point, polygon):
+    x, y = point
+    inside = False
+    n = len(polygon)
+    for i in range(n):
+        x1, y1 = polygon[i]
+        x2, y2 = polygon[(i + 1) % n]
+        if ((y1 > y) != (y2 > y)) and (x < (x2 - x1) * (y - y1) / (y2 - y1) + x1):
+            inside = not inside
+    return inside
+
+
+def filter_lots_inside_polygon(lots, boundary):
+    """Keep only lots whose center is inside the boundary polygon."""
+    return [l for l in lots if _point_in_polygon(
+        ((l.boundary[0][0] + l.boundary[2][0]) / 2,
+         (l.boundary[0][1] + l.boundary[2][1]) / 2),
+        boundary,
+    )]

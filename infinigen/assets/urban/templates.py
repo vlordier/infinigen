@@ -43,7 +43,7 @@ def get_template(name: str):
     return _TEMPLATE_REGISTRY.get(name)
 
 
-from infinigen.assets.urban.template_utils import make_grid_segments, bbox_lots, clip_segments_to_boundary
+from infinigen.assets.urban.template_utils import make_grid_segments, grid_lots, bbox_lots, clip_segments_to_boundary, filter_lots_inside_polygon
 
 
 @register_template
@@ -56,17 +56,15 @@ class RectangularGridTemplate(BaseTemplate):
         ys = [p[1] for p in boundary]
         x0, x1 = min(xs), max(xs)
         y0, y1 = min(ys), max(ys)
-        segs = make_grid_segments(
+        spacing = max(config.lot_depth, config.lot_width) * 2
+        segs, xp, yp = make_grid_segments(
             (x0, y0), (x1, y1),
-            spacing=max(config.lot_depth, config.lot_width) * 2,
+            spacing=spacing,
             road_type="local", width=config.internal_road_width,
             sidewalk=config.internal_sidewalk, rng=rng,
             irregularity=config.irregularity,
         )
-        lots = bbox_lots(
-            (x0 + 2, y0 + 2), (x1 - 2, y1 - 2),
-            lot_width=config.lot_width, lot_depth=config.lot_depth,
-        )
+        lots = filter_lots_inside_polygon(grid_lots(xp, yp, rng=rng, jitter=1.0), boundary)
         lots = [l for l in lots if l.area >= config.lot_min_area]
         return DistrictFill(road_segments=segs, building_lots=lots)
 
@@ -82,19 +80,15 @@ class OrganicGridTemplate(BaseTemplate):
         x0, x1 = min(xs), max(xs)
         y0, y1 = min(ys), max(ys)
         spacing = max(config.lot_depth, config.lot_width) * 2
-        segs = make_grid_segments(
+        segs, xp, yp = make_grid_segments(
             (x0, y0), (x1, y1), spacing=spacing,
             road_type="local", width=config.internal_road_width,
             sidewalk=config.internal_sidewalk,
             irregularity=config.irregularity, rng=rng,
         )
         segs = clip_segments_to_boundary(segs, boundary)
-        dither = spacing * config.irregularity * 0.5 if config.irregularity else 0
-        lots = bbox_lots(
-            (x0 + dither + 2, y0 + dither + 2),
-            (x1 - dither - 2, y1 - dither - 2),
-            lot_width=config.lot_width, lot_depth=config.lot_depth,
-        )
+        jitter = spacing * config.irregularity * 0.3 if config.irregularity else 1.0
+        lots = filter_lots_inside_polygon(grid_lots(xp, yp, rng=rng, jitter=jitter), boundary)
         lots = [l for l in lots if l.area >= config.lot_min_area]
         return DistrictFill(road_segments=segs, building_lots=lots)
 

@@ -5,8 +5,10 @@ from infinigen.assets.urban.template_utils import (
 
 
 def test_make_grid_segments():
-    segs = make_grid_segments((0, 0), (100, 100), spacing=50)
+    segs, xp, yp = make_grid_segments((0, 0), (100, 100), spacing=50)
     assert len(segs) >= 4
+    assert len(xp) >= 2
+    assert len(yp) >= 2
 
 
 def test_clip_segments():
