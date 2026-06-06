@@ -132,7 +132,7 @@ def add_hdri(scene):
 def generate_city(args):
     import bpy, random as rng_mod, math
     from infinigen.assets.urban.city_presets import load_preset
-    from infinigen.assets.urban.block_subdivision import BuildingLot
+    from infinigen.assets.urban.block_subdivision import BuildingLot, subdivide_block_fill
     from infinigen.assets.urban.skeleton import (
         RadialGenerator, GridGenerator, OrganicSpineGenerator, SingleSpineGenerator,
     )
@@ -157,13 +157,6 @@ def generate_city(args):
     rng = rng_mod.Random(args.seed)
     sk_type = preset["skeleton_type"]
 
-    def _poly_area(pts):
-        a = 0.0
-        for i in range(len(pts)):
-            j = (i + 1) % len(pts)
-            a += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]
-        return abs(a) / 2.0
-
     if sk_type == "osmnx":
         from infinigen.assets.urban.osmnx_skeleton import OsmnxSkeleton
         skeleton = OsmnxSkeleton.generate(
@@ -181,20 +174,8 @@ def generate_city(args):
         for block in skeleton.blocks:
             if len(block.boundary) < 3:
                 continue
-            cx = sum(p[0] for p in block.boundary) / len(block.boundary)
-            cy = sum(p[1] for p in block.boundary) / len(block.boundary)
-            inset = []
-            for px, py in block.boundary:
-                dx, dy = px - cx, py - cy
-                d = (dx*dx + dy*dy) ** 0.5
-                if d < 0.01:
-                    continue
-                m = 1.0 - 2.0 / d
-                inset.append((cx + dx*m, cy + dy*m))
-            if len(inset) >= 3:
-                area = _poly_area(inset)
-                if area >= 50:
-                    all_lots.append(BuildingLot(boundary=inset, area=area, building_type="residential"))
+            lots = subdivide_block_fill(block.boundary, rng=rng)
+            all_lots.extend(lots)
     else:
         skeleton_cls = skeleton_map.get(sk_type)
         skeleton = skeleton_cls.generate(
@@ -220,20 +201,8 @@ def generate_city(args):
             if fill.building_lots:
                 all_lots.extend(fill.building_lots)
             else:
-                cx = sum(p[0] for p in block.boundary) / len(block.boundary)
-                cy = sum(p[1] for p in block.boundary) / len(block.boundary)
-                inset = []
-                for px, py in block.boundary:
-                    dx, dy = px - cx, py - cy
-                    d = (dx*dx + dy*dy) ** 0.5
-                    if d < 0.01:
-                        continue
-                    m = 1.0 - 3.0 / d
-                    inset.append((cx + dx*m, cy + dy*m))
-                if len(inset) >= 3:
-                    area = _poly_area(inset)
-                    if area >= 50:
-                        all_lots.append(BuildingLot(boundary=inset, area=area, building_type="residential"))
+                lots = subdivide_block_fill(block.boundary, rng=rng)
+                all_lots.extend(lots)
 
     def _shift(obj, dx, dy):
         if obj is None:

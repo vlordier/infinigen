@@ -176,3 +176,91 @@ def _infer_building_type(area: float, rng: random.Random = None) -> str:
         if rng.random() < 0.1:
             return "commercial"
         return "residential"
+
+
+def subdivide_block_fill(boundary, rng=None, max_building_width=40, gap=3, setback=3):
+    """CARLA-style: fill a block face with rectangular buildings along its longest axis."""
+    if rng is None:
+        rng = random.Random()
+    pts = list(boundary)
+    if len(pts) < 3:
+        return []
+
+    # Find longest span direction (principal axis of block)
+    n_pts = len(pts)
+    max_d2 = 0
+    best_i, best_j = 0, 0
+    for i in range(n_pts):
+        for j in range(i+1, n_pts):
+            d2 = (pts[i][0]-pts[j][0])**2 + (pts[i][1]-pts[j][1])**2
+            if d2 > max_d2:
+                max_d2 = d2
+                best_i, best_j = i, j
+    p0 = pts[best_i]; p1 = pts[best_j]
+    ax_len = max_d2 ** 0.5
+    if ax_len < 5:
+        return []
+    ax = (p1[0]-p0[0]) / ax_len; ay = (p1[1]-p0[1]) / ax_len
+    px, py = -ay, ax  # perpendicular
+
+    # Project all vertices onto both axes
+    proj_along = [(p[0]-p0[0])*ax + (p[1]-p0[1])*ay for p in pts]
+    proj_perp = [(p[0]-p0[0])*px + (p[1]-p0[1])*py for p in pts]
+    min_a, max_a = min(proj_along), max(proj_along)
+    min_p, max_p = min(proj_perp), max(proj_perp)
+
+    a_len = max_a - min_a
+    p_len = max_p - min_p
+
+    # Number of buildings along the long axis
+    # CARLA fills the space - divide the long dimension
+    if a_len > max_building_width:
+        n_bldg = max(2, int(a_len / max_building_width))
+    else:
+        n_bldg = 1
+
+    # Width per building (along long axis), evenly divided with gaps
+    total_gap = gap * (n_bldg - 1)
+    bldg_width = (a_len - total_gap) / n_bldg
+    if bldg_width < 5:
+        bldg_width = a_len / n_bldg
+
+    # Depth (perpendicular axis) with setback on both sides
+    bldg_depth = p_len - setback * 2
+    if bldg_depth < 3:
+        bldg_depth = p_len
+
+    lots = []
+    for i in range(n_bldg):
+        start_a = min_a + setback + i * (bldg_width + gap)
+        end_a = start_a + bldg_width
+        if end_a > max_a - setback and n_bldg > 1:
+            end_a = max_a - setback
+
+        # Compute 4 corners of this strip in the block
+        corners = []
+        for ca, cp in [(start_a, min_p + setback), (end_a, min_p + setback),
+                       (end_a, min_p + setback + bldg_depth), (start_a, min_p + setback + bldg_depth)]:
+            x = p0[0] + ca*ax + cp*px
+            y = p0[1] + ca*ay + cp*py
+            corners.append((x, y))
+
+        w = ((corners[1][0]-corners[0][0])**2 + (corners[1][1]-corners[0][1])**2)**0.5
+        d = ((corners[2][0]-corners[1][0])**2 + (corners[2][1]-corners[1][1])**2)**0.5
+        area = w * d
+
+        # Jitter
+        if rng and n_bldg > 1:
+            j = rng.uniform(-0.5, 0.5)
+            corners = [(x+j*ax, y+j*ay) for x, y in corners]
+            area = abs(w * d + j * d * rng.uniform(-0.3, 0.3))
+
+        if area < 30:
+            continue
+
+        btype = _infer_building_type(area, rng) if rng else "residential"
+        lots.append(BuildingLot(
+            boundary=corners, area=area, building_type=btype,
+        ))
+
+    return lots
