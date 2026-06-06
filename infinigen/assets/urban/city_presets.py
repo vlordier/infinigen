@@ -86,6 +86,14 @@ CITY_PRESETS = {
         },
         "regional_style": "mediterranean",
     },
+    "rostov_on_don": {
+        "skeleton_type": "osmnx",
+        "skeleton_params": {"place": "Rostov-on-Don, Russia", "network_type": "drive"},
+        "zone_templates": {
+            "inner": {"template": "rectangular_grid", "config": DistrictTemplateConfig(lot_width=25, lot_depth=35, lot_min_area=250, internal_road_width=12.0)},
+        },
+        "regional_style": "soviet",
+    },
 }
 
 
