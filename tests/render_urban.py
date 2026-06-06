@@ -22,6 +22,9 @@ def parse_args():
     parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--top-down", action="store_true")
     parser.add_argument("--preset", type=str, default="european_old")
+    parser.add_argument("--tree-spacing", type=float, default=8.0)
+    parser.add_argument("--car-density", type=float, default=0.3)
+    parser.add_argument("--street-view", action="store_true")
     try:
         sep = sys.argv.index("--")
         script_argv = [sys.argv[0]] + sys.argv[sep + 1:]
@@ -65,7 +68,7 @@ def add_ground(city_size):
     return ground
 
 
-def add_camera(scene, city_size, top_down=False):
+def add_camera(scene, city_size, top_down=False, street_view=False):
     import bpy, mathutils
     if top_down:
         cam_data = bpy.data.cameras.new("Camera")
@@ -77,14 +80,21 @@ def add_camera(scene, city_size, top_down=False):
         scene.collection.objects.link(cam)
         scene.camera = cam
         return cam
-    dist = city_size * 1.0
-    height = city_size * 0.55
+    cx, cy = city_size * 0.5, city_size * 0.5
     cam_data = bpy.data.cameras.new("Camera")
+    if street_view:
+        cam_data.lens = 24
+        cam_pos = mathutils.Vector((cx - city_size * 0.25, cy - city_size * 0.3, 6))
+        target = mathutils.Vector((cx + city_size * 0.1, cy + city_size * 0.2, 3))
+    else:
+        cam_data.lens = 32
+        cam_pos = mathutils.Vector((cx + city_size * 0.5, cy - city_size * 0.5, city_size * 0.28))
+        target = mathutils.Vector((cx, cy, 0))
     cam = bpy.data.objects.new("Camera", cam_data)
-    cam.location = mathutils.Vector((dist, -dist * 0.4, height))
-    cam.rotation_euler = mathutils.Euler((
-        math.radians(55), 0, math.radians(50),
-    ))
+    cam.location = cam_pos
+    direction = (target - cam_pos).normalized()
+    rot_quat = direction.to_track_quat('-Z', 'Y')
+    cam.rotation_euler = rot_quat.to_euler()
     scene.collection.objects.link(cam)
     scene.camera = cam
     return cam
@@ -94,8 +104,9 @@ def add_sun(scene, city_size):
     import bpy, mathutils
     sun_data = bpy.data.lights.new("Sun", type="SUN")
     sun = bpy.data.objects.new("Sun", sun_data)
-    sun.rotation_euler = mathutils.Euler((math.radians(55), 0, math.radians(35)))
-    sun_data.energy = 5
+    sun.rotation_euler = mathutils.Euler((math.radians(50), 0, math.radians(35)))
+    sun_data.energy = 3.5
+    sun_data.color = (1.0, 0.95, 0.85)
     scene.collection.objects.link(sun)
     return sun
 
@@ -105,12 +116,12 @@ def add_hdri(scene):
     world = scene.world
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
-    bg.inputs["Strength"].default_value = 0.3
-    bg.inputs["Color"].default_value = (0.6, 0.65, 0.75, 1)
+    bg.inputs["Strength"].default_value = 0.4
+    bg.inputs["Color"].default_value = (0.7, 0.78, 0.88, 1)
 
 
 def generate_city(args):
-    import bpy, random as rng_mod
+    import bpy, random as rng_mod, math
     from infinigen.assets.urban.city_presets import load_preset
     from infinigen.assets.urban.skeleton import (
         RadialGenerator, GridGenerator, OrganicSpineGenerator, SingleSpineGenerator,
@@ -120,6 +131,9 @@ def generate_city(args):
     from infinigen.assets.urban.graph_parser import GraphParser
     from infinigen.assets.urban.road_mesher import RoadMesher
     from infinigen.assets.urban.intersection import IntersectionMesher
+    from infinigen.assets.urban.road_markings import RoadMarkingMesher
+    from infinigen.assets.urban.trees import place_trees_along_roads
+    from infinigen.assets.urban.cars import place_parked_cars
     from infinigen.assets.urban.buildings.building_generator import generate_building_shell
 
     preset = load_preset(args.preset)
@@ -150,18 +164,39 @@ def generate_city(args):
         all_segments.extend(fill.road_segments)
         all_lots.extend(fill.building_lots)
 
+    offset_x = args.city_size * 0.5
+    offset_y = args.city_size * 0.5
+
+    def _shift(obj, dx, dy):
+        if obj is None:
+            return
+        v = obj.location
+        obj.location = (v.x + dx, v.y + dy, v.z)
+
     dcel = RoadToDCEL.build(all_segments)
     parser = GraphParser(dcel)
     road_mesher = RoadMesher()
 
     road_objs = road_mesher.mesh_roads(parser.road_segments)
     sidewalk_objs = road_mesher.mesh_sidewalks(parser.road_segments)
+    for obj in road_objs:
+        _shift(obj, offset_x, offset_y)
+    for obj in sidewalk_objs:
+        _shift(obj, offset_x, offset_y)
 
     inter_mesher = IntersectionMesher()
     inter_objs = inter_mesher.mesh_intersections(dcel, parser.road_segments)
+    for obj in inter_objs:
+        _shift(obj, offset_x, offset_y)
+
+    marking_mesher = RoadMarkingMesher()
+    marking_objs = marking_mesher.mesh_markings(parser.road_segments)
+    crosswalk_objs = marking_mesher.mesh_crosswalks(dcel, parser.road_segments)
+    for obj in marking_objs + crosswalk_objs:
+        _shift(obj, offset_x, offset_y)
 
     road_mat = create_material("road_mat", (0.12, 0.12, 0.12, 1), roughness=0.95)
-    sidewalk_mat = create_material("sidewalk_mat", (0.55, 0.52, 0.48, 1), roughness=0.85)
+    sidewalk_mat = create_material("sidewalk_mat", (0.7, 0.68, 0.62, 1), roughness=0.85)
     inter_mat = create_material("inter_mat", (0.12, 0.12, 0.12, 1), roughness=0.95)
     for obj in road_objs:
         obj.data.materials.append(road_mat)
@@ -177,6 +212,7 @@ def generate_city(args):
         create_material("bldg_stucco", (0.8, 0.75, 0.7, 1), roughness=0.9),
     ]
 
+    bldg_count = 0
     for lot in all_lots:
         h = max(5.0, lot.area ** 0.5 * 0.35)
         h = min(h, args.building_height)
@@ -186,15 +222,28 @@ def generate_city(args):
         elif lot.building_type == "residential":
             h *= 0.6
         obj = generate_building_shell(lot.boundary, h)
-        mat_idx = hash(str(lot.boundary)) % len(building_mats)
-        if lot.building_type == "industrial":
-            mat_idx = 0
-        elif lot.building_type == "residential":
-            mat_idx = 3
-        obj.data.materials.append(building_mats[mat_idx])
         bpy.context.scene.collection.objects.link(obj)
+        bldg_count += 1
 
-    print(f"Roads:{len(road_objs)}  Sidewalks:{len(sidewalk_objs)}  Intersections:{len(inter_objs)}  Buildings:{len(all_lots)}")
+    trees = place_trees_along_roads(
+        parser.road_segments,
+        spacing=args.tree_spacing,
+        seed=args.seed + 100,
+    )
+    for t in trees:
+        _shift(t, offset_x, offset_y)
+
+    cars = place_parked_cars(
+        parser.road_segments,
+        density=args.car_density,
+        seed=args.seed + 200,
+    )
+    for c in cars:
+        _shift(c, offset_x, offset_y)
+
+    print(f"Roads:{len(road_objs)}  Sidewalks:{len(sidewalk_objs)}  Intersections:{len(inter_objs)}  "
+          f"Buildings:{bldg_count}  Trees:{len(trees)}  Cars:{len(cars)}  "
+          f"Markings:{len(marking_objs)}  Crosswalks:{len(crosswalk_objs)}")
     return parser
 
 
@@ -224,7 +273,7 @@ def main():
         scene = setup_scene()
         generate_city(args)
         add_ground(args.city_size)
-        add_camera(scene, args.city_size, top_down=args.top_down)
+        add_camera(scene, args.city_size, top_down=args.top_down, street_view=args.street_view)
         add_sun(scene, args.city_size)
         add_hdri(scene)
         render(scene, args)
