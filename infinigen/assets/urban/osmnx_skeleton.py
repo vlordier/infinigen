@@ -37,14 +37,28 @@ class OsmnxSkeleton:
     @staticmethod
     def generate(place=None, point=None, dist=None, network_type="drive",
                  simplify=True, retain_all=False, truncate_by_edge=False,
-                 size=200, seed=0) -> CitySkeleton:
+                 crop_size=None, size=200, seed=0) -> CitySkeleton:
         try:
             import osmnx as ox
         except ImportError:
             raise ImportError("Install osmnx: pip install osmnx")
         ox.settings.log_console = False
         ox.settings.use_cache = True
-        if place:
+        if crop_size and place:
+            from geopy.geocoders import Nominatim
+            from shapely.geometry import Point
+            geolocator = Nominatim(user_agent="infinigen")
+            loc = geolocator.geocode(place)
+            if loc:
+                G = ox.graph_from_point(
+                    (loc.latitude, loc.longitude), dist=crop_size,
+                    network_type=network_type, simplify=simplify,
+                )
+            else:
+                G = ox.graph_from_place(place, network_type=network_type,
+                                        simplify=simplify, retain_all=retain_all,
+                                        truncate_by_edge=truncate_by_edge)
+        elif place:
             G = ox.graph_from_place(place, network_type=network_type,
                                     simplify=simplify, retain_all=retain_all,
                                     truncate_by_edge=truncate_by_edge)

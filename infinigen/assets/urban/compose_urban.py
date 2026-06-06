@@ -3,7 +3,7 @@ import gin
 from infinigen.core.util.pipeline import RandomStageExecutor
 from infinigen.assets.urban.road_mesher import RoadMesher
 from infinigen.assets.urban.intersection import IntersectionMesher
-from infinigen.assets.urban.block_subdivision import subdivide_lots
+from infinigen.assets.urban.block_subdivision import subdivide_lots, subdivide_block_fill
 from infinigen.assets.urban.buildings.building_generator import generate_buildings_from_lots
 from infinigen.assets.urban.infrastructure.streetlights import place_streetlights
 from infinigen.assets.urban.buildings.landmarks import place_landmarks
@@ -14,8 +14,6 @@ from infinigen.assets.urban.graph_parser import GraphParser
 from infinigen.assets.urban.templates import get_template
 
 logger = logging.getLogger(__name__)
-
-_SKELETON_GENERATORS = {}
 
 
 def _get_skeleton_generator(skeleton_type):
@@ -49,34 +47,56 @@ def compose_urban(output_folder, scene_seed, preset_name="european_old", **param
         plane.name = "ground"
         return plane
 
-    ground = p.run_stage("ground", add_base_plane, use_chance=False)
+    p.run_stage("ground", add_base_plane, use_chance=False)
 
     def add_road_network():
         import random as rng_mod
+        import math
+        from infinigen.assets.urban.block_subdivision import BuildingLot
+        from infinigen.assets.urban.road_markings import RoadMarkingMesher
+        from infinigen.assets.urban.trees import place_trees_along_roads
+        from infinigen.assets.urban.cars import place_parked_cars
         city_size = params.get("city_size", 200)
         preset = load_preset(preset_name)
-        skeleton_cls = _get_skeleton_generator(preset["skeleton_type"])
+        sk_type = preset["skeleton_type"]
+        skeleton_cls = _get_skeleton_generator(sk_type)
         if skeleton_cls is None:
-            raise ValueError(f"Unknown skeleton type: {preset['skeleton_type']}")
+            raise ValueError(f"Unknown skeleton type: {sk_type}")
         rng = rng_mod.Random(scene_seed + 1)
-        skeleton = skeleton_cls.generate(
-            size=city_size, seed=rng.randint(0, 2**31),
-            **preset["skeleton_params"],
-        )
-        all_segments = list(skeleton.road_segments)
-        all_lots = []
-        zone_templates = preset["zone_templates"]
-        for block in skeleton.blocks:
-            zone_entry = zone_templates.get(block.zone_id)
-            if zone_entry is None:
-                continue
-            template_cls = get_template(zone_entry["template"])
-            if template_cls is None:
-                continue
-            config = zone_entry["config"]
-            fill = template_cls.fill(block.boundary, config, rng)
-            all_segments.extend(fill.road_segments)
-            all_lots.extend(fill.building_lots)
+        if sk_type == "osmnx":
+            skeleton = skeleton_cls.generate(
+                **preset["skeleton_params"],
+            )
+            all_segments = list(skeleton.road_segments)
+            all_lots = []
+            for block in skeleton.blocks:
+                if len(block.boundary) < 3:
+                    continue
+                lots = subdivide_block_fill(block.boundary, rng=rng)
+                all_lots.extend(lots)
+        else:
+            skeleton = skeleton_cls.generate(
+                size=city_size, seed=rng.randint(0, 2**31),
+                **preset["skeleton_params"],
+            )
+            all_segments = list(skeleton.road_segments)
+            all_lots = []
+            zone_templates = preset["zone_templates"]
+            for block in skeleton.blocks:
+                zone_entry = zone_templates.get(block.zone_id)
+                if zone_entry is None:
+                    continue
+                template_cls = get_template(zone_entry["template"])
+                if template_cls is None:
+                    continue
+                config = zone_entry["config"]
+                fill = template_cls.fill(block.boundary, config, rng)
+                all_segments.extend(fill.road_segments)
+                if fill.building_lots:
+                    all_lots.extend(fill.building_lots)
+                else:
+                    lots = subdivide_block_fill(block.boundary, rng=rng)
+                    all_lots.extend(lots)
         dcel = RoadToDCEL.build(all_segments)
         parser = GraphParser(dcel)
         mesher = RoadMesher()
@@ -84,12 +104,20 @@ def compose_urban(output_folder, scene_seed, preset_name="european_old", **param
         sidewalk_objs = mesher.mesh_sidewalks(parser.road_segments)
         inter_mesher = IntersectionMesher()
         inter_objs = inter_mesher.mesh_intersections(dcel, parser.road_segments)
-        return parser, all_lots, road_objs, sidewalk_objs, inter_objs
+
+        mark_mesher = RoadMarkingMesher()
+        mark_objs = mark_mesher.mesh_markings(parser.road_segments)
+        cross_objs = mark_mesher.mesh_crosswalks(dcel, parser.road_segments)
+
+        trees = place_trees_along_roads(parser.road_segments, spacing=8, seed=scene_seed + 100)
+        cars = place_parked_cars(parser.road_segments, density=0.3, seed=scene_seed + 200)
+
+        return parser, all_lots, road_objs, sidewalk_objs, inter_objs, mark_objs, cross_objs, trees, cars
 
     result = p.run_stage("road_network", add_road_network, use_chance=False)
     if result is None:
         return
-    parser, all_lots, road_objs, sidewalk_objs, inter_objs = result
+    parser, all_lots, road_objs, sidewalk_objs, inter_objs, mark_objs, cross_objs, trees, cars = result
 
     def add_buildings():
         lots = all_lots if all_lots else subdivide_lots(parser.city_areas, seed=scene_seed + 2)
@@ -106,14 +134,14 @@ def compose_urban(output_folder, scene_seed, preset_name="european_old", **param
             if seg.sidewalk
         ]
         if not light_positions:
-            return []
-        lights, light_objs = place_streetlights(
+            return [], []
+        mesh_objs, light_objs = place_streetlights(
             light_positions,
             spacing=params.get("streetlight_spacing", 30),
             seed=scene_seed + 4,
         )
-        logger.info(f"Placed {len(lights)} streetlights")
-        return lights
+        logger.info(f"Placed {len(mesh_objs)} streetlights")
+        return mesh_objs
 
     p.run_stage("streetlights", add_streetlights, use_chance=False)
 

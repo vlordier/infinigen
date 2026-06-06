@@ -47,6 +47,7 @@ dependencies = [
     "python-fcl",
     "rtree",
     "osmnx",
+    "geopy",
 ]
 
 [project.optional-dependencies]
