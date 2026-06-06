@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument("--tree-spacing", type=float, default=8.0)
     parser.add_argument("--car-density", type=float, default=0.3)
     parser.add_argument("--street-view", action="store_true")
+    parser.add_argument("--export-xodr", type=str, default=None)
     try:
         sep = sys.argv.index("--")
         script_argv = [sys.argv[0]] + sys.argv[sep + 1:]
@@ -80,7 +81,9 @@ def add_camera(scene, city_size, top_down=False, street_view=False):
         scene.collection.objects.link(cam)
         scene.camera = cam
         return cam
-    cx, cy = city_size * 0.5, city_size * 0.5
+    offset_x = city_size * 0.5
+    offset_y = city_size * 0.5
+    cx, cy = offset_x, offset_y
     cam_data = bpy.data.cameras.new("Camera")
     if street_view:
         cam_data.lens = 24
@@ -88,9 +91,15 @@ def add_camera(scene, city_size, top_down=False, street_view=False):
         target = mathutils.Vector((cx + city_size * 0.1, cy + city_size * 0.2, 3))
     else:
         cam_data.lens = 32
-        cam_pos = mathutils.Vector((cx + city_size * 0.5, cy - city_size * 0.5, city_size * 0.28))
+        cam_pos = mathutils.Vector((cx + city_size * 0.45, cy - city_size * 0.45, city_size * 0.28))
         target = mathutils.Vector((cx, cy, 0))
     cam = bpy.data.objects.new("Camera", cam_data)
+    cam.location = cam_pos
+    direction = (target - cam_pos).normalized()
+    cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+    scene.collection.objects.link(cam)
+    scene.camera = cam
+    return cam
     cam.location = cam_pos
     direction = (target - cam_pos).normalized()
     rot_quat = direction.to_track_quat('-Z', 'Y')
@@ -123,6 +132,7 @@ def add_hdri(scene):
 def generate_city(args):
     import bpy, random as rng_mod, math
     from infinigen.assets.urban.city_presets import load_preset
+    from infinigen.assets.urban.block_subdivision import BuildingLot
     from infinigen.assets.urban.skeleton import (
         RadialGenerator, GridGenerator, OrganicSpineGenerator, SingleSpineGenerator,
     )
@@ -134,6 +144,7 @@ def generate_city(args):
     from infinigen.assets.urban.road_markings import RoadMarkingMesher
     from infinigen.assets.urban.trees import place_trees_along_roads
     from infinigen.assets.urban.cars import place_parked_cars
+    from infinigen.assets.urban.infrastructure.streetlights import place_streetlights
     from infinigen.assets.urban.buildings.building_generator import generate_building_shell
 
     preset = load_preset(args.preset)
@@ -143,29 +154,86 @@ def generate_city(args):
         "organic_spine": OrganicSpineGenerator,
         "single_spine": SingleSpineGenerator,
     }
-    skeleton_cls = skeleton_map.get(preset["skeleton_type"])
     rng = rng_mod.Random(args.seed)
-    skeleton = skeleton_cls.generate(
-        size=args.city_size, seed=rng.randint(0, 2**31),
-        **preset["skeleton_params"],
-    )
-    all_segments = list(skeleton.road_segments)
-    all_lots = []
-    zone_templates = preset["zone_templates"]
-    for block in skeleton.blocks:
-        zone_entry = zone_templates.get(block.zone_id)
-        if zone_entry is None:
-            continue
-        template_cls = get_template(zone_entry["template"])
-        if template_cls is None:
-            continue
-        config = zone_entry["config"]
-        fill = template_cls.fill(block.boundary, config, rng)
-        all_segments.extend(fill.road_segments)
-        all_lots.extend(fill.building_lots)
+    sk_type = preset["skeleton_type"]
 
-    offset_x = args.city_size * 0.5
-    offset_y = args.city_size * 0.5
+    def _poly_area(pts):
+        a = 0.0
+        for i in range(len(pts)):
+            j = (i + 1) % len(pts)
+            a += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]
+        return abs(a) / 2.0
+
+    if sk_type == "osmnx":
+        from infinigen.assets.urban.osmnx_skeleton import OsmnxSkeleton
+        skeleton = OsmnxSkeleton.generate(
+            **preset["skeleton_params"],
+        )
+        all_xs = [p[0] for seg in skeleton.road_segments for p in (seg.source, seg.target)]
+        all_ys = [p[1] for seg in skeleton.road_segments for p in (seg.source, seg.target)]
+        min_x, max_x = min(all_xs), max(all_xs)
+        min_y, max_y = min(all_ys), max(all_ys)
+        city_bounds = max(max_x - min_x, max_y - min_y) * 1.3
+        offset_x = -min_x + city_bounds * 0.05
+        offset_y = -min_y + city_bounds * 0.05
+        all_segments = list(skeleton.road_segments)
+        all_lots = []
+        for block in skeleton.blocks:
+            if len(block.boundary) < 3:
+                continue
+            cx = sum(p[0] for p in block.boundary) / len(block.boundary)
+            cy = sum(p[1] for p in block.boundary) / len(block.boundary)
+            inset = []
+            for px, py in block.boundary:
+                dx, dy = px - cx, py - cy
+                d = (dx*dx + dy*dy) ** 0.5
+                if d < 0.01:
+                    continue
+                m = 1.0 - 2.0 / d
+                inset.append((cx + dx*m, cy + dy*m))
+            if len(inset) >= 3:
+                area = _poly_area(inset)
+                if area >= 50:
+                    all_lots.append(BuildingLot(boundary=inset, area=area, building_type="residential"))
+    else:
+        skeleton_cls = skeleton_map.get(sk_type)
+        skeleton = skeleton_cls.generate(
+            size=args.city_size, seed=rng.randint(0, 2**31),
+            **preset["skeleton_params"],
+        )
+        city_bounds = args.city_size
+        offset_x = city_bounds * 0.5
+        offset_y = city_bounds * 0.5
+        all_segments = list(skeleton.road_segments)
+        all_lots = []
+        zone_templates = preset["zone_templates"]
+        for block in skeleton.blocks:
+            zone_entry = zone_templates.get(block.zone_id)
+            if zone_entry is None:
+                continue
+            template_cls = get_template(zone_entry["template"])
+            if template_cls is None:
+                continue
+            config = zone_entry["config"]
+            fill = template_cls.fill(block.boundary, config, rng)
+            all_segments.extend(fill.road_segments)
+            if fill.building_lots:
+                all_lots.extend(fill.building_lots)
+            else:
+                cx = sum(p[0] for p in block.boundary) / len(block.boundary)
+                cy = sum(p[1] for p in block.boundary) / len(block.boundary)
+                inset = []
+                for px, py in block.boundary:
+                    dx, dy = px - cx, py - cy
+                    d = (dx*dx + dy*dy) ** 0.5
+                    if d < 0.01:
+                        continue
+                    m = 1.0 - 3.0 / d
+                    inset.append((cx + dx*m, cy + dy*m))
+                if len(inset) >= 3:
+                    area = _poly_area(inset)
+                    if area >= 50:
+                        all_lots.append(BuildingLot(boundary=inset, area=area, building_type="residential"))
 
     def _shift(obj, dx, dy):
         if obj is None:
@@ -229,6 +297,7 @@ def generate_city(args):
         parser.road_segments,
         spacing=args.tree_spacing,
         seed=args.seed + 100,
+        city_bounds=(min_x, max_x, min_y, max_y) if sk_type == "osmnx" else None,
     )
     for t in trees:
         _shift(t, offset_x, offset_y)
@@ -237,13 +306,30 @@ def generate_city(args):
         parser.road_segments,
         density=args.car_density,
         seed=args.seed + 200,
+        city_bounds=(min_x, max_x, min_y, max_y) if sk_type == "osmnx" else None,
     )
     for c in cars:
         _shift(c, offset_x, offset_y)
 
+    light_positions = [
+        ((seg.source[0] + seg.target[0]) * 0.5, (seg.source[1] + seg.target[1]) * 0.5)
+        for seg in parser.road_segments if seg.sidewalk
+    ]
+    streetlights = []
+    light_objs = []
+    if light_positions:
+        streetlights, light_objs = place_streetlights(
+            light_positions,
+            spacing=30,
+            seed=args.seed + 300,
+        )
+        for s in streetlights + light_objs:
+            _shift(s, offset_x, offset_y)
+
     print(f"Roads:{len(road_objs)}  Sidewalks:{len(sidewalk_objs)}  Intersections:{len(inter_objs)}  "
-          f"Buildings:{bldg_count}  Trees:{len(trees)}  Cars:{len(cars)}  "
+          f"Buildings:{bldg_count}  Trees:{len(trees)}  Cars:{len(cars)}  Streetlights:{len(streetlights)}  "
           f"Markings:{len(marking_objs)}  Crosswalks:{len(crosswalk_objs)}")
+    args.city_bounds = city_bounds
     return parser
 
 
@@ -271,10 +357,15 @@ def main():
             args.output = os.path.join(args.output_dir, f"urban_seed{seed:03d}.png")
 
         scene = setup_scene()
-        generate_city(args)
-        add_ground(args.city_size)
-        add_camera(scene, args.city_size, top_down=args.top_down, street_view=args.street_view)
-        add_sun(scene, args.city_size)
+        parser = generate_city(args)
+        if args.export_xodr:
+            from infinigen.assets.urban.opendrive_exporter import export_opendrive
+            export_opendrive(parser.road_segments, args.export_xodr)
+            print(f"Exported OpenDRIVE to {args.export_xodr}")
+        cb = getattr(args, 'city_bounds', args.city_size)
+        add_ground(cb)
+        add_camera(scene, cb, top_down=args.top_down, street_view=args.street_view)
+        add_sun(scene, cb)
         add_hdri(scene)
         render(scene, args)
 

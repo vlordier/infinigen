@@ -120,7 +120,7 @@ def make_car(center=(0, 0, 0), heading=0.0, length=4.0, width=1.8, height=1.4):
 
 
 @gin.configurable
-def place_parked_cars(road_segments, density=0.4, offset=0.0, seed=42, city_size=None):
+def place_parked_cars(road_segments, density=0.4, offset=0.0, seed=42, city_bounds=None):
     rng = random.Random(seed)
     placed = []
     for seg in road_segments:
@@ -143,8 +143,9 @@ def place_parked_cars(road_segments, density=0.4, offset=0.0, seed=42, city_size
             side = rng.choice((-1, 1))
             x = x1 + dx * seg_len * t + px * (half_w + offset) * side
             y = y1 + dy * seg_len * t + py * (half_w + offset) * side
-            if city_size is not None:
-                if x < 0 or y < 0 or x > city_size or y > city_size:
+            if city_bounds is not None:
+                bx_min, bx_max, by_min, by_max = city_bounds
+                if x < bx_min or x > bx_max or y < by_min or y > by_max:
                     continue
             heading = math.atan2(dy, dx) if side == 1 else math.atan2(dy, dx) + math.pi
             car = make_car(

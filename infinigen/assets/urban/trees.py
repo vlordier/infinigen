@@ -94,7 +94,7 @@ def make_tree(center=(0, 0, 0), trunk_height=2.5, trunk_radius=0.18, canopy_radi
 
 
 @gin.configurable
-def place_trees_along_roads(road_segments, spacing=8, offset=1.5, seed=42, city_size=None):
+def place_trees_along_roads(road_segments, spacing=8, offset=1.5, seed=42, city_bounds=None):
     rng = random.Random(seed)
     placed = []
     for seg in road_segments:
@@ -119,8 +119,9 @@ def place_trees_along_roads(road_segments, spacing=8, offset=1.5, seed=42, city_
                 base_y = y1 + dy * seg_len * t
                 x = base_x + px * (half_w + offset) * side + (rng.random() - 0.5) * 0.3
                 y = base_y + py * (half_w + offset) * side + (rng.random() - 0.5) * 0.3
-                if city_size is not None:
-                    if x < -2 or y < -2 or x > city_size + 2 or y > city_size + 2:
+                if city_bounds is not None:
+                    bx_min, bx_max, by_min, by_max = city_bounds
+                    if x < bx_min or x > bx_max or y < by_min or y > by_max:
                         continue
                 tree = make_tree(
                     center=(x, y, 0),
