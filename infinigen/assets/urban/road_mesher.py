@@ -35,28 +35,28 @@ class RoadMesher:
         self.sidewalk_height = sidewalk_height
         self.wall_height = wall_height
 
-    def mesh_roads(self, road_segments: list) -> list:
+    def mesh_roads(self, road_segments: list, z_func=None) -> list:
         objects = []
         for seg in road_segments:
-            obj = self._mesh_road_segment(seg)
+            obj = self._mesh_road_segment(seg, z_func)
             if obj:
                 objects.append(obj)
         return objects
 
-    def mesh_sidewalks(self, road_segments: list) -> list:
+    def mesh_sidewalks(self, road_segments: list, z_func=None) -> list:
         objects = []
         for seg in road_segments:
             if not seg.sidewalk:
                 continue
-            obj = self._mesh_sidewalk(seg, side="left")
+            obj = self._mesh_sidewalk(seg, side="left", z_func=z_func)
             if obj:
                 objects.append(obj)
-            obj = self._mesh_sidewalk(seg, side="right")
+            obj = self._mesh_sidewalk(seg, side="right", z_func=z_func)
             if obj:
                 objects.append(obj)
         return objects
 
-    def _mesh_road_segment(self, seg: RoadSegment):
+    def _mesh_road_segment(self, seg: RoadSegment, z_func=None):
         import bpy
         x1, y1 = seg.source
         x2, y2 = seg.target
@@ -79,8 +79,10 @@ class RoadMesher:
             ly = cy + py * half_width
             rx = cx - px * half_width
             ry = cy - py * half_width
-            verts.append((lx, ly, 0.0))
-            verts.append((rx, ry, 0.0))
+            zl = z_func(cx, cy) if z_func else 0.0
+            zr = z_func(cx, cy) if z_func else 0.0
+            verts.append((lx, ly, zl))
+            verts.append((rx, ry, zr))
         for i in range(n):
             a = i * 2
             b = i * 2 + 1
@@ -96,7 +98,7 @@ class RoadMesher:
         bpy.context.scene.collection.objects.link(obj)
         return obj
 
-    def _mesh_sidewalk(self, seg: RoadSegment, side: str):
+    def _mesh_sidewalk(self, seg: RoadSegment, side: str, z_func=None):
         import bpy
         x1, y1 = seg.source
         x2, y2 = seg.target
@@ -121,8 +123,10 @@ class RoadMesher:
             inner_y = cy + py * (offset * sign)
             outer_x = cx + px * (offset + self.sidewalk_width) * sign
             outer_y = cy + py * (offset + self.sidewalk_width) * sign
-            verts.append((inner_x, inner_y, self.sidewalk_height))
-            verts.append((outer_x, outer_y, self.sidewalk_height))
+            z_terrain = z_func(cx, cy) if z_func else 0.0
+            z_sidewalk = z_terrain + self.sidewalk_height
+            verts.append((inner_x, inner_y, z_sidewalk))
+            verts.append((outer_x, outer_y, z_sidewalk))
         for i in range(n):
             a = i * 2
             b = i * 2 + 1

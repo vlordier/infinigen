@@ -3,6 +3,22 @@ from infinigen.assets.urban.skeleton import CitySkeleton, BlockFace
 from infinigen.assets.urban.road_to_dcel import RoadToDCEL
 
 
+def _utm_to_latlon(easting, northing, zone=None, hem=None):
+    """Convert UTM easting/northing to (lat, lon) using pyproj."""
+    try:
+        import pyproj
+    except ImportError:
+        return (0.0, 0.0)
+    if zone is None:
+        zone = int((easting / 100000 + 31) % 60) or 60
+    hem = "south" if northing < 0 else "north"
+    crs_utm = f"+proj=utm +zone={int(zone)} +{hem} +datum=WGS84 +units=m"
+    crs_wgs = "+proj=longlat +datum=WGS84"
+    transformer = pyproj.Transformer.from_crs(crs_utm, crs_wgs, always_xy=True)
+    lon, lat = transformer.transform(easting, northing)
+    return (lat, lon)
+
+
 _ROAD_TYPE_MAP = {
     'motorway': 'arterial',
     'motorway_link': 'arterial',

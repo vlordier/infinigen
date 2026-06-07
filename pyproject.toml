@@ -48,6 +48,9 @@ dependencies = [
     "rtree",
     "osmnx",
     "geopy",
+    "rasterio",
+    "requests",
+    "elevation",
 ]
 
 [project.optional-dependencies]

@@ -12,13 +12,43 @@ class UrbanPipeline:
     independently by providing inputs directly.
     """
 
-    def __init__(self, seed=42, city_size=200, preset_name="european_old"):
+    def __init__(self, seed=42, city_size=200, preset_name="european_old",
+                 terrain_mode="flat", terrain_noise_amplitude=3.0):
         import random
         self.seed = seed
         self.city_size = city_size
         self.preset_name = preset_name
         self.preset = load_preset(preset_name)
         self.rng = random.Random(seed)
+        self.terrain_mode = terrain_mode
+        self.terrain_noise_amp = terrain_noise_amplitude
+        self.terrain_modifier = None
+
+    # ------------------------------------------------------------------
+    # Step 0 – terrain
+    # ------------------------------------------------------------------
+    def step0_terrain(self):
+        """Create a TerrainProvider + TerrainModifier for this city."""
+        from infinigen.assets.urban.terrain import (
+            TerrainProvider, TerrainModifier, terrain_from_preset, terrain_from_osm,
+        )
+        sk_type = self.preset["skeleton_type"]
+        if self.terrain_mode == "flat":
+            tp = TerrainProvider.flat()
+        elif sk_type == "osmnx":
+            from infinigen.assets.urban.osmnx_skeleton import OsmnxSkeleton
+            sk = self._cached_skeleton if hasattr(self, '_cached_skeleton') else None
+            if sk is None:
+                sk = OsmnxSkeleton.generate(**self.preset["skeleton_params"])
+                self._cached_skeleton = sk
+            tp = terrain_from_osm(sk.road_segments, seed=self.seed)
+        else:
+            tp = terrain_from_preset(
+                self.preset_name, city_size=self.city_size,
+                noise_amplitude=self.terrain_noise_amp, seed=self.seed,
+            )
+        self.terrain_modifier = TerrainModifier(tp, mode=self.terrain_mode)
+        return tp
 
     # ------------------------------------------------------------------
     # Step 1 – city skeleton
@@ -82,10 +112,14 @@ class UrbanPipeline:
     # Step 4 – mesh roads and sidewalks
     # ------------------------------------------------------------------
     def step4_mesh_roads(self, parser):
-        """Blender meshes for roads and sidewalks."""
+        """Blender meshes for roads and sidewalks (with terrain Z)."""
         from infinigen.assets.urban.road_mesher import RoadMesher
         m = RoadMesher()
-        return m.mesh_roads(parser.road_segments), m.mesh_sidewalks(parser.road_segments)
+        z_func = None
+        if self.terrain_modifier:
+            z_func = lambda x, y: self.terrain_modifier.road_vertex_z(x, y)
+        return (m.mesh_roads(parser.road_segments, z_func=z_func),
+                m.mesh_sidewalks(parser.road_segments, z_func=z_func))
 
     # ------------------------------------------------------------------
     # Step 5 – mesh intersections
@@ -109,13 +143,16 @@ class UrbanPipeline:
     # Step 7 – buildings
     # ------------------------------------------------------------------
     def step7_buildings(self, lots):
-        """Extrude building shells from lot boundaries."""
+        """Extrude building shells from lot boundaries (with terrain Z)."""
         import bpy
         from infinigen.assets.urban.buildings.building_generator import generate_building_shell
         objs = []
         for i, lot in enumerate(lots):
             h = max(6.0, min(40.0, lot.area ** 0.5 * 0.5))
-            obj = generate_building_shell(lot.boundary, h, name_suffix=str(i))
+            z_base = 0.0
+            if self.terrain_modifier:
+                z_base = self.terrain_modifier.building_z(lot.boundary)
+            obj = generate_building_shell(lot.boundary, h, name_suffix=str(i), z_base=z_base)
             bpy.context.scene.collection.objects.link(obj)
             objs.append(obj)
         return objs

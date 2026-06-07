@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument("--car-density", type=float, default=0.3)
     parser.add_argument("--street-view", action="store_true")
     parser.add_argument("--export-xodr", type=str, default=None)
+    parser.add_argument("--terrain", type=str, default="flat", choices=["flat", "gentle", "moderate", "aggressive"])
     try:
         sep = sys.argv.index("--")
         script_argv = [sys.argv[0]] + sys.argv[sep + 1:]
@@ -325,7 +326,29 @@ def main():
             export_opendrive(parser.road_segments, args.export_xodr)
             print(f"Exported OpenDRIVE to {args.export_xodr}")
         cb = getattr(args, 'city_bounds', args.city_size)
-        add_ground(cb)
+        if args.terrain != "flat":
+            from infinigen.assets.urban.terrain import terrain_from_preset
+            import bpy
+            tp = terrain_from_preset(args.preset, city_size=cb, seed=args.seed)
+            bpy.ops.mesh.primitive_grid_add(
+                x_subdivisions=50, y_subdivisions=50,
+                size=cb * 1.8,
+                location=(cb * 0.5, cb * 0.5, 0),
+            )
+            ground = bpy.context.active_object
+            ground.name = "terrain"
+            for v in ground.data.vertices:
+                v.co.z = tp.get_elevation(v.co.x, v.co.y)
+            ground.data.update()
+            ground_mat = bpy.data.materials.new("ground_mat")
+            ground_mat.use_nodes = True
+            bsdf = ground_mat.node_tree.nodes.get("Principled BSDF")
+            if bsdf:
+                bsdf.inputs["Base Color"].default_value = (0.18, 0.2, 0.15, 1)
+                bsdf.inputs["Roughness"].default_value = 1.0
+            ground.data.materials.append(ground_mat)
+        else:
+            add_ground(cb)
         add_camera(scene, cb, top_down=args.top_down, street_view=args.street_view)
         add_sun(scene, cb)
         add_hdri(scene)

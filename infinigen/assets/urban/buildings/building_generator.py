@@ -89,7 +89,7 @@ _PALETTES = [
 
 
 @gin.configurable
-def generate_building_shell(footprint_polygon, height, name_suffix="", material_name="concrete"):
+def generate_building_shell(footprint_polygon, height, name_suffix="", material_name="concrete", z_base=0.0):
     rng = random.Random(hash(tuple(round(p[0], 1) for p in footprint_polygon)) & 0xFFFFFF)
     wall_color = rng.choice(_PALETTES)[0]
     roof_color = (wall_color[0] * 0.7, wall_color[1] * 0.7, wall_color[2] * 0.65)
@@ -99,8 +99,8 @@ def generate_building_shell(footprint_polygon, height, name_suffix="", material_
     floor_h = height / n_floors
 
     bm = bmesh.new()
-    bv = [bm.verts.new((p[0], p[1], 0)) for p in footprint_polygon]
-    tv = [bm.verts.new((p[0], p[1], height)) for p in footprint_polygon]
+    bv = [bm.verts.new((p[0], p[1], z_base)) for p in footprint_polygon]
+    tv = [bm.verts.new((p[0], p[1], z_base + height)) for p in footprint_polygon]
 
     for i in range(n_verts):
         j = (i + 1) % n_verts
